@@ -41,7 +41,7 @@ Primary V1 fishing scope:
 Use:
 
 * Laravel 13
-* PHP 8.3 or newer
+* PHP 8.4
 * PostgreSQL
 * Redis
 * Laravel official starter kit/auth scaffolding
@@ -64,6 +64,17 @@ Do not use:
 * Hardcoded scraper thresholds
 * Hardcoded source parsing inside jobs
 
+Follow project conventions:
+
+* Use PHPUnit for tests. Do not introduce Pest.
+* Use `php artisan make:* --no-interaction` generators for Laravel classes, migrations, requests, policies, jobs, notifications, seeders, and tests.
+* Prefer the conventions already present in this Laravel 13 skeleton, including attribute-based model metadata where sibling models use it.
+* Use explicit PHP parameter and return types on all methods.
+* Use PHP 8 constructor property promotion where constructors are needed.
+* Use TitleCase enum case names.
+* Run `vendor/bin/pint --dirty --format agent` after modifying PHP files.
+* Run the smallest relevant PHPUnit test set after each implementation slice.
+
 ## 1.2 Application principles
 
 The app must be:
@@ -84,6 +95,20 @@ The app must be:
 Always store raw source payloads before parsing.
 
 Never overwrite raw scrape data. Normalized rows may be updated/deduplicated, but the raw HTML/text/json payload should remain available for troubleshooting and future parser improvements.
+
+## 1.4 Laravel implementation conventions
+
+Before each implementation phase:
+
+* Search the version-specific Laravel documentation for the framework feature being used.
+* Inspect sibling files before choosing naming, structure, casts, fillable fields, route style, and test style.
+* Keep controllers thin. Put business workflows in action/service classes and use jobs only to orchestrate queued work.
+* Use Form Request classes for all create/update/admin forms. Put authorization in the Form Request or policy, and only persist `$request->validated()`.
+* Use policies or gates for every user-owned or admin-only action.
+* Use named routes and `route()` for links and redirects.
+* Use implicit route model binding and scoped bindings where parent/child resources are involved.
+* Avoid queries in Blade views; eager load all data in controllers or query/action classes.
+* Prefer Eloquent relationships and local scopes over raw queries.
 
 ---
 
@@ -145,6 +170,8 @@ Requirements:
 * Secure session cookies
 * Authenticated routes only
 * Admin-only routes protected by policy/gate/middleware
+* Session regeneration on login
+* Email verification optional for V1, but the decision must be explicit before production deployment
 
 ## 2.3 Notifications
 
@@ -159,8 +186,9 @@ Notification behavior:
 * Daily hot-bite notification sends only when at least one enabled rule crosses threshold.
 * Sunday weekly digest always sends, regardless of threshold.
 * Notification events must be deduplicated.
-* Discord failures must not block email delivery.
-* Email failures must not block Discord delivery.
+* Discord delivery failures must not block email delivery.
+* Email delivery failures must not block Discord delivery.
+* Each channel delivery attempt should be logged separately so partial delivery can be diagnosed and retried.
 * Notification logs must be retained.
 
 ## 2.4 Alert rules
@@ -314,7 +342,7 @@ Recommended:
 
 ## 3.2 Laravel application layers
 
-Use these directories/concepts:
+Use these directories/concepts when they fit the code being implemented:
 
 ```text
 app/
@@ -337,6 +365,8 @@ app/
 │   └── Notifications/
 └── Support/
 ```
+
+Do not create empty base directories ahead of need. Add each directory when the first real class belongs there.
 
 Keep controllers thin.
 
@@ -369,7 +399,7 @@ Create a clean Laravel 13 project with auth, Docker, PostgreSQL, Redis, and role
 10. Add production Docker environment.
 11. Add Makefile or composer scripts for common commands.
 12. Add Pint formatting.
-13. Add Pest or PHPUnit test suite.
+13. Use the existing PHPUnit test suite.
 14. Add role enum:
 
     * admin
@@ -388,6 +418,7 @@ Create a clean Laravel 13 project with auth, Docker, PostgreSQL, Redis, and role
 * Authenticated dashboard route works.
 * Admin-only route blocks normal users.
 * Tests run successfully.
+* PHP runtime and Composer platform requirements align with PHP 8.4.
 
 ---
 
@@ -398,6 +429,19 @@ Create a clean Laravel 13 project with auth, Docker, PostgreSQL, Redis, and role
 Create normalized, future-proof schema for regions, landings, boats, trip types, species, source payloads, reports, counts, rules, scores, backfills, and notifications.
 
 ## Core tables
+
+Schema implementation rules:
+
+* Create migrations with Artisan.
+* Keep each migration focused on one concern.
+* Add foreign keys with `constrained()` where practical.
+* Add indexes during the migration for columns used in filters, joins, ordering, uniqueness, and deduplication.
+* Use PostgreSQL `jsonb` for metadata/settings/explanation fields.
+* Mirror database defaults in model attributes.
+* Define fillable fields or guarded fields on every model.
+* Define casts for booleans, dates, encrypted fields, JSON fields, decimals, and enums.
+* Prefer enum-backed status/type fields for internal state values.
+* Make migration `down()` methods reversible unless the migration is intentionally forward-only and documented.
 
 ### users
 
@@ -681,6 +725,8 @@ index trip_date
 index landing_id + trip_date
 index boat_id + trip_date
 index trip_type_id + trip_date
+index region_id + trip_date
+index source_id + trip_date
 unique source_id + source_trip_identifier nullable where available
 index dedupe_key
 ```
@@ -779,6 +825,33 @@ Security:
 * Discord webhook URLs should be encrypted at rest using Laravel encrypted casts.
 * Mask webhook URLs in UI.
 * Do not log full webhook URLs.
+* Store email destinations separately from user profile email only when alternate email support is implemented.
+* Add a unique constraint that prevents duplicate enabled destinations for the same user/channel/name where practical.
+
+### notification_deliveries
+
+```text
+id
+alert_event_id nullable
+user_id
+notification_destination_id nullable
+channel
+notification_type
+status
+attempted_at
+sent_at nullable
+failed_at nullable
+error_message nullable
+metadata jsonb nullable
+created_at
+updated_at
+```
+
+Purpose:
+
+* Track email and Discord attempts independently.
+* Make partial failures visible.
+* Support safe retry without duplicating already successful channel deliveries.
 
 ### score_runs
 
@@ -822,6 +895,13 @@ Unique index:
 alert_rule_id + score_date
 ```
 
+Recommended indexes:
+
+```text
+score_date
+level + score_date
+```
+
 ### alert_events
 
 ```text
@@ -845,6 +925,12 @@ Unique index:
 
 ```text
 alert_rule_id + event_type + event_date
+```
+
+Recommended index:
+
+```text
+user_id + event_date
 ```
 
 ### backfill_runs
@@ -884,6 +970,36 @@ created_at
 updated_at
 ```
 
+Unique/indexing:
+
+```text
+unique backfill_run_id + scrape_source_id + target_date
+index status + target_date
+```
+
+### parser_errors
+
+```text
+id
+raw_scrape_payload_id nullable
+scrape_source_id
+target_date nullable
+error_type
+raw_field nullable
+raw_value nullable
+message
+context jsonb nullable
+resolved_at nullable
+resolved_by_user_id nullable
+created_at
+updated_at
+```
+
+Purpose:
+
+* Preserve parser warnings and failures without losing the raw payload.
+* Drive alias-management workflows from real unmatched source data.
+
 ---
 
 # 6. Phase 3 — Authenticated Dashboard Without Filament
@@ -911,6 +1027,8 @@ PUT /notification-settings
 GET /alerts
 GET /profile
 ```
+
+Prefer `Route::resource()` for CRUD resources such as alert rules and use named route groups for user and admin areas.
 
 ## Admin routes
 
@@ -954,6 +1072,8 @@ Rules:
 * Admin can manage all.
 * Only admin can trigger backfills.
 * Only admin can view raw payloads.
+* Form Requests must call the relevant policy or gate in `authorize()`.
+* Feature tests must cover both allowed and denied paths for every policy.
 
 ## Dashboard page requirements
 
@@ -1018,6 +1138,14 @@ Must include:
 * Threshold fields
 * Channel toggles
 * Weekly digest toggle
+
+Implementation requirements:
+
+* Use Form Requests for store/update.
+* Validate numeric thresholds with explicit min/max bounds.
+* Validate selected region/landing/boat/trip type IDs against active records.
+* Ensure optional landings and boats belong to the selected regions where applicable.
+* Use database transactions when syncing many-to-many rule filters.
 
 ### /notification-settings
 
@@ -1124,13 +1252,15 @@ This can be adjusted after empirical comparison.
 * Set clear User-Agent.
 * Respect robots/TOS.
 * Rate-limit requests by source.
-* Timeout requests.
-* Retry transient failures conservatively.
+* Set explicit `timeout()` and `connectTimeout()` values.
+* Retry transient connection/server failures conservatively with backoff.
 * Do not retry 404-like historical misses aggressively.
 * Store raw response even if parsing fails.
 * Record parser version.
 * Do not scrape more than necessary.
 * Backfill should process slowly.
+* Use source-domain allowlists; never accept arbitrary user-supplied fetch URLs.
+* In tests, use `Http::fake()` and prevent stray real HTTP requests.
 
 ## Commands
 
@@ -1177,6 +1307,13 @@ BoatNormalizer
 FishCountTextParser
 ```
 
+Normalization requirements:
+
+* Store unresolved aliases as parser errors or pending alias candidates.
+* Do not silently create new species/trip types from scraped text without admin review unless explicitly approved later.
+* Use case-insensitive normalized alias matching.
+* Preserve raw source names on trip reports for auditability.
+
 ## Fish count parsing
 
 Must handle examples like:
@@ -1219,6 +1356,8 @@ Deduping behavior:
 * Mark duplicates as non-primary or link duplicate group if implemented.
 * Prefer higher priority source.
 * Never delete duplicate raw payloads.
+* Use database transactions when replacing normalized report/count rows for a payload.
+* Make repeated parse/reparse operations idempotent.
 
 ---
 
@@ -1246,6 +1385,14 @@ Output:
 * ScoreResult
 
 ## Score components
+
+Scoring implementation requirements:
+
+* Use retained counts for alert scoring unless the rule explicitly opts into released counts later.
+* Exclude non-primary duplicate trip reports from score aggregation.
+* Store enough explanation JSON to reproduce the displayed score inputs.
+* Clamp every component and final score to 0-100.
+* Define species default targets in config or seeded settings, not hardcoded inside the scoring service.
 
 ### Count score
 
@@ -1374,6 +1521,7 @@ Discord:
 * Store webhook encrypted.
 * Never log full webhook.
 * Mask in UI.
+* Give each channel send its own queued job or isolated delivery attempt so one failed channel cannot mark the other as failed.
 
 ## Daily alert behavior
 
@@ -1385,6 +1533,7 @@ After daily scrape and scoring:
 4. Send Discord if enabled.
 5. Mark delivery status.
 6. Prevent duplicate alerts for same user/rule/date/type.
+7. Record a `notification_deliveries` row per attempted channel.
 
 ## Weekly digest behavior
 
@@ -1454,6 +1603,12 @@ Schedule::command('fish:send-weekly-digest')
     ->onOneServer();
 ```
 
+Scheduler requirements:
+
+* Use Redis or another shared cache store in production so `onOneServer()` works correctly.
+* Consider grouping scheduled fishing commands with shared timezone and `onOneServer()` configuration.
+* Ensure scrape, score, and notification commands are idempotent because manual retries and delayed queues can overlap.
+
 ## Queue jobs
 
 Create:
@@ -1486,6 +1641,15 @@ backfill
 Use Redis queue driver.
 
 Failed jobs must be inspectable.
+
+Queue implementation requirements:
+
+* Configure queue `retry_after` greater than the longest job timeout.
+* Set explicit `$tries`, `$timeout`, and `$backoff` on queued jobs.
+* Implement `failed()` on jobs that update scrape/backfill/notification state.
+* Use `RateLimited` job middleware or cache locks for per-source scraping limits.
+* Use unique jobs or locks for source/date work to prevent duplicate scraping.
+* Use `Bus::batch()` for backfill groups when it improves progress tracking and cancellation.
 
 ---
 
@@ -1535,6 +1699,14 @@ Admin starts BackfillRun
 → Progress updates
 ```
 
+Implementation requirements:
+
+* Validate date range and source selection with a Form Request.
+* Use admin policy authorization before creating a backfill.
+* Create backfill items inside a database transaction.
+* Use unique backfill item constraints so retries cannot enqueue duplicate source/date rows.
+* Record unavailable historical dates distinctly from successful zero-count reports.
+
 ## Controls
 
 Admin can:
@@ -1562,6 +1734,8 @@ Admin can:
 Make scraping transparent enough to debug without shell access.
 
 ## Admin diagnostics pages
+
+All diagnostics pages must be admin-only, escape raw payload output by default, and avoid rendering untrusted HTML directly.
 
 ### Scrape runs
 
@@ -1663,6 +1837,10 @@ scheduler
 * Restart policies
 * Health check endpoint
 * Queue worker restart strategy
+* `APP_DEBUG=false`
+* Secure session cookie settings
+* `config:cache`, `route:cache`, and event cache during deployment where compatible
+* Documented queue restart on deploy with `php artisan queue:restart`
 
 ## Host Nginx
 
@@ -1707,6 +1885,8 @@ Cover:
 * Alert threshold decisions
 * Discord payload formatting
 * Backfill status transitions
+* Form Request validation boundaries
+* Policy authorization decisions
 
 ## Feature tests
 
@@ -1722,6 +1902,9 @@ Cover:
 * Notification settings save correctly
 * Disabled rule does not notify
 * Weekly digest sends even below threshold
+* Alert rule filters reject inactive or out-of-scope related records
+* Raw payload viewer escapes untrusted payloads
+* Per-channel notification failure does not block the other channel
 
 ## Integration-style tests
 
@@ -1742,6 +1925,14 @@ Every parser should be tested against fixtures.
 
 No parser should rely only on live HTTP tests.
 
+Testing implementation requirements:
+
+* Use PHPUnit classes generated with `php artisan make:test --phpunit`.
+* Prefer `LazilyRefreshDatabase` where it fits the suite.
+* Use factories and factory states for model setup.
+* Use `Http::fake()` for scraper tests and prevent stray requests.
+* Run the specific changed test file or filter before moving to the next phase.
+
 ---
 
 # 16. Phase 13 — Seed Data
@@ -1761,6 +1952,12 @@ ScrapeSourceSeeder
 AdminUserSeeder
 DefaultAlertRuleSeeder
 ```
+
+Seeder requirements:
+
+* Make seeders idempotent with stable slugs/keys.
+* Do not overwrite user-managed notification secrets.
+* Keep seed data separate from schema migrations.
 
 ## Initial source registry
 
@@ -1816,6 +2013,7 @@ Weekly digest: true
 * Every admin route behind admin gate
 * Policies for user-owned resources
 * Tests for cross-user access denial
+* No controller action should rely on UI-hidden buttons as the only authorization boundary
 
 ## Secret handling
 
@@ -1825,6 +2023,7 @@ Weekly digest: true
 * No secrets in logs
 * No secrets in frontend HTML
 * Mask sensitive settings in UI
+* Access secrets through `config()` values, not direct `env()` calls outside config files
 
 ## Scraper safety
 
@@ -1832,6 +2031,7 @@ Weekly digest: true
 * Source URLs must come from admin-managed scrape_sources.
 * Normal users cannot create scrape sources.
 * Validate and constrain source domains.
+* Never render raw remote HTML as trusted markup in diagnostics.
 
 ---
 
@@ -1848,6 +2048,8 @@ Implement:
 * Failed job visibility
 * Health check route
 * Latest successful scrape timestamp
+* Per-channel notification delivery status
+* Source/date unavailable markers
 
 ## Optional later additions
 
@@ -1868,23 +2070,24 @@ Codex should implement in this order:
 1. Bootstrap Laravel 13 app with auth and Docker.
 2. Add roles, policies, and route protection.
 3. Add database schema and seeders.
-4. Build basic dashboard pages.
-5. Build source adapter contract and raw payload storage.
-6. Implement one adapter first: SanDiegoFishReportsAdapter.
-7. Add parser fixtures and parser tests.
-8. Implement normalization and deduplication.
-9. Implement additional adapters one at a time.
-10. Implement scoring engine.
-11. Implement alert rules UI.
-12. Implement email notification.
-13. Implement Discord notification.
-14. Implement scheduler commands.
-15. Implement manual backfill dashboard.
-16. Add diagnostics pages.
-17. Add deployment scripts.
-18. Add backup scripts.
-19. Harden security.
-20. Final acceptance test pass.
+4. Add factories and base seeders for core lookup tables.
+5. Build basic authenticated dashboard shell.
+6. Build alert rule CRUD with policies, Form Requests, and tests.
+7. Build source adapter contract and raw payload storage.
+8. Implement one adapter first: SanDiegoFishReportsAdapter.
+9. Add parser fixtures and parser tests.
+10. Implement normalization and deduplication.
+11. Implement additional adapters one at a time.
+12. Implement scoring engine.
+13. Implement email notification.
+14. Implement Discord notification.
+15. Implement scheduler commands.
+16. Implement manual backfill dashboard.
+17. Add diagnostics pages.
+18. Add deployment scripts.
+19. Add backup scripts.
+20. Harden security.
+21. Final acceptance test pass.
 
 Do not implement all source adapters before the parser architecture is tested with the first adapter.
 
@@ -1918,4 +2121,3 @@ The project is ready when:
 * Tests cover parser, scoring, auth, policies, notifications, and backfill state.
 * Database backups are configured.
 * Secrets are not exposed.
-
