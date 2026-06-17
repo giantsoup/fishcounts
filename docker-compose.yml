@@ -1,0 +1,98 @@
+services:
+  app:
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      APP_ENV: local
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: fishcounts
+      DB_USERNAME: fishcounts
+      DB_PASSWORD: fishcounts
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  queue:
+    build:
+      context: .
+    command: php artisan queue:work redis --queue=scraping,parsing,scoring,notifications,backfill,default --sleep=3 --tries=3 --timeout=180
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: fishcounts
+      DB_USERNAME: fishcounts
+      DB_PASSWORD: fishcounts
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  scheduler:
+    build:
+      context: .
+    command: php artisan schedule:work
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: fishcounts
+      DB_USERNAME: fishcounts
+      DB_PASSWORD: fishcounts
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fishcounts
+      POSTGRES_USER: fishcounts
+      POSTGRES_PASSWORD: fishcounts
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fishcounts -d fishcounts"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:

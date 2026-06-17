@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\ScrapeRunStatus;
 use App\Enums\ScrapeRunType;
-use App\Models\ScrapeRun;
+use App\Jobs\ScrapeSourceForDateJob;
+use App\Models\ScrapeSource;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -15,12 +15,15 @@ class ScrapeDailyCommand extends Command
 {
     public function handle(): int
     {
-        ScrapeRun::query()->firstOrCreate(
-            ['run_type' => ScrapeRunType::Daily, 'target_date' => today()],
-            ['status' => ScrapeRunStatus::Pending],
-        );
+        $date = today()->toDateString();
 
-        $this->info('Daily scrape run recorded.');
+        ScrapeSource::query()
+            ->where('is_enabled', true)
+            ->orderBy('priority')
+            ->pluck('id')
+            ->each(fn (int $sourceId): mixed => ScrapeSourceForDateJob::dispatch($sourceId, $date, ScrapeRunType::Daily));
+
+        $this->info("Daily scrape jobs queued for {$date}.");
 
         return self::SUCCESS;
     }

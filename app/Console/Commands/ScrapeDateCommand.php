@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Enums\ScrapeRunStatus;
 use App\Enums\ScrapeRunType;
-use App\Models\ScrapeRun;
+use App\Jobs\ScrapeSourceForDateJob;
+use App\Models\ScrapeSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -18,12 +18,13 @@ class ScrapeDateCommand extends Command
     {
         $date = CarbonImmutable::parse($this->argument('date'))->toDateString();
 
-        ScrapeRun::query()->firstOrCreate(
-            ['run_type' => ScrapeRunType::Manual, 'target_date' => $date],
-            ['status' => ScrapeRunStatus::Pending],
-        );
+        ScrapeSource::query()
+            ->where('is_enabled', true)
+            ->orderBy('priority')
+            ->pluck('id')
+            ->each(fn (int $sourceId): mixed => ScrapeSourceForDateJob::dispatch($sourceId, $date, ScrapeRunType::Manual));
 
-        $this->info("Manual scrape run recorded for {$date}.");
+        $this->info("Manual scrape jobs queued for {$date}.");
 
         return self::SUCCESS;
     }

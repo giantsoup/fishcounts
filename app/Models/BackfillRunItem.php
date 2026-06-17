@@ -29,4 +29,10 @@ class BackfillRunItem extends Model
     {
         return $this->belongsTo(BackfillRun::class);
     }
+
+    /** @return BelongsTo<ScrapeSource, $this> */
+    public function scrapeSource(): BelongsTo
+    {
+        return $this->belongsTo(ScrapeSource::class);
+    }
 }

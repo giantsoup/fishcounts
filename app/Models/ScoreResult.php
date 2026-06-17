@@ -25,4 +25,10 @@ class ScoreResult extends Model
     {
         return $this->belongsTo(AlertRule::class);
     }
+
+    /** @return BelongsTo<ScoreRun, $this> */
+    public function scoreRun(): BelongsTo
+    {
+        return $this->belongsTo(ScoreRun::class);
+    }
 }

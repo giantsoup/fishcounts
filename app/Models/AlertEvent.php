@@ -33,4 +33,16 @@ class AlertEvent extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** @return BelongsTo<AlertRule, $this> */
+    public function alertRule(): BelongsTo
+    {
+        return $this->belongsTo(AlertRule::class);
+    }
+
+    /** @return BelongsTo<ScoreResult, $this> */
+    public function scoreResult(): BelongsTo
+    {
+        return $this->belongsTo(ScoreResult::class);
+    }
 }

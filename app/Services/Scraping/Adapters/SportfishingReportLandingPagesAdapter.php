@@ -1,0 +1,18 @@
+<?php
+
+namespace App\Services\Scraping\Adapters;
+
+use Carbon\CarbonImmutable;
+
+class SportfishingReportLandingPagesAdapter extends AbstractHttpFishCountAdapter
+{
+    public function sourceKey(): string
+    {
+        return 'sportfishingreport_landing_pages';
+    }
+
+    protected function pathForDate(CarbonImmutable $date): string
+    {
+        return '/fish-counts/san-diego.php?date='.$date->format('Y-m-d');
+    }
+}

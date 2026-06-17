@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Enums\BackfillRunStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBackfillRunRequest;
+use App\Jobs\BackfillRunJob;
 use App\Models\BackfillRun;
 use App\Models\ScrapeSource;
 use Carbon\CarbonImmutable;
@@ -58,6 +59,8 @@ class BackfillController extends Controller
 
             return $backfill;
         });
+
+        BackfillRunJob::dispatch($backfill->id);
 
         return redirect()->route('admin.backfills.index')->with('status', "Backfill {$backfill->id} queued.");
     }

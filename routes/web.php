@@ -15,11 +15,22 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ScoresController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
+
+Route::get('/healthz', function () {
+    DB::select('select 1');
+
+    return response()->json([
+        'status' => 'ok',
+        'app' => config('app.name'),
+        'time' => now()->toISOString(),
+    ]);
+})->name('healthz');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
