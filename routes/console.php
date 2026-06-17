@@ -2,7 +2,33 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::command('fish:scrape-daily')
+    ->dailyAt('01:00')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('fish:score-latest')
+    ->dailyAt('01:15')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('fish:send-hot-alerts')
+    ->dailyAt('01:25')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('fish:send-weekly-digest')
+    ->sundays()
+    ->at('07:00')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
