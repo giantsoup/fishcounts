@@ -3,10 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Enums\NotificationChannel;
+use App\Enums\NotificationDeliveryStatus;
 use App\Http\Requests\UpdateNotificationSettingsRequest;
+use App\Models\NotificationDelivery;
 use App\Models\NotificationDestination;
+use App\Notifications\TestNotification;
+use App\Services\Notifications\DiscordWebhookSender;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
+use Throwable;
 
 class NotificationSettingsController extends Controller
 {
@@ -38,5 +43,52 @@ class NotificationSettingsController extends Controller
         }
 
         return redirect()->route('notification-settings.edit')->with('status', 'Notification settings updated.');
+    }
+
+    public function test(NotificationDestination $notificationDestination, DiscordWebhookSender $discord): RedirectResponse
+    {
+        $this->authorize('update', $notificationDestination);
+
+        $delivery = NotificationDelivery::query()->create([
+            'user_id' => $notificationDestination->user_id,
+            'notification_destination_id' => $notificationDestination->id,
+            'channel' => $notificationDestination->channel,
+            'notification_type' => TestNotification::class,
+            'status' => NotificationDeliveryStatus::Pending,
+            'attempted_at' => now(),
+            'metadata' => ['test' => true],
+        ]);
+
+        if (! $notificationDestination->is_enabled) {
+            $delivery->update([
+                'status' => NotificationDeliveryStatus::Skipped,
+                'failed_at' => now(),
+                'error_message' => 'Destination is disabled.',
+            ]);
+
+            return redirect()->route('notification-settings.edit')->with('status', 'Destination is disabled.');
+        }
+
+        try {
+            if ($notificationDestination->channel === NotificationChannel::Email) {
+                $notificationDestination->user->notify(new TestNotification($notificationDestination->name));
+            } elseif ($notificationDestination->channel === NotificationChannel::Discord) {
+                $discord->send($notificationDestination->destination, [
+                    'content' => "Fish Counts test delivery for {$notificationDestination->name}.",
+                ]);
+            }
+
+            $delivery->update(['status' => NotificationDeliveryStatus::Sent, 'sent_at' => now()]);
+        } catch (Throwable $throwable) {
+            $delivery->update([
+                'status' => NotificationDeliveryStatus::Failed,
+                'failed_at' => now(),
+                'error_message' => str($throwable->getMessage())->replaceMatches('/https:\/\/discord\.com\/api\/webhooks\/[^\s]+/', 'https://discord.com/api/webhooks/[masked]')->limit(1000)->toString(),
+            ]);
+
+            return redirect()->route('notification-settings.edit')->with('status', 'Test notification failed. Check notification logs.');
+        }
+
+        return redirect()->route('notification-settings.edit')->with('status', 'Test notification sent.');
     }
 }

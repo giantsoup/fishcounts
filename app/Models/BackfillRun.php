@@ -12,11 +12,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class BackfillRun extends Model
 {
     protected $attributes = [
-        'status' => 'pending',
+        'status' => BackfillRunStatus::Pending->value,
         'batch_size_days' => 7,
         'total_days' => 0,
         'processed_days' => 0,
         'failed_days' => 0,
+        'unavailable_days' => 0,
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class BackfillRun extends Model
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
             'cancel_requested_at' => 'datetime',
+            'pause_requested_at' => 'datetime',
         ];
     }
 

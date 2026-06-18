@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BackfillRunItem extends Model
 {
     protected $attributes = [
-        'status' => 'pending',
+        'status' => BackfillRunStatus::Pending->value,
     ];
 
     protected function casts(): array
@@ -34,5 +34,17 @@ class BackfillRunItem extends Model
     public function scrapeSource(): BelongsTo
     {
         return $this->belongsTo(ScrapeSource::class);
+    }
+
+    /** @return BelongsTo<ScrapeRun, $this> */
+    public function scrapeRun(): BelongsTo
+    {
+        return $this->belongsTo(ScrapeRun::class);
+    }
+
+    /** @return BelongsTo<RawScrapePayload, $this> */
+    public function rawScrapePayload(): BelongsTo
+    {
+        return $this->belongsTo(RawScrapePayload::class);
     }
 }

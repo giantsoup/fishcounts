@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Guarded(['id'])]
 class ParserError extends Model
@@ -15,5 +16,17 @@ class ParserError extends Model
             'context' => 'array',
             'resolved_at' => 'datetime',
         ];
+    }
+
+    /** @return BelongsTo<ScrapeSource, $this> */
+    public function scrapeSource(): BelongsTo
+    {
+        return $this->belongsTo(ScrapeSource::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function resolver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'resolved_by_user_id');
     }
 }

@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateScrapeSourceRequest;
 use App\Models\ScrapeSource;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 
 class ScrapeSourceController extends Controller
 {
@@ -17,15 +17,12 @@ class ScrapeSourceController extends Controller
         return view('admin.sources.index', ['sources' => ScrapeSource::query()->orderBy('priority')->get()]);
     }
 
-    public function update(Request $request, ScrapeSource $source): RedirectResponse
+    public function update(UpdateScrapeSourceRequest $request, ScrapeSource $source): RedirectResponse
     {
-        $this->authorize('update', $source);
-
-        $source->update($request->validate([
-            'priority' => ['required', 'integer', 'min:1', 'max:1000'],
-            'is_enabled' => ['sometimes', 'boolean'],
-            'rate_limit_seconds' => ['required', 'integer', 'min:1', 'max:3600'],
-            'notes' => ['nullable', 'string', 'max:5000'],
+        $source->update(array_merge($request->validated(), [
+            'is_enabled' => $request->boolean('is_enabled'),
+            'supports_historical_dates' => $request->boolean('supports_historical_dates'),
+            'supports_landing_filter' => $request->boolean('supports_landing_filter'),
         ]));
 
         return redirect()->route('admin.sources.index')->with('status', 'Source updated.');

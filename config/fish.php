@@ -20,6 +20,8 @@ return [
             'seaforthlanding.com',
             'www.hmlanding.com',
             'hmlanding.com',
+            'www.fishcounts.com',
+            'fishcounts.com',
             'www.pointlomasportfishing.com',
             'pointlomasportfishing.com',
             'www.sportfishingreport.com',

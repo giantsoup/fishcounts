@@ -39,6 +39,11 @@ class RawScrapePayloadPolicy
         return false;
     }
 
+    public function reparse(User $user, RawScrapePayload $rawScrapePayload): bool
+    {
+        return $user->isAdmin();
+    }
+
     /**
      * Determine whether the user can delete the model.
      */

@@ -6,7 +6,7 @@ use App\DTOs\FetchResult;
 use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\RawPayloadData;
 use App\Models\ScrapeSource;
-use App\Services\Parsing\GenericFishCountParser;
+use App\Services\Parsing\SourceSpecificFishCountParser;
 use App\Services\Scraping\Contracts\FishCountSourceAdapter;
 use App\Services\Scraping\HttpSourceFetcher;
 use Carbon\CarbonImmutable;
@@ -15,7 +15,7 @@ abstract class AbstractHttpFishCountAdapter implements FishCountSourceAdapter
 {
     public function __construct(
         private readonly HttpSourceFetcher $fetcher,
-        private readonly GenericFishCountParser $parser,
+        private readonly SourceSpecificFishCountParser $parser,
     ) {}
 
     public function supportsDate(CarbonImmutable $date): bool

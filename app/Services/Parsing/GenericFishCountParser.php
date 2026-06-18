@@ -27,7 +27,7 @@ class GenericFishCountParser
         return new ParsedFishCountCollection($reports);
     }
 
-    private function parseLine(RawPayloadData $payload, string $line): ?ParsedTripReportData
+    public function parseLine(RawPayloadData $payload, string $line, string $parserVersion = 'generic-line-v1'): ?ParsedTripReportData
     {
         if (! preg_match('/(?<anglers>\d+)\s+(?:anglers?|people|passengers?)\b/i', $line, $anglerMatches)) {
             return null;
@@ -52,34 +52,77 @@ class GenericFishCountParser
             anglers: (int) $anglerMatches['anglers'],
             rawFishCountText: $line,
             speciesCounts: $speciesCounts->all(),
-            metadata: ['parser' => 'generic-line-v1'],
+            metadata: ['parser' => $parserVersion],
         );
     }
 
     /** @return Collection<int, ParsedSpeciesCountData> */
-    private function parseSpeciesCounts(string $line): Collection
+    public function parseSpeciesCounts(string $line): Collection
     {
-        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s\-]{2,40})(?=,|\.|$|\s+\d+\s+)/', $line, $matches, PREG_SET_ORDER);
+        $line = Str::of($line)
+            ->replace("\u{00A0}", ' ')
+            ->replaceMatches('/\([^)]*\b(?:lbs?|pounds?)\b[^)]*\)/i', '')
+            ->replaceMatches('/\bfrom\s+(?:\d+\s*(?:-|to)\s*\d+|up to\s+\d+|\d+)\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
+            ->replaceMatches('/\bfor\s+\d+\s+anglers?\b[^,.]*/i', '')
+            ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
+            ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
+            ->toString();
+
+        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|$)|\s+\d+\s+)/i', $line, $matches, PREG_SET_ORDER);
 
         return collect($matches)
             ->map(function (array $match): ParsedSpeciesCountData {
                 $species = Str::of($match['species'])
-                    ->replaceMatches('/\b(?:anglers?|people|passengers?|released|kept)\b/i', '')
+                    ->replaceMatches('/^\s*(?:and|with)\s+/i', '')
+                    ->replaceMatches('/\b(?:anglers?|people|passengers?|released|kept|aboard)\b/i', '')
                     ->squish()
                     ->title()
                     ->toString();
+                $count = (int) $match['count'];
+                $isReleased = isset($match['released']) && Str::lower($match['released']) === 'released';
 
                 return new ParsedSpeciesCountData(
                     speciesName: $species,
-                    count: (int) $match['count'],
+                    count: $isReleased ? 0 : $count,
+                    releasedCount: $isReleased ? $count : 0,
                     rawText: trim($match[0]),
                 );
             })
-            ->filter(fn (ParsedSpeciesCountData $count): bool => $count->speciesName !== '');
+            ->filter(fn (ParsedSpeciesCountData $count): bool => $count->speciesName !== '' && ! in_array(Str::lower($count->speciesName), [
+                'lbs',
+                'lb',
+                'day',
+                'day with',
+                'boats',
+                'trips',
+                'anglers',
+            ], true))
+            ->groupBy(fn (ParsedSpeciesCountData $count): string => $count->speciesName)
+            ->map(function (Collection $counts): ParsedSpeciesCountData {
+                /** @var ParsedSpeciesCountData $first */
+                $first = $counts->first();
+
+                return new ParsedSpeciesCountData(
+                    speciesName: $first->speciesName,
+                    count: $counts->sum('count'),
+                    releasedCount: $counts->sum('releasedCount'),
+                    rawText: $counts->pluck('rawText')->implode(', '),
+                );
+            })
+            ->values();
     }
 
     private function extractBeforeAnglers(string $line): ?string
     {
+        $boatName = $this->extractNarrativeBoatName($line);
+
+        if ($boatName !== null) {
+            return $boatName;
+        }
+
         $before = Str::before($line, preg_match('/\d+\s+(?:anglers?|people|passengers?)/i', $line, $matches) ? $matches[0] : '');
         $candidate = Str::of($before)->replaceMatches('/^\W+|\W+$/', '')->squish()->toString();
 
@@ -88,9 +131,28 @@ class GenericFishCountParser
 
     private function extractTripType(string $line): ?string
     {
+        if (preg_match('/\b(?<trip>\d+(?:\.\d+)?\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight)\b/i', $line, $matches)) {
+            return Str::of($matches['trip'])->squish()->title()->toString();
+        }
+
         foreach (['1/2 Day', '3/4 Day', 'Full Day', 'Overnight', '1.5 Day', '2 Day', 'Twilight'] as $tripType) {
             if (Str::contains($line, $tripType, true)) {
                 return $tripType;
+            }
+        }
+
+        return null;
+    }
+
+    private function extractNarrativeBoatName(string $line): ?string
+    {
+        foreach ([
+            '/\bThe\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:returned|had|has|just checked|checked|ended|caught)\b/',
+            '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+caught\b/',
+            '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
+        ] as $pattern) {
+            if (preg_match($pattern, $line, $matches)) {
+                return Str::of($matches['boat'])->replaceMatches('/\b(?:The|Update|Report|Tuesday|Wednesday)\b/i', '')->squish()->toString();
             }
         }
 

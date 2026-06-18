@@ -13,6 +13,6 @@ class SportfishingReportLandingPagesAdapter extends AbstractHttpFishCountAdapter
 
     protected function pathForDate(CarbonImmutable $date): string
     {
-        return '/fish-counts/san-diego.php?date='.$date->format('Y-m-d');
+        return '/dock_totals/?date='.$date->format('Y-m-d').'&region_id=7';
     }
 }

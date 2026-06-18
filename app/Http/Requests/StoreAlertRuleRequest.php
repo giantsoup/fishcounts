@@ -65,4 +65,37 @@ class StoreAlertRuleRequest extends FormRequest
             },
         ];
     }
+
+    /** @return array<string, mixed> */
+    public function ruleAttributes(): array
+    {
+        $validated = $this->validated();
+
+        return [
+            'name' => $validated['name'],
+            'species_id' => $validated['species_id'],
+            'is_enabled' => $this->boolean('is_enabled'),
+            'minimum_score' => $validated['minimum_score'],
+            'minimum_total_count' => $validated['minimum_total_count'] ?? null,
+            'minimum_count_per_angler' => $validated['minimum_count_per_angler'] ?? null,
+            'trend_window_days' => $validated['trend_window_days'],
+            'baseline_window_days' => $validated['baseline_window_days'],
+            'email_enabled' => $this->boolean('email_enabled'),
+            'discord_enabled' => $this->boolean('discord_enabled'),
+            'include_in_weekly_digest' => $this->boolean('include_in_weekly_digest'),
+        ];
+    }
+
+    /** @return array{region_ids: array<int, int>, trip_type_ids: array<int, int>, landing_ids: array<int, int>, boat_ids: array<int, int>} */
+    public function filterAttributes(): array
+    {
+        $validated = $this->validated();
+
+        return [
+            'region_ids' => array_map('intval', $validated['region_ids']),
+            'trip_type_ids' => array_map('intval', $validated['trip_type_ids']),
+            'landing_ids' => array_map('intval', $validated['landing_ids'] ?? []),
+            'boat_ids' => array_map('intval', $validated['boat_ids'] ?? []),
+        ];
+    }
 }

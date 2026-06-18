@@ -64,7 +64,10 @@ class TripReportNormalizer
                 $count++;
             }
 
-            $payload->update(['parsed_at' => now(), 'parser_version' => 'generic-line-v1']);
+            $payload->update([
+                'parsed_at' => now(),
+                'parser_version' => $parsed->tripReports->first()?->metadata['parser'] ?? 'unknown',
+            ]);
 
             return $count;
         });

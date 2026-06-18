@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ScrapeRun extends Model
 {
     protected $attributes = [
-        'status' => 'pending',
+        'status' => ScrapeRunStatus::Pending->value,
     ];
 
     protected function casts(): array

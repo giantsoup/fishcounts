@@ -10,4 +10,5 @@ enum ScrapeRunStatus: string
     case Failed = 'failed';
     case Partial = 'partial';
     case Cancelled = 'cancelled';
+    case Unavailable = 'unavailable';
 }

@@ -10,4 +10,5 @@ enum BackfillRunStatus: string
     case Succeeded = 'succeeded';
     case Failed = 'failed';
     case Cancelled = 'cancelled';
+    case Unavailable = 'unavailable';
 }

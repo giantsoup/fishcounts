@@ -29,14 +29,14 @@ class BackfillRunJob implements ShouldBeUnique, ShouldQueue
     {
         $backfill = BackfillRun::query()->findOrFail($this->backfillRunId);
 
-        if ($backfill->status === BackfillRunStatus::Cancelled) {
+        if (in_array($backfill->status, [BackfillRunStatus::Cancelled, BackfillRunStatus::Paused], true)) {
             return;
         }
 
         $backfill->update(['status' => BackfillRunStatus::Running, 'started_at' => $backfill->started_at ?? now()]);
 
         $backfill->items()
-            ->where('status', 'pending')
+            ->where('status', BackfillRunStatus::Pending->value)
             ->orderBy('target_date')
             ->pluck('target_date')
             ->unique()

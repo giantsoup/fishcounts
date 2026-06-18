@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AlertEvent extends Model
 {
     protected $attributes = [
-        'status' => 'pending',
+        'status' => AlertEventStatus::Pending->value,
     ];
 
     protected function casts(): array

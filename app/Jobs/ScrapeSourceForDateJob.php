@@ -67,7 +67,23 @@ class ScrapeSourceForDateJob implements ShouldBeUnique, ShouldQueue
                 return;
             }
 
-            $payload = $payloadStore->store($scrapeRun, $source, $adapter->fetchForDate($source, $date));
+            $fetchResult = $adapter->fetchForDate($source, $date);
+            $payload = $payloadStore->store($scrapeRun, $source, $fetchResult);
+
+            $unavailableReason = $this->unavailableReason($fetchResult->statusCode, $fetchResult->body);
+
+            if ($unavailableReason !== null) {
+                $scrapeRun->update([
+                    'status' => ScrapeRunStatus::Unavailable,
+                    'finished_at' => now(),
+                    'metadata' => [
+                        'raw_scrape_payload_id' => $payload->id,
+                        'reason' => $unavailableReason,
+                    ],
+                ]);
+
+                return;
+            }
 
             $scrapeRun->update([
                 'status' => ScrapeRunStatus::Succeeded,
@@ -99,5 +115,18 @@ class ScrapeSourceForDateJob implements ShouldBeUnique, ShouldQueue
     private function maskedError(Throwable $throwable): string
     {
         return str($throwable->getMessage())->replaceMatches('/https:\/\/discord\.com\/api\/webhooks\/[^\s]+/', 'https://discord.com/api/webhooks/[masked]')->limit(1000)->toString();
+    }
+
+    private function unavailableReason(?int $statusCode, string $body): ?string
+    {
+        if (in_array($statusCode, [204, 404, 410], true)) {
+            return "Source returned HTTP {$statusCode}.";
+        }
+
+        if (trim($body) === '') {
+            return 'Source returned an empty payload.';
+        }
+
+        return null;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\ScoreRunStatus;
 use App\Jobs\ComputeScoreForRuleJob;
 use App\Models\AlertRule;
 use App\Models\ScoreRun;
@@ -17,7 +18,7 @@ class ScoreDateCommand extends Command
     public function handle(): int
     {
         $date = CarbonImmutable::parse($this->argument('date'))->toDateString();
-        $scoreRun = ScoreRun::query()->firstOrCreate(['run_date' => $date], ['status' => 'pending', 'started_at' => now()]);
+        $scoreRun = ScoreRun::query()->firstOrCreate(['run_date' => $date], ['status' => ScoreRunStatus::Pending, 'started_at' => now()]);
 
         AlertRule::query()
             ->where('is_enabled', true)

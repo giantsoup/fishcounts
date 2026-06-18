@@ -36,17 +36,36 @@
                                 <option value="{{ $item->id }}" @selected((int) old('species_id', $rule->species_id) === $item->id)>{{ $item->name }}</option>
                             @endforeach
                         </select>
+                        <x-input-error :messages="$errors->get('species_id')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="minimum_score" value="Minimum score" />
                         <x-text-input id="minimum_score" name="minimum_score" type="number" min="0" max="100" class="mt-1 block w-full" :value="old('minimum_score', $rule->minimum_score ?? 70)" required />
+                        <x-input-error :messages="$errors->get('minimum_score')" class="mt-2" />
                     </div>
                 </div>
 
-                <div class="grid gap-4 md:grid-cols-3">
-                    <x-text-input name="minimum_total_count" type="number" min="0" placeholder="Minimum total count" :value="old('minimum_total_count', $rule->minimum_total_count)" />
-                    <x-text-input name="minimum_count_per_angler" type="number" step="0.01" min="0" placeholder="Minimum count per angler" :value="old('minimum_count_per_angler', $rule->minimum_count_per_angler)" />
-                    <x-text-input name="trend_window_days" type="number" min="1" max="30" placeholder="Trend days" :value="old('trend_window_days', $rule->trend_window_days ?? 3)" />
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                        <x-input-label for="minimum_total_count" value="Minimum total count" />
+                        <x-text-input id="minimum_total_count" name="minimum_total_count" type="number" min="0" class="mt-1 block w-full" :value="old('minimum_total_count', $rule->minimum_total_count)" />
+                        <x-input-error :messages="$errors->get('minimum_total_count')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="minimum_count_per_angler" value="Minimum count per angler" />
+                        <x-text-input id="minimum_count_per_angler" name="minimum_count_per_angler" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('minimum_count_per_angler', $rule->minimum_count_per_angler)" />
+                        <x-input-error :messages="$errors->get('minimum_count_per_angler')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="trend_window_days" value="Trend window days" />
+                        <x-text-input id="trend_window_days" name="trend_window_days" type="number" min="1" max="30" class="mt-1 block w-full" :value="old('trend_window_days', $rule->trend_window_days ?? 3)" required />
+                        <x-input-error :messages="$errors->get('trend_window_days')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="baseline_window_days" value="Baseline window days" />
+                        <x-text-input id="baseline_window_days" name="baseline_window_days" type="number" min="1" max="90" class="mt-1 block w-full" :value="old('baseline_window_days', $rule->baseline_window_days ?? 7)" required />
+                        <x-input-error :messages="$errors->get('baseline_window_days')" class="mt-2" />
+                    </div>
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
@@ -57,6 +76,7 @@
                                 <option value="{{ $region->id }}" @selected(in_array($region->id, array_map('intval', $selectedRegions), true))>{{ $region->name }}</option>
                             @endforeach
                         </select>
+                        <x-input-error :messages="$errors->get('region_ids')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label value="Trip types" />
@@ -65,23 +85,36 @@
                                 <option value="{{ $tripType->id }}" @selected(in_array($tripType->id, array_map('intval', $selectedTripTypes), true))>{{ $tripType->name }}</option>
                             @endforeach
                         </select>
+                        <x-input-error :messages="$errors->get('trip_type_ids')" class="mt-2" />
                     </div>
                 </div>
 
                 <div class="grid gap-4 md:grid-cols-2">
-                    <select name="landing_ids[]" multiple class="block w-full border-gray-300 rounded-md shadow-sm min-h-28">
-                        @foreach ($landings as $landing)
-                            <option value="{{ $landing->id }}" @selected(in_array($landing->id, array_map('intval', $selectedLandings), true))>{{ $landing->name }}</option>
-                        @endforeach
-                    </select>
-                    <select name="boat_ids[]" multiple class="block w-full border-gray-300 rounded-md shadow-sm min-h-28">
-                        @foreach ($boats as $boat)
-                            <option value="{{ $boat->id }}" @selected(in_array($boat->id, array_map('intval', $selectedBoats), true))>{{ $boat->name }}</option>
-                        @endforeach
-                    </select>
+                    <div>
+                        <x-input-label value="Landings" />
+                        <select name="landing_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                            @foreach ($landings as $landing)
+                                <option value="{{ $landing->id }}" @selected(in_array($landing->id, array_map('intval', $selectedLandings), true))>{{ $landing->name }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error :messages="$errors->get('landing_ids')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label value="Boats" />
+                        <select name="boat_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                            @foreach ($boats as $boat)
+                                <option value="{{ $boat->id }}" @selected(in_array($boat->id, array_map('intval', $selectedBoats), true))>{{ $boat->name }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error :messages="$errors->get('boat_ids')" class="mt-2" />
+                    </div>
                 </div>
 
                 <div class="flex flex-wrap gap-4 text-sm">
+                    <input type="hidden" name="is_enabled" value="0">
+                    <input type="hidden" name="email_enabled" value="0">
+                    <input type="hidden" name="discord_enabled" value="0">
+                    <input type="hidden" name="include_in_weekly_digest" value="0">
                     <label><input type="checkbox" name="is_enabled" value="1" @checked(old('is_enabled', $rule->is_enabled ?? true))> Enabled</label>
                     <label><input type="checkbox" name="email_enabled" value="1" @checked(old('email_enabled', $rule->email_enabled ?? true))> Email</label>
                     <label><input type="checkbox" name="discord_enabled" value="1" @checked(old('discord_enabled', $rule->discord_enabled ?? false))> Discord</label>

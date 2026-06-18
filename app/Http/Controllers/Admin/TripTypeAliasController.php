@@ -1,0 +1,55 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTripTypeAliasRequest;
+use App\Models\ParserError;
+use App\Models\TripType;
+use App\Models\TripTypeAlias;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
+
+class TripTypeAliasController extends Controller
+{
+    public function index(): View
+    {
+        abort_unless(auth()->user()?->isAdmin(), 403);
+
+        return view('admin.trip-type-aliases.index', [
+            'aliases' => TripTypeAlias::query()->with('tripType')->latest()->paginate(50),
+            'tripTypes' => TripType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(),
+        ]);
+    }
+
+    public function store(StoreTripTypeAliasRequest $request): RedirectResponse
+    {
+        $alias = TripTypeAlias::query()->create([
+            'trip_type_id' => $request->validated('trip_type_id'),
+            'alias' => $request->validated('alias'),
+            'normalized_alias' => $request->normalizedAlias(),
+        ]);
+
+        $this->resolveParserError($request, $alias->alias);
+
+        return redirect()->back()->with('status', 'Trip type alias saved.');
+    }
+
+    private function resolveParserError(StoreTripTypeAliasRequest $request, string $alias): void
+    {
+        $parserErrorId = $request->validated('parser_error_id');
+
+        if ($parserErrorId === null) {
+            return;
+        }
+
+        ParserError::query()
+            ->whereKey($parserErrorId)
+            ->where('raw_field', 'trip_type')
+            ->where('raw_value', $alias)
+            ->update([
+                'resolved_at' => now(),
+                'resolved_by_user_id' => $request->user()->id,
+            ]);
+    }
+}

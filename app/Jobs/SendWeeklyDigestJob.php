@@ -8,6 +8,7 @@ use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Notifications\WeeklyFishingDigestNotification;
 use App\Services\Notifications\DiscordWebhookSender;
+use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -26,7 +27,7 @@ class SendWeeklyDigestJob implements ShouldQueue
         $this->onQueue('notifications');
     }
 
-    public function handle(DiscordWebhookSender $discord): void
+    public function handle(DiscordWebhookSender $discord, WeeklyDigestBuilder $digestBuilder): void
     {
         $user = User::query()->with('notificationDestinations')->findOrFail($this->userId);
         $destination = $user->notificationDestinations
@@ -46,7 +47,9 @@ class SendWeeklyDigestJob implements ShouldQueue
             if ($this->channel === NotificationChannel::Email) {
                 $user->notify(new WeeklyFishingDigestNotification($user, CarbonImmutable::parse($this->date)));
             } elseif ($destination !== null) {
-                $discord->send($destination->destination, ['content' => "Weekly fishing digest for week ending {$this->date} is ready."]);
+                $discord->send($destination->destination, [
+                    'content' => $digestBuilder->discordContent($user, CarbonImmutable::parse($this->date)),
+                ]);
             } else {
                 $delivery->update(['status' => NotificationDeliveryStatus::Skipped, 'failed_at' => now(), 'error_message' => 'No enabled destination.']);
 

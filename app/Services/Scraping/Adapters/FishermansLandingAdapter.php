@@ -13,6 +13,6 @@ class FishermansLandingAdapter extends AbstractHttpFishCountAdapter
 
     protected function pathForDate(CarbonImmutable $date): string
     {
-        return '/fish-counts.php?date='.$date->format('Y-m-d');
+        return '/fishcounts.php';
     }
 }

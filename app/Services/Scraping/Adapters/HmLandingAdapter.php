@@ -13,6 +13,6 @@ class HmLandingAdapter extends AbstractHttpFishCountAdapter
 
     protected function pathForDate(CarbonImmutable $date): string
     {
-        return '/fish-counts?date='.$date->format('Y-m-d');
+        return 'https://www.fishcounts.com/hmlanding/fishcounts.php';
     }
 }

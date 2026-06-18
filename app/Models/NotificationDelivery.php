@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class NotificationDelivery extends Model
 {
     protected $attributes = [
-        'status' => 'pending',
+        'status' => NotificationDeliveryStatus::Pending->value,
     ];
 
     protected function casts(): array

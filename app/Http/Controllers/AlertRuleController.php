@@ -13,7 +13,6 @@ use App\Models\TripType;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class AlertRuleController extends Controller
@@ -41,8 +40,8 @@ class AlertRuleController extends Controller
     public function store(StoreAlertRuleRequest $request): RedirectResponse
     {
         $rule = DB::transaction(function () use ($request): AlertRule {
-            $rule = $request->user()->alertRules()->create($this->ruleAttributes($request->validated()));
-            $this->syncFilters($rule, $request->validated());
+            $rule = $request->user()->alertRules()->create($request->ruleAttributes());
+            $this->syncFilters($rule, $request->filterAttributes());
 
             return $rule;
         });
@@ -63,8 +62,8 @@ class AlertRuleController extends Controller
     public function update(UpdateAlertRuleRequest $request, AlertRule $alertRule): RedirectResponse
     {
         DB::transaction(function () use ($request, $alertRule): void {
-            $alertRule->update($this->ruleAttributes($request->validated()));
-            $this->syncFilters($alertRule, $request->validated());
+            $alertRule->update($request->ruleAttributes());
+            $this->syncFilters($alertRule, $request->filterAttributes());
         });
 
         return redirect()->route('alert-rules.edit', $alertRule)->with('status', 'Alert rule updated.');
@@ -91,30 +90,12 @@ class AlertRuleController extends Controller
         ];
     }
 
-    /** @param array<string, mixed> $validated */
-    private function ruleAttributes(array $validated): array
+    /** @param array{region_ids: array<int, int>, trip_type_ids: array<int, int>, landing_ids: array<int, int>, boat_ids: array<int, int>} $filters */
+    private function syncFilters(AlertRule $rule, array $filters): void
     {
-        return Arr::only($validated, [
-            'name',
-            'species_id',
-            'is_enabled',
-            'minimum_score',
-            'minimum_total_count',
-            'minimum_count_per_angler',
-            'trend_window_days',
-            'baseline_window_days',
-            'email_enabled',
-            'discord_enabled',
-            'include_in_weekly_digest',
-        ]);
-    }
-
-    /** @param array<string, mixed> $validated */
-    private function syncFilters(AlertRule $rule, array $validated): void
-    {
-        $rule->regions()->sync($validated['region_ids']);
-        $rule->tripTypes()->sync($validated['trip_type_ids']);
-        $rule->landings()->sync($validated['landing_ids'] ?? []);
-        $rule->boats()->sync($validated['boat_ids'] ?? []);
+        $rule->regions()->sync($filters['region_ids']);
+        $rule->tripTypes()->sync($filters['trip_type_ids']);
+        $rule->landings()->sync($filters['landing_ids']);
+        $rule->boats()->sync($filters['boat_ids']);
     }
 }
