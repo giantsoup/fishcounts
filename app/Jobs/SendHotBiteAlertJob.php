@@ -10,11 +10,13 @@ use App\Models\NotificationDelivery;
 use App\Models\NotificationDestination;
 use App\Notifications\HotBiteAlertNotification;
 use App\Services\Notifications\DiscordWebhookSender;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
-class SendHotBiteAlertJob implements ShouldQueue
+class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
 {
     use FoundationQueueable;
 
@@ -36,6 +38,11 @@ class SendHotBiteAlertJob implements ShouldQueue
     public function handle(DiscordWebhookSender $discord): void
     {
         $event = AlertEvent::query()->with(['user.notificationDestinations', 'alertRule.species', 'scoreResult'])->findOrFail($this->alertEventId);
+
+        if ($this->alreadySent($event)) {
+            return;
+        }
+
         $destination = $this->destination($event);
 
         $delivery = NotificationDelivery::query()->create([
@@ -50,7 +57,7 @@ class SendHotBiteAlertJob implements ShouldQueue
 
         try {
             if ($this->channel === NotificationChannel::Email) {
-                $event->user->notify(new HotBiteAlertNotification($event));
+                Notification::sendNow($event->user, new HotBiteAlertNotification($event));
                 $event->update(['email_sent_at' => now()]);
             } elseif ($destination !== null) {
                 $discord->send($destination->destination, [
@@ -75,6 +82,19 @@ class SendHotBiteAlertJob implements ShouldQueue
 
             throw $throwable;
         }
+    }
+
+    public function uniqueId(): string
+    {
+        return "{$this->alertEventId}:{$this->channel->value}";
+    }
+
+    private function alreadySent(AlertEvent $event): bool
+    {
+        return match ($this->channel) {
+            NotificationChannel::Email => $event->email_sent_at !== null,
+            NotificationChannel::Discord => $event->discord_sent_at !== null,
+        };
     }
 
     private function destination(AlertEvent $event): ?NotificationDestination

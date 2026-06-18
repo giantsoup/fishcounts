@@ -14,7 +14,7 @@ return new class extends Migration
             $table->date('from_date');
             $table->date('to_date');
             $table->string('status')->default('pending')->index();
-            $table->json('source_ids');
+            $table->jsonb('source_ids');
             $table->unsignedSmallInteger('batch_size_days')->default(7);
             $table->date('current_date')->nullable();
             $table->unsignedInteger('total_days')->default(0);
@@ -50,7 +50,7 @@ return new class extends Migration
             $table->string('raw_field')->nullable();
             $table->text('raw_value')->nullable();
             $table->text('message');
-            $table->json('context')->nullable();
+            $table->jsonb('context')->nullable();
             $table->timestamp('resolved_at')->nullable();
             $table->foreignId('resolved_by_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

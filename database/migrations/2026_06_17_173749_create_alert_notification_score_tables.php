@@ -22,7 +22,7 @@ return new class extends Migration
             $table->boolean('email_enabled')->default(true);
             $table->boolean('discord_enabled')->default(false);
             $table->boolean('include_in_weekly_digest')->default(true);
-            $table->json('settings')->nullable();
+            $table->jsonb('settings')->nullable();
             $table->timestamps();
             $table->index(['user_id', 'is_enabled']);
         });
@@ -89,7 +89,7 @@ return new class extends Migration
             $table->unsignedTinyInteger('count_per_angler_score')->default(0);
             $table->unsignedTinyInteger('breadth_score')->default(0);
             $table->unsignedTinyInteger('source_confidence_score')->default(0);
-            $table->json('explanation');
+            $table->jsonb('explanation');
             $table->timestamps();
             $table->unique(['alert_rule_id', 'score_date']);
             $table->index(['level', 'score_date']);
@@ -125,7 +125,7 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamp('failed_at')->nullable();
             $table->text('error_message')->nullable();
-            $table->json('metadata')->nullable();
+            $table->jsonb('metadata')->nullable();
             $table->timestamps();
         });
     }

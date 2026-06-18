@@ -10,11 +10,13 @@ use App\Notifications\WeeklyFishingDigestNotification;
 use App\Services\Notifications\DiscordWebhookSender;
 use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Support\Facades\Notification;
 use Throwable;
 
-class SendWeeklyDigestJob implements ShouldQueue
+class SendWeeklyDigestJob implements ShouldBeUnique, ShouldQueue
 {
     use FoundationQueueable;
 
@@ -30,6 +32,11 @@ class SendWeeklyDigestJob implements ShouldQueue
     public function handle(DiscordWebhookSender $discord, WeeklyDigestBuilder $digestBuilder): void
     {
         $user = User::query()->with('notificationDestinations')->findOrFail($this->userId);
+
+        if ($this->alreadySent()) {
+            return;
+        }
+
         $destination = $user->notificationDestinations
             ->first(fn ($destination): bool => $destination->channel === $this->channel && $destination->is_enabled);
 
@@ -45,7 +52,7 @@ class SendWeeklyDigestJob implements ShouldQueue
 
         try {
             if ($this->channel === NotificationChannel::Email) {
-                $user->notify(new WeeklyFishingDigestNotification($user, CarbonImmutable::parse($this->date)));
+                Notification::sendNow($user, new WeeklyFishingDigestNotification($user, CarbonImmutable::parse($this->date)));
             } elseif ($destination !== null) {
                 $discord->send($destination->destination, [
                     'content' => $digestBuilder->discordContent($user, CarbonImmutable::parse($this->date)),
@@ -66,5 +73,21 @@ class SendWeeklyDigestJob implements ShouldQueue
 
             throw $throwable;
         }
+    }
+
+    public function uniqueId(): string
+    {
+        return "{$this->userId}:{$this->date}:{$this->channel->value}";
+    }
+
+    private function alreadySent(): bool
+    {
+        return NotificationDelivery::query()
+            ->where('user_id', $this->userId)
+            ->where('channel', $this->channel)
+            ->where('notification_type', WeeklyFishingDigestNotification::class)
+            ->where('status', NotificationDeliveryStatus::Sent)
+            ->where('metadata->week_ending', $this->date)
+            ->exists();
     }
 }

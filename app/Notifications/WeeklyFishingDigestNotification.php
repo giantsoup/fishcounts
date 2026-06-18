@@ -5,15 +5,11 @@ namespace App\Notifications;
 use App\Models\User;
 use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class WeeklyFishingDigestNotification extends Notification implements ShouldQueue
+class WeeklyFishingDigestNotification extends Notification
 {
-    use Queueable;
-
     public function __construct(
         public readonly User $user,
         public readonly CarbonImmutable $weekEnding,

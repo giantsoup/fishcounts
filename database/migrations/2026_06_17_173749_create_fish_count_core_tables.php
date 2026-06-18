@@ -95,7 +95,7 @@ return new class extends Migration
             $table->timestamp('started_at')->nullable();
             $table->timestamp('finished_at')->nullable();
             $table->text('error_message')->nullable();
-            $table->json('metadata')->nullable();
+            $table->jsonb('metadata')->nullable();
             $table->timestamps();
         });
 
@@ -113,7 +113,7 @@ return new class extends Migration
             $table->timestamp('parsed_at')->nullable();
             $table->string('parser_version')->nullable();
             $table->text('error_message')->nullable();
-            $table->json('metadata')->nullable();
+            $table->jsonb('metadata')->nullable();
             $table->timestamps();
             $table->unique(['scrape_source_id', 'target_date', 'payload_hash']);
         });
@@ -136,7 +136,7 @@ return new class extends Migration
             $table->boolean('is_deduped_primary')->default(true)->index();
             $table->string('dedupe_key')->index();
             $table->unsignedTinyInteger('source_confidence')->default(100);
-            $table->json('metadata')->nullable();
+            $table->jsonb('metadata')->nullable();
             $table->timestamps();
             $table->unique(['source_id', 'source_trip_identifier']);
             $table->index(['landing_id', 'trip_date']);
