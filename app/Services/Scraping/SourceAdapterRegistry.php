@@ -8,8 +8,7 @@ use App\Services\Scraping\Adapters\HmLandingAdapter;
 use App\Services\Scraping\Adapters\PointLomaSportfishingAdapter;
 use App\Services\Scraping\Adapters\SanDiegoFishReportsAdapter;
 use App\Services\Scraping\Adapters\SeaforthLandingAdapter;
-use App\Services\Scraping\Adapters\SportfishingReportLandingPagesAdapter;
-use App\Services\Scraping\Adapters\Tuna976ReportsAdapter;
+use App\Services\Scraping\Adapters\SportfishingReportPartyBoatScoresAdapter;
 use App\Services\Scraping\Contracts\FishCountSourceAdapter;
 use InvalidArgumentException;
 
@@ -22,8 +21,7 @@ class SourceAdapterRegistry
         'seaforth_landing' => SeaforthLandingAdapter::class,
         'hm_landing' => HmLandingAdapter::class,
         'point_loma_sportfishing' => PointLomaSportfishingAdapter::class,
-        'sportfishingreport_landing_pages' => SportfishingReportLandingPagesAdapter::class,
-        'tuna_976_reports' => Tuna976ReportsAdapter::class,
+        'sportfishingreport_landing_pages' => SportfishingReportPartyBoatScoresAdapter::class,
     ];
 
     public function forSource(ScrapeSource $source): FishCountSourceAdapter

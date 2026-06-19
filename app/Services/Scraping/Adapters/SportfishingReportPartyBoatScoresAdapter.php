@@ -4,15 +4,15 @@ namespace App\Services\Scraping\Adapters;
 
 use Carbon\CarbonImmutable;
 
-class Tuna976ReportsAdapter extends AbstractHttpFishCountAdapter
+class SportfishingReportPartyBoatScoresAdapter extends AbstractHttpFishCountAdapter
 {
     public function sourceKey(): string
     {
-        return 'tuna_976_reports';
+        return 'sportfishingreport_landing_pages';
     }
 
     protected function pathForDate(CarbonImmutable $date): string
     {
-        return '/counts?m='.$date->month.'&d='.$date->day.'&y='.$date->year;
+        return '/dock_totals/boats.php?date='.$date->format('Y-m-d');
     }
 }

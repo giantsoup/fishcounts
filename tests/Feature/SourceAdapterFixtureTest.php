@@ -236,7 +236,43 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(140, $report->speciesCounts[1]->count);
     }
 
-    public function test_report_feed_source_parser_handles_dock_totals_header_fixture(): void
+    public function test_report_feed_source_parser_omits_json_dock_total_fixture(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'sandiego_fish_reports',
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: 'https://www.sandiegofishreports.com/dock_totals/index.php',
+            body: json_encode([
+                'reports' => [
+                    [
+                        'boat_name' => 'Dock Total',
+                        'landing_name' => 'Fisherman\'s Landing',
+                        'trip_type' => 'All Trips',
+                        'passengers' => 115,
+                        'species_counts' => [
+                            ['species' => 'Rockfish', 'count' => 159],
+                        ],
+                    ],
+                ],
+            ], JSON_THROW_ON_ERROR),
+        ));
+
+        $this->assertCount(0, $parsed->tripReports);
+    }
+
+    public function test_generic_parser_omits_explicit_dock_total_line(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'unknown_report_feed',
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: 'https://example.test/dock-total',
+            body: '<p>Fisherman\'s Landing Dock Total All Trips 115 anglers 159 Rockfish, 4 Calico Bass.</p>',
+        ));
+
+        $this->assertCount(0, $parsed->tripReports);
+    }
+
+    public function test_report_feed_source_parser_omits_dock_totals_header_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
             sourceKey: 'sandiego_fish_reports',
@@ -250,20 +286,10 @@ class SourceAdapterFixtureTest extends TestCase
             HTML,
         ));
 
-        $report = $parsed->tripReports->first();
-
-        $this->assertCount(1, $parsed->tripReports);
-        $this->assertSame('Point Loma Sportfishing', $report->landingName);
-        $this->assertSame('dock-total', $report->metadata['format']);
-        $this->assertSame(135, $report->anglers);
-        $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
-        $this->assertSame(84, $report->speciesCounts[0]->count);
-        $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
-        $this->assertSame(34, $report->speciesCounts[1]->count);
-        $this->assertSame(100, $report->speciesCounts[1]->releasedCount);
+        $this->assertCount(0, $parsed->tripReports);
     }
 
-    public function test_report_feed_source_parser_handles_sportfishing_report_div_dock_totals_fixture(): void
+    public function test_report_feed_source_parser_omits_sportfishing_report_div_dock_totals_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
             sourceKey: 'sportfishingreport_landing_pages',
@@ -282,71 +308,73 @@ class SourceAdapterFixtureTest extends TestCase
             HTML,
         ));
 
-        $report = $parsed->tripReports->first();
-
-        $this->assertCount(1, $parsed->tripReports);
-        $this->assertSame('H&M Landing', $report->landingName);
-        $this->assertSame(103, $report->anglers);
-        $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
-        $this->assertSame(65, $report->speciesCounts[0]->count);
-        $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
-        $this->assertSame(37, $report->speciesCounts[1]->count);
-        $this->assertSame(50, $report->speciesCounts[1]->releasedCount);
+        $this->assertCount(0, $parsed->tripReports);
     }
 
-    public function test_report_feed_source_parser_handles_tuna_976_landing_card_fixture(): void
+    public function test_sportfishing_report_party_boat_parser_only_reads_san_diego_section(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
-            sourceKey: 'tuna_976_reports',
-            targetDate: CarbonImmutable::parse('2026-06-15'),
-            url: 'https://www.976-tuna.com/counts?m=6&d=15&y=2026',
+            sourceKey: 'sportfishingreport_landing_pages',
+            targetDate: CarbonImmutable::parse('2026-06-17'),
+            url: 'https://www.sportfishingreport.com/dock_totals/boats.php?date=2026-06-17',
             body: <<<'HTML'
-                <div class="row card m-2 mb-3">
-                    <div class="container">
-                        <div class="row mt-2 mb-2">
-                            <div class="col-sm-12 col-md-12 text-center">
-                                <b><a href="/landing/12/long-beach-sportfishing/counts?m=6&y=2026">Long Beach Sportfishing</a></b>
-                                <div class="col-12">
-                                    2 trips
-                                    with
-                                    48 anglers caught: 586
-                                    Total Fish -
-                                    162 perch,
-                                    131 rockfish,
-                                    126 sculpin,
-                                    60 calico bass,
-                                    54 whitefish,
-                                    36 sheephead,
-                                    12 barracuda,
-                                    and
-                                    5 sand bass.
-                                    <br>
-                                    <a class="button" href="#news_popup-12">News Reports</a>
-                                    <div id="news_popup-12" class="overlay">
-                                        <div class="content">
-                                            <a href="/news/250917">Daily Double 1/2 Day AM Wrap-Up Fish Report</a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                <div class='panel' style='background-color: #C9E5F5'>
+                    <h2 class='text-center'>Orange Fish Counts</h2>
+                    <div style='background-color: #FFFFFF; padding: 10px; border-top: 1px solid #dedede;'>
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><a href="/charter_boats/blackfish.php"><b>Blackfish</b></a><br><a href="/landings/daveys-locker.php">Davey's Locker</a><br>Newport Beach, CA</div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3">4 Anglers</div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3">Full Day Trip</div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3">&nbsp;</div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5">25 Barracuda, 1 Yellowtail</div>
+                        </div>
+                    </div>
+                </div>
+                <div class='panel' style='background-color: #C9E5F5'>
+                    <h2 class='text-center'>San Diego Fish Counts</h2>
+                    <div style="padding: 10px;">
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><strong>Landing</strong></div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3"><strong>Anglers</strong></div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3"><strong>Trip Type</strong></div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3"><strong>Audio</strong></div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5"><strong>Fish Count</strong></div>
+                        </div>
+                    </div>
+                    <div style='background-color: #FFFFFF; padding: 10px; border-top: 1px solid #dedede;'>
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><a href="/charter_boats/dolphin.php"><b>Dolphin</b></a><br><a href="/landings/fishermans-landing.php">Fisherman's Landing</a><br>San Diego, CA</div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3">25 Anglers</div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3">1/2 Day Trip</div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3">&nbsp;</div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5">19 Calico Bass, 50 Calico Bass <font color="red">Released</font></div>
+                        </div>
+                    </div>
+                    <div style='background-color: #E0F0F9; padding: 10px; border-top: 1px solid #dedede;'>
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><a target=_blank href='https://www.southerncal.net/'><img src='//media.fishreports.com/images/ani72.gif'></a> <a href="/charter_boats/southerncal.php"><b>Southern Cal</b></a><br><a href="/landings/oceanside-sea-center.php">Oceanside Sea Center</a><br>Oceanside, CA</div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3">18 Anglers</div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3">1/2 Day Trip</div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3">&nbsp;</div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5">14 Calico Bass, 60 Calico Bass Released</div>
                         </div>
                     </div>
                 </div>
             HTML,
         ));
 
-        $report = $parsed->tripReports->first();
+        $dolphin = $parsed->tripReports->first();
+        $southernCal = $parsed->tripReports->get(1);
 
-        $this->assertCount(1, $parsed->tripReports);
-        $this->assertSame('Long Beach Sportfishing', $report->landingName);
-        $this->assertSame('Southern California', $report->regionName);
-        $this->assertSame(48, $report->anglers);
-        $this->assertSame('landing-card', $report->metadata['format']);
-        $this->assertSame('Perch', $report->speciesCounts[0]->speciesName);
-        $this->assertSame(162, $report->speciesCounts[0]->count);
-        $this->assertSame('Rockfish', $report->speciesCounts[1]->speciesName);
-        $this->assertSame(131, $report->speciesCounts[1]->count);
-        $this->assertSame('Sand Bass', $report->speciesCounts[7]->speciesName);
-        $this->assertSame(5, $report->speciesCounts[7]->count);
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('Dolphin', $dolphin->boatName);
+        $this->assertSame('Fisherman\'s Landing', $dolphin->landingName);
+        $this->assertSame('1/2 Day', $dolphin->tripTypeName);
+        $this->assertSame(25, $dolphin->anglers);
+        $this->assertSame('party-boat-scores', $dolphin->metadata['format']);
+        $this->assertSame('fallback', $dolphin->metadata['source_role']);
+        $this->assertSame('Southern Cal', $southernCal->boatName);
+        $this->assertSame('Oceanside Sea Center', $southernCal->landingName);
+        $this->assertSame(['Dolphin', 'Southern Cal'], $parsed->tripReports->pluck('boatName')->all());
     }
 }

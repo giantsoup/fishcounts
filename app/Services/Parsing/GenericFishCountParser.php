@@ -29,6 +29,10 @@ class GenericFishCountParser
 
     public function parseLine(RawPayloadData $payload, string $line, string $parserVersion = 'generic-line-v1'): ?ParsedTripReportData
     {
+        if ($this->isAggregateLine($line)) {
+            return null;
+        }
+
         if (! preg_match('/(?<anglers>\d+)\s+(?:anglers?|people|passengers?)\b/i', $line, $anglerMatches)) {
             return null;
         }
@@ -169,5 +173,16 @@ class GenericFishCountParser
         }
 
         return null;
+    }
+
+    private function isAggregateLine(string $line): bool
+    {
+        $normalized = Str::of($line)
+            ->lower()
+            ->squish()
+            ->toString();
+
+        return Str::contains($normalized, ['dock total', 'dock totals', 'all trips', 'total fish'])
+            || preg_match('/\b\d+\s+trips?\s+(?:with|for)\s+\d+\s+(?:anglers?|people|passengers?)\b/i', $normalized) === 1;
     }
 }

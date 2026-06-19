@@ -10,11 +10,14 @@ use App\Models\RawScrapePayload;
 use App\Models\ScrapeSource;
 use App\Models\SpeciesCount;
 use App\Models\TripReport;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class TripReportNormalizer
 {
+    private const SPORTFISHING_REPORT_SOURCE_SLUG = 'sportfishingreport_landing_pages';
+
     public function __construct(private readonly AliasNormalizer $normalizer) {}
 
     public function replaceForPayload(RawScrapePayload $payload, ParsedFishCountCollection $parsed): int
@@ -30,22 +33,31 @@ class TripReportNormalizer
                 ->with('speciesCounts')
                 ->get()
                 ->each(function (TripReport $tripReport): void {
-                    $tripReport->speciesCounts()->delete();
-                    $tripReport->delete();
+                    $this->deleteTripReport($tripReport);
                 });
 
             $source = $payload->scrapeSource;
             $count = 0;
 
             foreach ($parsed->tripReports as $index => $report) {
+                if ($report->boatName === null) {
+                    continue;
+                }
+
                 $region = $this->normalizer->region($report->regionName);
                 $landingName = $report->landingName ?? $this->landingNameFromSource($source);
                 $landing = $this->normalizer->landing($landingName, $region);
                 $boat = $this->normalizer->boat($report->boatName, $landing);
                 $tripType = $this->normalizer->tripType($report->tripTypeName, $payload);
-                $rawBoatName = $report->boatName ?? $this->aggregateBoatLabel($report->metadata);
-                $rawTripType = $report->tripTypeName ?? $this->aggregateTripTypeLabel($report->metadata);
                 $dedupeKey = $this->dedupeKey($source, $report->tripDate->toDateString(), $report->boatName, $report->tripTypeName, $report->anglers);
+
+                if ($this->isSportfishingReportFallbackSource($source) && $this->directLandingReportExists($report->tripDate->toDateString(), $boat?->id, $tripType?->id)) {
+                    continue;
+                }
+
+                if ($source->source_type === SourceType::Landing) {
+                    $this->deleteSportfishingReportFallbackReports($report->tripDate->toDateString(), $boat?->id, $tripType?->id);
+                }
 
                 $tripReport = TripReport::query()->create([
                     'source_id' => $source->id,
@@ -57,9 +69,9 @@ class TripReportNormalizer
                     'trip_date' => $report->tripDate,
                     'source_trip_identifier' => $report->metadata['source_trip_identifier'] ?? "{$payload->id}:{$index}:{$dedupeKey}",
                     'anglers' => $report->anglers,
-                    'raw_boat_name' => $rawBoatName,
+                    'raw_boat_name' => $report->boatName,
                     'raw_landing_name' => $landingName,
-                    'raw_trip_type' => $rawTripType,
+                    'raw_trip_type' => $report->tripTypeName,
                     'raw_fish_count_text' => $report->rawFishCountText,
                     'dedupe_key' => $dedupeKey,
                     'source_confidence' => max(1, 100 - $source->priority),
@@ -82,21 +94,87 @@ class TripReportNormalizer
         });
     }
 
-    /** @param array<string, mixed> $metadata */
-    private function aggregateBoatLabel(array $metadata): ?string
-    {
-        return ($metadata['format'] ?? null) === 'dock-total' ? 'Dock Total' : null;
-    }
-
-    /** @param array<string, mixed> $metadata */
-    private function aggregateTripTypeLabel(array $metadata): ?string
-    {
-        return ($metadata['format'] ?? null) === 'dock-total' ? 'All Trips' : null;
-    }
-
     private function landingNameFromSource(ScrapeSource $source): ?string
     {
         return $source->source_type === SourceType::Landing ? $source->name : null;
+    }
+
+    private function isSportfishingReportFallbackSource(ScrapeSource $source): bool
+    {
+        return $source->slug === self::SPORTFISHING_REPORT_SOURCE_SLUG;
+    }
+
+    private function directLandingReportExists(string $date, ?int $boatId, ?int $tripTypeId): bool
+    {
+        if ($boatId === null || $tripTypeId === null) {
+            return false;
+        }
+
+        $query = TripReport::query()
+            ->whereDate('trip_date', $date)
+            ->where('boat_id', $boatId)
+            ->whereHas('source', fn ($query) => $query->where('source_type', SourceType::Landing->value));
+
+        return $this->whereMatchingTripType($query, $tripTypeId)->exists();
+    }
+
+    private function deleteSportfishingReportFallbackReports(string $date, ?int $boatId, ?int $tripTypeId): void
+    {
+        if ($boatId === null || $tripTypeId === null) {
+            return;
+        }
+
+        $query = TripReport::query()
+            ->whereDate('trip_date', $date)
+            ->where('boat_id', $boatId)
+            ->whereHas('source', fn ($query) => $query->where('slug', self::SPORTFISHING_REPORT_SOURCE_SLUG))
+            ->with('speciesCounts')
+            ->where(function ($query) use ($tripTypeId): void {
+                $query->where('trip_type_id', $tripTypeId);
+
+                if ($this->isHalfDayLandingVariant($tripTypeId)) {
+                    $query->orWhereHas('tripType', fn ($tripTypeQuery) => $tripTypeQuery->where('name', '1/2 Day'));
+                }
+            });
+
+        $query
+            ->get()
+            ->each(function (TripReport $tripReport): void {
+                $this->deleteTripReport($tripReport);
+            });
+    }
+
+    private function whereMatchingTripType(Builder $query, int $tripTypeId): Builder
+    {
+        return $query->where(function ($query) use ($tripTypeId): void {
+            $query->where('trip_type_id', $tripTypeId);
+
+            if ($this->isHalfDayFallbackTripType($tripTypeId)) {
+                $query->orWhereHas('tripType', fn ($tripTypeQuery) => $tripTypeQuery->whereIn('name', ['1/2 Day AM', '1/2 Day PM']));
+            }
+        });
+    }
+
+    private function isHalfDayFallbackTripType(int $tripTypeId): bool
+    {
+        return DB::table('trip_types')
+            ->where('id', $tripTypeId)
+            ->where('name', '1/2 Day')
+            ->exists();
+    }
+
+    private function isHalfDayLandingVariant(int $tripTypeId): bool
+    {
+        return DB::table('trip_types')
+            ->where('id', $tripTypeId)
+            ->whereIn('name', ['1/2 Day AM', '1/2 Day PM'])
+            ->exists();
+    }
+
+    private function deleteTripReport(TripReport $tripReport): void
+    {
+        $tripReport->speciesCounts()->delete();
+        $tripReport->delete();
     }
 
     public function refreshPrimaryReports(string $date): void

@@ -8,8 +8,7 @@ use App\Services\Scraping\Adapters\FishermansLandingAdapter;
 use App\Services\Scraping\Adapters\HmLandingAdapter;
 use App\Services\Scraping\Adapters\PointLomaSportfishingAdapter;
 use App\Services\Scraping\Adapters\SanDiegoFishReportsAdapter;
-use App\Services\Scraping\Adapters\SportfishingReportLandingPagesAdapter;
-use App\Services\Scraping\Adapters\Tuna976ReportsAdapter;
+use App\Services\Scraping\Adapters\SportfishingReportPartyBoatScoresAdapter;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -31,15 +30,13 @@ class SourceAdapterEndpointTest extends TestCase
         app(PointLomaSportfishingAdapter::class)->fetchForDate($this->source('point_loma_sportfishing', 'https://www.pointlomasportfishing.com'), $date);
         app(SanDiegoFishReportsAdapter::class)->fetchForDate($this->source('sandiego_fish_reports', 'https://www.sandiegofishreports.com'), $date);
         app(HmLandingAdapter::class)->fetchForDate($this->source('hm_landing', 'https://www.hmlanding.com'), $date);
-        app(SportfishingReportLandingPagesAdapter::class)->fetchForDate($this->source('sportfishingreport_landing_pages', 'https://www.sportfishingreport.com'), $date);
-        app(Tuna976ReportsAdapter::class)->fetchForDate($this->source('tuna_976_reports', 'https://www.976-tuna.com'), $date);
+        app(SportfishingReportPartyBoatScoresAdapter::class)->fetchForDate($this->source('sportfishingreport_landing_pages', 'https://www.sportfishingreport.com'), $date);
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.fishermanslanding.com/fishcounts.php');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.pointlomasportfishing.com/fishcounts.php');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sandiegofishreports.com/dock_totals/index.php');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.fishcounts.com/hmlanding/fishcounts.php');
-        Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sportfishingreport.com/dock_totals/?date=2026-06-17&region_id=7');
-        Http::assertSent(fn ($request): bool => $request->url() === 'https://www.976-tuna.com/counts?m=6&d=17&y=2026');
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sportfishingreport.com/dock_totals/boats.php?date=2026-06-17');
     }
 
     private function source(string $slug, string $baseUrl): ScrapeSource

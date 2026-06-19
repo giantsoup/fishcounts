@@ -16,8 +16,7 @@ class ScrapeSourceSeeder extends Seeder
             ['Seaforth Sportfishing', 'seaforth_landing', SourceType::Landing, 'https://www.seaforthlanding.com', 10, true],
             ['H&M Landing', 'hm_landing', SourceType::Landing, 'https://www.hmlanding.com', 10, true],
             ['Point Loma Sportfishing', 'point_loma_sportfishing', SourceType::Landing, 'https://www.pointlomasportfishing.com', 10, true],
-            ['Sportfishing Report Landing Pages', 'sportfishingreport_landing_pages', SourceType::ReportFeed, 'https://www.sportfishingreport.com', 30, true],
-            ['976-TUNA Reports', 'tuna_976_reports', SourceType::Fallback, 'https://www.976-tuna.com', 100, false],
+            ['SportfishingReport Party Boat Scores', 'sportfishingreport_landing_pages', SourceType::Fallback, 'https://www.sportfishingreport.com', 90, true],
         ];
 
         foreach ($sources as [$name, $slug, $type, $baseUrl, $priority, $enabled]) {

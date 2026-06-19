@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\DTOs\ParsedFishCountCollection;
+use App\DTOs\ParsedSpeciesCountData;
+use App\DTOs\ParsedTripReportData;
 use App\DTOs\RawPayloadData;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
@@ -175,7 +178,53 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame($landing->id, $boat->refresh()->landing_id);
     }
 
-    public function test_dock_total_reports_are_labeled_as_aggregate_rows(): void
+    public function test_normalizer_skips_parsed_reports_without_individual_boats(): void
+    {
+        $source = ScrapeSource::query()->create([
+            'name' => 'Sportfishing Report Landing Pages',
+            'slug' => 'sportfishingreport_landing_pages',
+            'source_type' => SourceType::ReportFeed,
+            'base_url' => 'https://www.sportfishingreport.com',
+        ]);
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => '2026-06-18',
+        ]);
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-06-18',
+            'url' => 'https://www.sportfishingreport.com/dock_totals/?date=2026-06-18&region_id=7',
+            'payload' => 'dock total',
+            'payload_hash' => hash('sha256', 'parsed-dock-total-fixture'),
+            'fetched_at' => now(),
+        ]);
+        $parsed = new ParsedFishCountCollection(collect([
+            new ParsedTripReportData(
+                sourceKey: $source->slug,
+                tripDate: CarbonImmutable::parse('2026-06-18'),
+                regionName: 'San Diego',
+                landingName: 'Fisherman\'s Landing',
+                boatName: null,
+                tripTypeName: null,
+                anglers: 115,
+                rawFishCountText: '159 Rockfish',
+                speciesCounts: [
+                    new ParsedSpeciesCountData(speciesName: 'Rockfish', count: 159, rawText: '159 Rockfish'),
+                ],
+                metadata: ['parser' => 'test-parser'],
+            ),
+        ]));
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertSame(0, $created);
+        $this->assertSame(0, TripReport::query()->count());
+        $this->assertDatabaseCount('species_counts', 0);
+    }
+
+    public function test_dock_total_reports_are_omitted_from_parsing_and_storage(): void
     {
         $source = ScrapeSource::query()->create([
             'name' => 'Sportfishing Report Landing Pages',
@@ -221,14 +270,248 @@ class ParsingPipelineTest extends TestCase
             body: $payload->payload,
         ));
 
-        app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+        $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertCount(0, $parsed->tripReports);
+        $this->assertSame(0, $created);
+        $this->assertSame(0, TripReport::query()->count());
+        $this->assertDatabaseCount('species_counts', 0);
+    }
+
+    public function test_sportfishing_report_fallback_rows_are_saved_without_direct_landing_match(): void
+    {
+        $this->seedFallbackReferenceData();
+
+        $source = $this->sportfishingReportSource();
+        $payload = $this->payloadForSource($source, '2026-06-17');
+        $parsed = $this->parsedDolphinReport($source->slug, '2026-06-17', 19, 25, ['source_role' => 'fallback']);
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
 
         $report = TripReport::query()->firstOrFail();
 
-        $this->assertNull($report->boat_id);
-        $this->assertNull($report->trip_type_id);
-        $this->assertSame('Dock Total', $report->raw_boat_name);
-        $this->assertSame('All Trips', $report->raw_trip_type);
-        $this->assertSame(258, $report->anglers);
+        $this->assertSame(1, $created);
+        $this->assertSame($source->id, $report->source_id);
+        $this->assertSame(10, $report->source_confidence);
+        $this->assertSame('fallback', $report->metadata['source_role']);
+        $this->assertDatabaseHas('species_counts', [
+            'trip_report_id' => $report->id,
+            'count' => 19,
+            'released_count' => 50,
+        ]);
+    }
+
+    public function test_sportfishing_report_fallback_rows_are_skipped_when_direct_landing_match_exists(): void
+    {
+        $context = $this->seedFallbackReferenceData();
+        $directSource = $this->landingSource();
+
+        TripReport::query()->create([
+            'source_id' => $directSource->id,
+            'region_id' => $context['region']->id,
+            'landing_id' => $context['landing']->id,
+            'boat_id' => $context['boat']->id,
+            'trip_type_id' => $context['tripType']->id,
+            'trip_date' => '2026-06-17',
+            'anglers' => 55,
+            'raw_boat_name' => 'Dolphin',
+            'raw_landing_name' => "Fisherman's Landing",
+            'raw_trip_type' => '1/2 Day',
+            'raw_fish_count_text' => '78 Calico Bass',
+            'dedupe_key' => 'direct-dolphin',
+            'source_confidence' => 90,
+        ]);
+
+        $source = $this->sportfishingReportSource();
+        $payload = $this->payloadForSource($source, '2026-06-17');
+        $parsed = $this->parsedDolphinReport($source->slug, '2026-06-17', 19, 25, ['source_role' => 'fallback']);
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertSame(0, $created);
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertDatabaseHas('trip_reports', [
+            'source_id' => $directSource->id,
+            'raw_fish_count_text' => '78 Calico Bass',
+        ]);
+    }
+
+    public function test_later_direct_landing_import_removes_matching_sportfishing_report_fallback_rows(): void
+    {
+        $this->seedFallbackReferenceData();
+
+        $fallbackSource = $this->sportfishingReportSource();
+        $fallbackPayload = $this->payloadForSource($fallbackSource, '2026-06-17');
+        $fallbackParsed = $this->parsedDolphinReport($fallbackSource->slug, '2026-06-17', 19, 25, ['source_role' => 'fallback']);
+
+        app(TripReportNormalizer::class)->replaceForPayload($fallbackPayload, $fallbackParsed);
+
+        $fallbackReportId = TripReport::query()->firstOrFail()->id;
+        $directSource = $this->landingSource();
+        $directPayload = $this->payloadForSource($directSource, '2026-06-17');
+        $directParsed = $this->parsedDolphinReport($directSource->slug, '2026-06-17', 78, 55);
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($directPayload, $directParsed);
+
+        $report = TripReport::query()->firstOrFail();
+
+        $this->assertSame(1, $created);
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame($directSource->id, $report->source_id);
+        $this->assertSame(55, $report->anglers);
+        $this->assertDatabaseMissing('trip_reports', ['source_id' => $fallbackSource->id]);
+        $this->assertDatabaseMissing('species_counts', ['trip_report_id' => $fallbackReportId]);
+        $this->assertDatabaseHas('species_counts', [
+            'trip_report_id' => $report->id,
+            'count' => 78,
+            'released_count' => 50,
+        ]);
+    }
+
+    public function test_sportfishing_report_generic_half_day_rows_are_skipped_when_direct_half_day_variant_exists(): void
+    {
+        $context = $this->seedFallbackReferenceData();
+        $directSource = $this->landingSource();
+
+        TripReport::query()->create([
+            'source_id' => $directSource->id,
+            'region_id' => $context['region']->id,
+            'landing_id' => $context['landing']->id,
+            'boat_id' => $context['boat']->id,
+            'trip_type_id' => $context['halfDayAmTripType']->id,
+            'trip_date' => '2026-06-18',
+            'anglers' => 55,
+            'raw_boat_name' => 'Dolphin',
+            'raw_landing_name' => "Fisherman's Landing",
+            'raw_trip_type' => '1/2 Day AM',
+            'raw_fish_count_text' => '78 Rockfish',
+            'dedupe_key' => 'direct-dolphin-am',
+            'source_confidence' => 90,
+        ]);
+
+        $source = $this->sportfishingReportSource();
+        $payload = $this->payloadForSource($source, '2026-06-18');
+        $parsed = $this->parsedDolphinReport($source->slug, '2026-06-18', 2, 55, ['source_role' => 'fallback']);
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertSame(0, $created);
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertDatabaseHas('trip_reports', [
+            'source_id' => $directSource->id,
+            'raw_trip_type' => '1/2 Day AM',
+        ]);
+    }
+
+    public function test_later_direct_half_day_variant_removes_generic_sportfishing_report_half_day_fallback_rows(): void
+    {
+        $this->seedFallbackReferenceData();
+
+        $fallbackSource = $this->sportfishingReportSource();
+        $fallbackPayload = $this->payloadForSource($fallbackSource, '2026-06-18');
+        $fallbackParsed = $this->parsedDolphinReport($fallbackSource->slug, '2026-06-18', 2, 55, ['source_role' => 'fallback']);
+
+        app(TripReportNormalizer::class)->replaceForPayload($fallbackPayload, $fallbackParsed);
+
+        $fallbackReportId = TripReport::query()->firstOrFail()->id;
+        $directSource = $this->landingSource();
+        $directPayload = $this->payloadForSource($directSource, '2026-06-18');
+        $directParsed = $this->parsedDolphinReport(
+            sourceKey: $directSource->slug,
+            date: '2026-06-18',
+            retainedCalicoBass: 78,
+            anglers: 55,
+            tripTypeName: '1/2 Day AM',
+        );
+
+        $created = app(TripReportNormalizer::class)->replaceForPayload($directPayload, $directParsed);
+
+        $report = TripReport::query()->firstOrFail();
+
+        $this->assertSame(1, $created);
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame($directSource->id, $report->source_id);
+        $this->assertSame('1/2 Day AM', $report->raw_trip_type);
+        $this->assertDatabaseMissing('trip_reports', ['source_id' => $fallbackSource->id]);
+        $this->assertDatabaseMissing('species_counts', ['trip_report_id' => $fallbackReportId]);
+    }
+
+    /** @return array{region: Region, landing: Landing, boat: Boat, tripType: TripType, halfDayAmTripType: TripType} */
+    private function seedFallbackReferenceData(): array
+    {
+        $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Fisherman\'s Landing', 'slug' => 'fishermans-landing']);
+        $boat = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Dolphin', 'slug' => 'dolphin']);
+        $tripType = TripType::query()->create(['name' => '1/2 Day', 'slug' => '1-2-day']);
+        TripTypeAlias::query()->create(['trip_type_id' => $tripType->id, 'alias' => '1/2 Day', 'normalized_alias' => '1 2 day']);
+        $halfDayAmTripType = TripType::query()->create(['name' => '1/2 Day AM', 'slug' => '1-2-day-am']);
+        TripTypeAlias::query()->create(['trip_type_id' => $halfDayAmTripType->id, 'alias' => '1/2 Day AM', 'normalized_alias' => '1 2 day am']);
+
+        $calicoBass = Species::query()->create(['name' => 'Calico Bass', 'slug' => 'calico-bass']);
+        SpeciesAlias::query()->create(['species_id' => $calicoBass->id, 'alias' => 'Calico Bass', 'normalized_alias' => 'calico bass']);
+
+        return compact('region', 'landing', 'boat', 'tripType', 'halfDayAmTripType');
+    }
+
+    private function sportfishingReportSource(): ScrapeSource
+    {
+        return ScrapeSource::query()->create([
+            'name' => 'SportfishingReport Party Boat Scores',
+            'slug' => 'sportfishingreport_landing_pages',
+            'source_type' => SourceType::Fallback,
+            'base_url' => 'https://www.sportfishingreport.com',
+            'priority' => 90,
+        ]);
+    }
+
+    private function landingSource(): ScrapeSource
+    {
+        return ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+            'priority' => 10,
+        ]);
+    }
+
+    private function payloadForSource(ScrapeSource $source, string $date): RawScrapePayload
+    {
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => $date,
+        ]);
+
+        return RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => $date,
+            'url' => $source->base_url,
+            'payload' => 'parsed dto fixture',
+            'payload_hash' => hash('sha256', $source->slug.$date),
+            'fetched_at' => now(),
+        ]);
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function parsedDolphinReport(string $sourceKey, string $date, int $retainedCalicoBass, int $anglers, array $metadata = [], string $tripTypeName = '1/2 Day'): ParsedFishCountCollection
+    {
+        return new ParsedFishCountCollection(collect([
+            new ParsedTripReportData(
+                sourceKey: $sourceKey,
+                tripDate: CarbonImmutable::parse($date),
+                regionName: 'San Diego',
+                landingName: 'Fisherman\'s Landing',
+                boatName: 'Dolphin',
+                tripTypeName: $tripTypeName,
+                anglers: $anglers,
+                rawFishCountText: "{$retainedCalicoBass} Calico Bass, 50 Calico Bass Released",
+                speciesCounts: [
+                    new ParsedSpeciesCountData(speciesName: 'Calico Bass', count: $retainedCalicoBass, releasedCount: 50, rawText: "{$retainedCalicoBass} Calico Bass"),
+                ],
+                metadata: array_merge(['parser' => 'test-parser'], $metadata),
+            ),
+        ]));
     }
 }

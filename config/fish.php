@@ -26,8 +26,6 @@ return [
             'pointlomasportfishing.com',
             'www.sportfishingreport.com',
             'sportfishingreport.com',
-            'www.976-tuna.com',
-            '976-tuna.com',
         ],
     ],
 
