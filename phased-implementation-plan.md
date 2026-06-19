@@ -632,7 +632,6 @@ Initial source keys:
 * hm_landing
 * point_loma_sportfishing
 * sportfishingreport_landing_pages
-* tuna_976_reports
 
 ### scrape_runs
 
@@ -1233,7 +1232,6 @@ Implement in priority order:
 4. HmLandingAdapter
 5. PointLomaSportfishingAdapter
 6. SportfishingReportLandingAdapter
-7. Tuna976ReportAdapter as fallback/report-feed adapter
 
 ## Source priority
 
@@ -1242,7 +1240,6 @@ Use priority to resolve duplicates:
 1. Direct landing source
 2. SanDiegoFishReports aggregator
 3. SportfishingReport landing pages
-4. 976-TUNA report feed
 
 This can be adjusted after empirical comparison.
 
@@ -1918,7 +1915,6 @@ tests/Fixtures/sources/fishermans_landing/
 tests/Fixtures/sources/seaforth_landing/
 tests/Fixtures/sources/hm_landing/
 tests/Fixtures/sources/point_loma/
-tests/Fixtures/sources/976_tuna/
 ```
 
 Every parser should be tested against fixtures.
@@ -1970,12 +1966,6 @@ seaforth_landing
 hm_landing
 point_loma_sportfishing
 sportfishingreport_landing_pages
-```
-
-Seed fallback source disabled by default or low-priority:
-
-```text
-tuna_976_reports
 ```
 
 ## Default admin alert rule

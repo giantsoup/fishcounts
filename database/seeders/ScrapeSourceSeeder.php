@@ -19,6 +19,10 @@ class ScrapeSourceSeeder extends Seeder
             ['SportfishingReport Party Boat Scores', 'sportfishingreport_landing_pages', SourceType::Fallback, 'https://www.sportfishingreport.com', 90, true],
         ];
 
+        ScrapeSource::query()
+            ->whereNotIn('slug', array_column($sources, 1))
+            ->delete();
+
         foreach ($sources as [$name, $slug, $type, $baseUrl, $priority, $enabled]) {
             ScrapeSource::query()->updateOrCreate(
                 ['slug' => $slug],

@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SourceType;
 use App\Models\AlertRule;
+use App\Models\ScrapeSource;
 use App\Models\SpeciesAlias;
 use App\Models\TripTypeAlias;
 use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\ScrapeSourceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -29,5 +32,21 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'sandbass')->firstOrFail()->species->name);
         $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'barred sand bass')->firstOrFail()->species->name);
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion rockfish')->firstOrFail()->species->name);
+    }
+
+    public function test_scrape_source_seeder_removes_retired_sources(): void
+    {
+        ScrapeSource::query()->create([
+            'name' => 'Retired Reports',
+            'slug' => 'retired_reports',
+            'source_type' => SourceType::Fallback,
+            'base_url' => 'https://example.com',
+        ]);
+
+        $this->seed(ScrapeSourceSeeder::class);
+
+        $this->assertDatabaseMissing('scrape_sources', [
+            'slug' => 'retired_reports',
+        ]);
     }
 }
