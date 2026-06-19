@@ -14,11 +14,11 @@
                     @csrf
                     <div>
                         <x-input-label for="species_id" value="Species" />
-                        <select id="species_id" name="species_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.select id="species_id" name="species_id">
                             @foreach ($species as $item)
                                 <option value="{{ $item->id }}">{{ $item->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('species_id')" class="mt-2" />
                     </div>
                     <div>

@@ -13,15 +13,9 @@
                 @csrf
                 @method('PUT')
 
-                <label class="block text-sm">
-                    <input type="checkbox" name="email_enabled" value="1" checked>
-                    Email notifications to {{ auth()->user()->email }}
-                </label>
+                <x-form.checkbox name="email_enabled" value="1" checked>Email notifications to {{ auth()->user()->email }}</x-form.checkbox>
 
-                <label class="block text-sm">
-                    <input type="checkbox" name="discord_enabled" value="1">
-                    Discord notifications
-                </label>
+                <x-form.checkbox name="discord_enabled" value="1">Discord notifications</x-form.checkbox>
 
                 <div>
                     <x-input-label for="discord_webhook_url" value="Discord webhook URL" />

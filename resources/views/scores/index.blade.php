@@ -12,39 +12,39 @@
                 <form method="GET" action="{{ route('scores.index') }}" class="grid gap-4 md:grid-cols-5">
                     <div>
                         <label for="from" class="block text-sm font-medium text-gray-700">From</label>
-                        <input id="from" name="from" type="date" value="{{ $filters['from'] }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.date id="from" name="from" value="{{ $filters['from'] }}" />
                         <x-input-error :messages="$errors->get('from')" class="mt-2" />
                     </div>
 
                     <div>
                         <label for="to" class="block text-sm font-medium text-gray-700">To</label>
-                        <input id="to" name="to" type="date" value="{{ $filters['to'] }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.date id="to" name="to" value="{{ $filters['to'] }}" />
                         <x-input-error :messages="$errors->get('to')" class="mt-2" />
                     </div>
 
                     <div>
                         <label for="alert_rule_id" class="block text-sm font-medium text-gray-700">Rule</label>
-                        <select id="alert_rule_id" name="alert_rule_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.select id="alert_rule_id" name="alert_rule_id" placeholder="All rules">
                             <option value="">All rules</option>
                             @foreach ($rules as $rule)
                                 <option value="{{ $rule->id }}" @selected($filters['alert_rule_id'] === $rule->id)>{{ $rule->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                     </div>
 
                     <div>
                         <label for="level" class="block text-sm font-medium text-gray-700">Level</label>
-                        <select id="level" name="level" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.select id="level" name="level" placeholder="All levels">
                             <option value="">All levels</option>
                             @foreach ($levels as $level)
                                 <option value="{{ $level->value }}" @selected($filters['level'] === $level->value)>{{ str($level->value)->replace('_', ' ')->title() }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                     </div>
 
                     <div>
                         <label for="minimum_score" class="block text-sm font-medium text-gray-700">Min Score</label>
-                        <input id="minimum_score" name="minimum_score" type="number" min="0" max="100" value="{{ $filters['minimum_score'] }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.number id="minimum_score" name="minimum_score" min="0" max="100" value="{{ $filters['minimum_score'] }}" />
                         <x-input-error :messages="$errors->get('minimum_score')" class="mt-2" />
                     </div>
 

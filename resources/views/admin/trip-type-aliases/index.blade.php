@@ -14,11 +14,11 @@
                     @csrf
                     <div>
                         <x-input-label for="trip_type_id" value="Trip type" />
-                        <select id="trip_type_id" name="trip_type_id" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                        <x-form.select id="trip_type_id" name="trip_type_id">
                             @foreach ($tripTypes as $tripType)
                                 <option value="{{ $tripType->id }}">{{ $tripType->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('trip_type_id')" class="mt-2" />
                     </div>
                     <div>

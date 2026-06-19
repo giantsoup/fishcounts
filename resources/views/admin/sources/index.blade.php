@@ -25,18 +25,18 @@
 
                             <div>
                                 <x-input-label for="priority-{{ $source->id }}" value="Priority" />
-                                <x-text-input id="priority-{{ $source->id }}" name="priority" type="number" min="1" max="1000" :value="$source->priority" class="mt-1 block w-full" />
+                                <x-form.number id="priority-{{ $source->id }}" name="priority" min="1" max="1000" :value="$source->priority" />
                             </div>
 
                             <div>
                                 <x-input-label for="rate-{{ $source->id }}" value="Rate limit seconds" />
-                                <x-text-input id="rate-{{ $source->id }}" name="rate_limit_seconds" type="number" min="1" max="3600" :value="$source->rate_limit_seconds" class="mt-1 block w-full" />
+                                <x-form.number id="rate-{{ $source->id }}" name="rate_limit_seconds" min="1" max="3600" :value="$source->rate_limit_seconds" />
                             </div>
 
                             <div class="space-y-2 text-sm">
-                                <label class="block"><input type="checkbox" name="is_enabled" value="1" @checked($source->is_enabled)> Enabled</label>
-                                <label class="block"><input type="checkbox" name="supports_historical_dates" value="1" @checked($source->supports_historical_dates)> Historical dates</label>
-                                <label class="block"><input type="checkbox" name="supports_landing_filter" value="1" @checked($source->supports_landing_filter)> Landing filter</label>
+                                <x-form.checkbox name="is_enabled" value="1" :checked="$source->is_enabled" class="flex">Enabled</x-form.checkbox>
+                                <x-form.checkbox name="supports_historical_dates" value="1" :checked="$source->supports_historical_dates" class="flex">Historical dates</x-form.checkbox>
+                                <x-form.checkbox name="supports_landing_filter" value="1" :checked="$source->supports_landing_filter" class="flex">Landing filter</x-form.checkbox>
                             </div>
 
                             <div class="lg:col-span-6">

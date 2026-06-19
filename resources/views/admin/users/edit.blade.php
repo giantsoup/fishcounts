@@ -27,10 +27,10 @@
 
                 <div>
                     <x-input-label for="role" value="Role" />
-                    <select id="role" name="role" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <x-form.select id="role" name="role">
                         <option value="user" @selected(old('role', $user->role->value) === 'user')>user</option>
                         <option value="admin" @selected(old('role', $user->role->value) === 'admin')>admin</option>
-                    </select>
+                    </x-form.select>
                     <x-input-error :messages="$errors->get('role')" class="mt-2" />
                 </div>
 
@@ -40,10 +40,7 @@
                     <x-input-error :messages="$errors->get('timezone')" class="mt-2" />
                 </div>
 
-                <label class="flex items-center gap-2 text-sm text-gray-700">
-                    <input type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" @checked(old('is_active', $user->is_active))>
-                    Active
-                </label>
+                <x-form.checkbox name="is_active" value="1" :checked="old('is_active', $user->is_active)">Active</x-form.checkbox>
                 <x-input-error :messages="$errors->get('is_active')" class="mt-2" />
 
                 <div class="flex items-center gap-3">

@@ -31,16 +31,16 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label for="species_id" value="Species" />
-                        <select id="species_id" name="species_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        <x-form.select id="species_id" name="species_id">
                             @foreach ($species as $item)
                                 <option value="{{ $item->id }}" @selected((int) old('species_id', $rule->species_id) === $item->id)>{{ $item->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('species_id')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="minimum_score" value="Minimum score" />
-                        <x-text-input id="minimum_score" name="minimum_score" type="number" min="0" max="100" class="mt-1 block w-full" :value="old('minimum_score', $rule->minimum_score ?? 70)" required />
+                        <x-form.number id="minimum_score" name="minimum_score" min="0" max="100" :value="old('minimum_score', $rule->minimum_score ?? 70)" required />
                         <x-input-error :messages="$errors->get('minimum_score')" class="mt-2" />
                     </div>
                 </div>
@@ -48,22 +48,22 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label for="minimum_total_count" value="Minimum total count" />
-                        <x-text-input id="minimum_total_count" name="minimum_total_count" type="number" min="0" class="mt-1 block w-full" :value="old('minimum_total_count', $rule->minimum_total_count)" />
+                        <x-form.number id="minimum_total_count" name="minimum_total_count" min="0" :value="old('minimum_total_count', $rule->minimum_total_count)" />
                         <x-input-error :messages="$errors->get('minimum_total_count')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="minimum_count_per_angler" value="Minimum count per angler" />
-                        <x-text-input id="minimum_count_per_angler" name="minimum_count_per_angler" type="number" step="0.01" min="0" class="mt-1 block w-full" :value="old('minimum_count_per_angler', $rule->minimum_count_per_angler)" />
+                        <x-form.number id="minimum_count_per_angler" name="minimum_count_per_angler" step="0.01" min="0" :value="old('minimum_count_per_angler', $rule->minimum_count_per_angler)" decimal />
                         <x-input-error :messages="$errors->get('minimum_count_per_angler')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="trend_window_days" value="Trend window days" />
-                        <x-text-input id="trend_window_days" name="trend_window_days" type="number" min="1" max="30" class="mt-1 block w-full" :value="old('trend_window_days', $rule->trend_window_days ?? 3)" required />
+                        <x-form.number id="trend_window_days" name="trend_window_days" min="1" max="30" :value="old('trend_window_days', $rule->trend_window_days ?? 3)" required />
                         <x-input-error :messages="$errors->get('trend_window_days')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label for="baseline_window_days" value="Baseline window days" />
-                        <x-text-input id="baseline_window_days" name="baseline_window_days" type="number" min="1" max="90" class="mt-1 block w-full" :value="old('baseline_window_days', $rule->baseline_window_days ?? 7)" required />
+                        <x-form.number id="baseline_window_days" name="baseline_window_days" min="1" max="90" :value="old('baseline_window_days', $rule->baseline_window_days ?? 7)" required />
                         <x-input-error :messages="$errors->get('baseline_window_days')" class="mt-2" />
                     </div>
                 </div>
@@ -71,20 +71,20 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label value="Regions" />
-                        <select name="region_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                        <x-form.select name="region_ids[]" multiple class="min-h-28" placeholder="Select regions">
                             @foreach ($regions as $region)
                                 <option value="{{ $region->id }}" @selected(in_array($region->id, array_map('intval', $selectedRegions), true))>{{ $region->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('region_ids')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label value="Trip types" />
-                        <select name="trip_type_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                        <x-form.select name="trip_type_ids[]" multiple class="min-h-28" placeholder="Select trip types">
                             @foreach ($tripTypes as $tripType)
                                 <option value="{{ $tripType->id }}" @selected(in_array($tripType->id, array_map('intval', $selectedTripTypes), true))>{{ $tripType->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('trip_type_ids')" class="mt-2" />
                     </div>
                 </div>
@@ -92,20 +92,20 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label value="Landings" />
-                        <select name="landing_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                        <x-form.select name="landing_ids[]" multiple class="min-h-28" placeholder="Select landings">
                             @foreach ($landings as $landing)
                                 <option value="{{ $landing->id }}" @selected(in_array($landing->id, array_map('intval', $selectedLandings), true))>{{ $landing->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('landing_ids')" class="mt-2" />
                     </div>
                     <div>
                         <x-input-label value="Boats" />
-                        <select name="boat_ids[]" multiple class="mt-1 block w-full border-gray-300 rounded-md shadow-sm min-h-28">
+                        <x-form.select name="boat_ids[]" multiple class="min-h-28" placeholder="Select boats">
                             @foreach ($boats as $boat)
                                 <option value="{{ $boat->id }}" @selected(in_array($boat->id, array_map('intval', $selectedBoats), true))>{{ $boat->name }}</option>
                             @endforeach
-                        </select>
+                        </x-form.select>
                         <x-input-error :messages="$errors->get('boat_ids')" class="mt-2" />
                     </div>
                 </div>
@@ -115,10 +115,10 @@
                     <input type="hidden" name="email_enabled" value="0">
                     <input type="hidden" name="discord_enabled" value="0">
                     <input type="hidden" name="include_in_weekly_digest" value="0">
-                    <label><input type="checkbox" name="is_enabled" value="1" @checked(old('is_enabled', $rule->is_enabled ?? true))> Enabled</label>
-                    <label><input type="checkbox" name="email_enabled" value="1" @checked(old('email_enabled', $rule->email_enabled ?? true))> Email</label>
-                    <label><input type="checkbox" name="discord_enabled" value="1" @checked(old('discord_enabled', $rule->discord_enabled ?? false))> Discord</label>
-                    <label><input type="checkbox" name="include_in_weekly_digest" value="1" @checked(old('include_in_weekly_digest', $rule->include_in_weekly_digest ?? true))> Weekly digest</label>
+                    <x-form.checkbox name="is_enabled" value="1" :checked="old('is_enabled', $rule->is_enabled ?? true)">Enabled</x-form.checkbox>
+                    <x-form.checkbox name="email_enabled" value="1" :checked="old('email_enabled', $rule->email_enabled ?? true)">Email</x-form.checkbox>
+                    <x-form.checkbox name="discord_enabled" value="1" :checked="old('discord_enabled', $rule->discord_enabled ?? false)">Discord</x-form.checkbox>
+                    <x-form.checkbox name="include_in_weekly_digest" value="1" :checked="old('include_in_weekly_digest', $rule->include_in_weekly_digest ?? true)">Weekly digest</x-form.checkbox>
                 </div>
 
                 <x-primary-button>Save</x-primary-button>

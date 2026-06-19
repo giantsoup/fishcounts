@@ -39,11 +39,11 @@
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">
                                     <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
-                                    <select name="species_id" class="block w-full rounded-md border-gray-300 text-sm shadow-sm">
+                                    <x-form.select name="species_id" class="text-sm">
                                         @foreach ($species as $item)
                                             <option value="{{ $item->id }}">{{ $item->name }}</option>
                                         @endforeach
-                                    </select>
+                                    </x-form.select>
                                     <x-secondary-button>Resolve as species</x-secondary-button>
                                 </form>
                             @elseif (! $error->resolved_at && $error->error_type === 'unknown_trip_type_alias' && $error->raw_value)
@@ -51,11 +51,11 @@
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">
                                     <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
-                                    <select name="trip_type_id" class="block w-full rounded-md border-gray-300 text-sm shadow-sm">
+                                    <x-form.select name="trip_type_id" class="text-sm">
                                         @foreach ($tripTypes as $tripType)
                                             <option value="{{ $tripType->id }}">{{ $tripType->name }}</option>
                                         @endforeach
-                                    </select>
+                                    </x-form.select>
                                     <x-secondary-button>Resolve as trip type</x-secondary-button>
                                 </form>
                             @else
