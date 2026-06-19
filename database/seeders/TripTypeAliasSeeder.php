@@ -12,13 +12,13 @@ class TripTypeAliasSeeder extends Seeder
     public function run(): void
     {
         $aliases = [
-            '1-2-day' => ['Half Day', '1/2 Day'],
-            '3-4-day' => ['Three Quarter Day', '3/4 Day'],
-            'full-day' => ['Full Day'],
+            '1/2 Day' => ['Half Day', '1/2 Day'],
+            '3/4 Day' => ['Three Quarter Day', '3/4 Day'],
+            'Full Day' => ['Full Day'],
         ];
 
-        foreach ($aliases as $slug => $values) {
-            $tripType = TripType::query()->where('slug', $slug)->firstOrFail();
+        foreach ($aliases as $name => $values) {
+            $tripType = TripType::query()->where('name', $name)->firstOrFail();
 
             foreach ($values as $alias) {
                 TripTypeAlias::query()->updateOrCreate(

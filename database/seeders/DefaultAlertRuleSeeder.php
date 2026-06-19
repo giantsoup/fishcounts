@@ -35,7 +35,7 @@ class DefaultAlertRuleSeeder extends Seeder
 
         $rule->regions()->sync(Region::query()->where('slug', 'san-diego')->pluck('id'));
         $rule->tripTypes()->sync(TripType::query()
-            ->whereIn('slug', ['1-2-day', '1-2-day-am', '1-2-day-pm', '3-4-day', 'full-day', 'full-day-coronado-islands'])
+            ->whereIn('name', ['1/2 Day', '1/2 Day AM', '1/2 Day PM', '3/4 Day', 'Full Day', 'Full Day Coronado Islands'])
             ->pluck('id'));
     }
 }

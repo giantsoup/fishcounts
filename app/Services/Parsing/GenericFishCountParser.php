@@ -62,16 +62,17 @@ class GenericFishCountParser
         $line = Str::of($line)
             ->replace("\u{00A0}", ' ')
             ->replaceMatches('/\([^)]*\b(?:lbs?|pounds?)\b[^)]*\)/i', '')
+            ->replaceMatches('/\bMisc\.\s+/i', 'Misc ')
             ->replaceMatches('/\bfrom\s+(?:\d+\s*(?:-|to)\s*\d+|up to\s+\d+|\d+)\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
-            ->replaceMatches('/\bfor\s+\d+\s+anglers?\b[^,.]*/i', '')
+            ->replaceMatches('/\bfor\s+\d+\s+anglers?\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?\d+(?:\.\d+)?\s*day\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
             ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
             ->toString();
 
-        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|$)|\s+\d+\s+)/i', $line, $matches, PREG_SET_ORDER);
+        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|$)|\s+\d+\s+)/i', $line, $matches, PREG_SET_ORDER);
 
         return collect($matches)
             ->map(function (array $match): ParsedSpeciesCountData {
@@ -147,7 +148,7 @@ class GenericFishCountParser
     private function extractNarrativeBoatName(string $line): ?string
     {
         foreach ([
-            '/\bThe\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:returned|had|has|just checked|checked|ended|caught)\b/',
+            '/\bThe\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:returned|had|has|just checked|checked|ended|caught|called in)\b/',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+caught\b/',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {

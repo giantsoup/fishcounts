@@ -73,4 +73,50 @@ class ParsingPipelineTest extends TestCase
             'raw_value' => 'Calico Bass',
         ]);
     }
+
+    public function test_normalizer_aggregates_multiple_aliases_for_the_same_species_in_one_report(): void
+    {
+        $source = ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => '2026-06-18',
+        ]);
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-06-18',
+            'url' => 'https://www.fishermanslanding.com/fishcounts.php',
+            'payload' => '<p>The Poseidon called in with 151 Misc. Rockfish, and 71 Vermillion Rockfish for 23 anglers on a 2 day trip.</p>',
+            'payload_hash' => hash('sha256', 'rockfish-fixture'),
+            'fetched_at' => now(),
+        ]);
+        $rockfish = Species::query()->create(['name' => 'Rockfish', 'slug' => 'rockfish']);
+        SpeciesAlias::query()->create(['species_id' => $rockfish->id, 'alias' => 'Misc Rockfish', 'normalized_alias' => 'misc rockfish']);
+        SpeciesAlias::query()->create(['species_id' => $rockfish->id, 'alias' => 'Vermillion Rockfish', 'normalized_alias' => 'vermillion rockfish']);
+        $tripType = TripType::query()->create(['name' => '2 Day', 'slug' => '2-day']);
+        TripTypeAlias::query()->create(['trip_type_id' => $tripType->id, 'alias' => '2 Day', 'normalized_alias' => '2 day']);
+        Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+
+        $parsed = app(GenericFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: $source->slug,
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: $payload->url,
+            body: $payload->payload,
+        ));
+
+        app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertDatabaseHas('species_counts', [
+            'species_id' => $rockfish->id,
+            'count' => 222,
+            'raw_species_name' => 'Misc Rockfish, Vermillion Rockfish',
+        ]);
+    }
 }

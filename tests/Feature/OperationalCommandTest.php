@@ -17,6 +17,7 @@ use App\Models\Species;
 use App\Models\User;
 use App\Notifications\TestNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -24,6 +25,23 @@ use Tests\TestCase;
 class OperationalCommandTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_create_admin_command_creates_active_verified_admin(): void
+    {
+        $this->artisan('fish:create-admin', [
+            'email' => 'local-dev@example.test',
+            '--name' => 'Local Dev Admin',
+            '--password' => 'local-dev-password',
+        ])->assertSuccessful();
+
+        $user = User::query()->where('email', 'local-dev@example.test')->firstOrFail();
+
+        $this->assertSame('Local Dev Admin', $user->name);
+        $this->assertTrue($user->isAdmin());
+        $this->assertTrue($user->is_active);
+        $this->assertNotNull($user->email_verified_at);
+        $this->assertTrue(Hash::check('local-dev-password', $user->password));
+    }
 
     public function test_parse_payload_command_queues_parser_job(): void
     {

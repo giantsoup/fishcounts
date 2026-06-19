@@ -4,6 +4,7 @@ namespace App\Services\Parsing;
 
 use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
+use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeSource;
 use App\Models\SpeciesCount;
@@ -18,6 +19,10 @@ class TripReportNormalizer
     public function replaceForPayload(RawScrapePayload $payload, ParsedFishCountCollection $parsed): int
     {
         return DB::transaction(function () use ($payload, $parsed): int {
+            ParserError::query()
+                ->where('raw_scrape_payload_id', $payload->id)
+                ->delete();
+
             TripReport::query()
                 ->where('source_id', $payload->scrape_source_id)
                 ->whereDate('trip_date', $payload->target_date)
@@ -99,19 +104,25 @@ class TripReportNormalizer
             return;
         }
 
-        SpeciesCount::query()->updateOrCreate(
+        $storedCount = SpeciesCount::query()->firstOrNew(
             [
                 'trip_report_id' => $tripReport->id,
                 'species_id' => $species->id,
                 'is_retained_count' => true,
             ],
-            [
-                'count' => $speciesCount->count,
-                'released_count' => $speciesCount->releasedCount,
-                'raw_species_name' => $speciesCount->speciesName,
-                'raw_count_text' => $speciesCount->rawText,
-            ],
         );
+
+        $storedCount->count = (int) $storedCount->count + $speciesCount->count;
+        $storedCount->released_count = (int) $storedCount->released_count + $speciesCount->releasedCount;
+        $storedCount->raw_species_name = collect([$storedCount->raw_species_name, $speciesCount->speciesName])
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        $storedCount->raw_count_text = collect([$storedCount->raw_count_text, $speciesCount->rawText])
+            ->filter()
+            ->unique()
+            ->implode(', ');
+        $storedCount->save();
     }
 
     private function dedupeKey(ScrapeSource $source, string $date, ?string $boat, ?string $tripType, ?int $anglers): string

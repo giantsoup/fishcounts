@@ -86,6 +86,35 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(74, $report->speciesCounts[1]->count);
     }
 
+    public function test_landing_source_parser_handles_called_in_narrative_without_trip_duration_noise(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: <<<'HTML'
+                <p>The Poseidon called in with 12 Bluefin Tuna (up to 100 lbs.), 1 Yellowfin Tuna (70 lbs.), 25 Yellowtail (up to 70 lbs.), 5 Bonito, 151 Misc. Rockfish, and 71 Vermillion Rockfish for 23 anglers on a 2 day trip.</p>
+                <p>The Pacific Queen returned this morning with 49 Yellowtail for 30 anglers on a 1.5 day charter.</p>
+            HTML,
+        ));
+
+        $poseidon = $parsed->tripReports->first();
+        $pacificQueen = $parsed->tripReports->get(1);
+
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('Poseidon', $poseidon->boatName);
+        $this->assertSame('2 Day', $poseidon->tripTypeName);
+        $this->assertSame(23, $poseidon->anglers);
+        $this->assertSame('Bluefin Tuna', $poseidon->speciesCounts[0]->speciesName);
+        $this->assertSame(12, $poseidon->speciesCounts[0]->count);
+        $this->assertSame('Misc Rockfish', $poseidon->speciesCounts[4]->speciesName);
+        $this->assertSame(151, $poseidon->speciesCounts[4]->count);
+        $this->assertSame('Vermillion Rockfish', $poseidon->speciesCounts[5]->speciesName);
+        $this->assertSame(71, $poseidon->speciesCounts[5]->count);
+        $this->assertSame('Pacific Queen', $pacificQueen->boatName);
+        $this->assertSame(['Yellowtail'], collect($pacificQueen->speciesCounts)->pluck('speciesName')->all());
+    }
+
     public function test_seaforth_source_parser_handles_narrative_report_without_anglers_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(

@@ -19,11 +19,11 @@ class ParsePayloadCommand extends Command
 
         if ($this->option('sync')) {
             ParseRawPayloadJob::dispatchSync($payloadId);
+            $this->info("Payload {$payloadId} parsed.");
         } else {
             ParseRawPayloadJob::dispatch($payloadId);
+            $this->info("Payload {$payloadId} queued for parsing.");
         }
-
-        $this->info("Payload {$payloadId} queued for parsing.");
 
         return self::SUCCESS;
     }
