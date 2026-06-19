@@ -16,7 +16,7 @@
                             <p class="font-medium text-gray-900">{{ $error->error_type }}</p>
                             <p class="text-sm text-gray-600">{{ $error->message }}</p>
                             <p class="mt-2 text-xs text-gray-500">
-                                {{ $error->scrapeSource->name }} · {{ $error->target_date?->toDateString() ?? 'No date' }} · {{ $error->created_at->toDateTimeString() }}
+                                {{ $error->scrapeSource->name }} · {{ $error->target_date?->format('n/j/Y') ?? 'No date' }} · {{ $error->created_at->format('n/j/Y g:i A') }}
                             </p>
                             @if ($error->resolved_at)
                                 <p class="mt-2 text-xs text-green-700">Resolved {{ $error->resolved_at->diffForHumans() }}</p>

@@ -64,6 +64,7 @@ class CountsAndScoresIndexTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertSee('6/15/2026')
             ->assertSee('Yellowtail')
             ->assertSee('30')
             ->assertSee('5')
@@ -157,6 +158,7 @@ class CountsAndScoresIndexTest extends TestCase
                 'minimum_score' => 80,
             ]))
             ->assertOk()
+            ->assertSee('6/15/2026')
             ->assertSee('Local Yellowtail')
             ->assertSee('82')
             ->assertDontSee('Other User Rule')

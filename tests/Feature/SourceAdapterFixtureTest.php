@@ -27,6 +27,7 @@ class SourceAdapterFixtureTest extends TestCase
 
         $this->assertCount(1, $parsed->tripReports);
         $this->assertSame('Dolphin', $report->boatName);
+        $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('Full Day', $report->tripTypeName);
         $this->assertSame(20, $report->anglers);
         $this->assertSame('source-specific-fishermans_landing-v1', $report->metadata['parser']);
@@ -115,6 +116,30 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(['Yellowtail'], collect($pacificQueen->speciesCounts)->pluck('speciesName')->all());
     }
 
+    public function test_landing_source_parser_infers_half_day_trip_type_from_am_pm_trip_narrative(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: <<<'HTML'
+                <p>The <strong>Dolphin</strong> PM trip caught 81 Rockfish and 2 Calico Bass for 35 anglers.</p>
+                <p>The <strong>Dolphin</strong> AM trip caught 78 Rockfish, 3 Whitefish, 3 Sandbass and 2 Calico Bass for 55 anglers.</p>
+            HTML,
+        ));
+
+        $pmReport = $parsed->tripReports->first();
+        $amReport = $parsed->tripReports->get(1);
+
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('Dolphin', $pmReport->boatName);
+        $this->assertSame('1/2 Day PM', $pmReport->tripTypeName);
+        $this->assertSame(35, $pmReport->anglers);
+        $this->assertSame('Dolphin', $amReport->boatName);
+        $this->assertSame('1/2 Day AM', $amReport->tripTypeName);
+        $this->assertSame(55, $amReport->anglers);
+    }
+
     public function test_seaforth_source_parser_handles_narrative_report_without_anglers_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
@@ -142,6 +167,39 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(28, $report->speciesCounts[1]->count);
         $this->assertSame('Vermilion Rockfish', $report->speciesCounts[2]->speciesName);
         $this->assertSame(85, $report->speciesCounts[2]->count);
+    }
+
+    public function test_seaforth_source_parser_handles_list_item_narrative_reports(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'seaforth_landing',
+            targetDate: CarbonImmutable::parse('2026-06-18'),
+            url: 'https://www.seaforthlanding.com/fishcounts.php?date=2026-06-18',
+            body: <<<'HTML'
+                <ul>
+                    <li>The <em>New Seaforth</em>'s Twilight trip finished with 12 calico bass (100 released), 1 sand bass, 2 barracuda, 1 sheephead and 1 rockfish.</li>
+                    <li>The <em>Tribute</em> finished up their 1.5 Day wth 10 Bluefin Tuna up to 120lbs and 4 Yellowtail!</li>
+                    <li>The <em>Polaris Supreme</em> just checked in from their 3 Day wth 33 Bluefin Tuna up to 120lbs and 17 Yellowtail from 20-30lbs!</li>
+                </ul>
+            HTML,
+        ));
+
+        $twilight = $parsed->tripReports->first();
+        $tribute = $parsed->tripReports->get(1);
+        $polarisSupreme = $parsed->tripReports->get(2);
+
+        $this->assertCount(3, $parsed->tripReports);
+        $this->assertSame('New Seaforth', $twilight->boatName);
+        $this->assertSame('Twilight', $twilight->tripTypeName);
+        $this->assertSame('Calico Bass', $twilight->speciesCounts[0]->speciesName);
+        $this->assertSame(12, $twilight->speciesCounts[0]->count);
+        $this->assertSame(100, $twilight->speciesCounts[0]->releasedCount);
+        $this->assertSame('Tribute', $tribute->boatName);
+        $this->assertSame('1.5 Day', $tribute->tripTypeName);
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], collect($tribute->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame('Polaris Supreme', $polarisSupreme->boatName);
+        $this->assertSame('3 Day', $polarisSupreme->tripTypeName);
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], collect($polarisSupreme->speciesCounts)->pluck('speciesName')->all());
     }
 
     public function test_report_feed_source_parser_handles_json_fixture(): void
@@ -187,7 +245,7 @@ class SourceAdapterFixtureTest extends TestCase
             body: <<<'HTML'
                 <table>
                     <tr><th>Landing</th><th>Boats</th><th>Anglers</th><th>Dock Totals</th></tr>
-                    <tr><td>Point Loma Sportfishing</td><td>3 Boats<br>4 Trips</td><td>135 Anglers</td><td>84 Yellowtail, 34 Calico Bass, 100 Calico Bass <span style="color: red">Released</span></td></tr>
+                    <tr><td>Point Loma Sportfishing San Diego, CA</td><td>3 Boats<br>4 Trips</td><td>135 Anglers</td><td>84 Yellowtail, 34 Calico Bass, 100 Calico Bass <span style="color: red">Released</span></td></tr>
                 </table>
             HTML,
         ));
@@ -196,6 +254,7 @@ class SourceAdapterFixtureTest extends TestCase
 
         $this->assertCount(1, $parsed->tripReports);
         $this->assertSame('Point Loma Sportfishing', $report->landingName);
+        $this->assertSame('dock-total', $report->metadata['format']);
         $this->assertSame(135, $report->anglers);
         $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
         $this->assertSame(84, $report->speciesCounts[0]->count);

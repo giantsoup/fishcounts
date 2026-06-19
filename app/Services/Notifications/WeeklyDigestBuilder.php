@@ -36,7 +36,7 @@ class WeeklyDigestBuilder
                 $topBoats = $summary['top_boats']->isEmpty() ? 'no boat detail' : $summary['top_boats']->implode(', ');
                 $topLandings = $summary['top_landings']->isEmpty() ? 'no landing detail' : $summary['top_landings']->implode(', ');
 
-                return "{$rule->name}: {$latest->score} {$latest->level->value} on {$latest->score_date->toDateString()} · {$summary['weekly_total']} fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$latest->boat_count} boats · {$countPerAngler} fish/angler · top boats: {$topBoats} · top landings: {$topLandings} · data: {$summary['data_quality']}.";
+                return "{$rule->name}: {$latest->score} {$latest->level->value} on {$latest->score_date->format('n/j/Y')} · {$summary['weekly_total']} fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$latest->boat_count} boats · {$countPerAngler} fish/angler · top boats: {$topBoats} · top landings: {$topLandings} · data: {$summary['data_quality']}.";
             })
             ->values();
     }
@@ -44,12 +44,13 @@ class WeeklyDigestBuilder
     public function discordContent(User $user, CarbonImmutable $weekEnding): string
     {
         $lines = $this->lines($user, $weekEnding);
+        $formattedWeekEnding = $weekEnding->format('n/j/Y');
 
         if ($lines->isEmpty()) {
-            return "Weekly fishing digest for week ending {$weekEnding->toDateString()}: no digest-enabled alert rules.";
+            return "Weekly fishing digest for week ending {$formattedWeekEnding}: no digest-enabled alert rules.";
         }
 
-        return "Weekly fishing digest for week ending {$weekEnding->toDateString()}:\n".$lines->implode("\n");
+        return "Weekly fishing digest for week ending {$formattedWeekEnding}:\n".$lines->implode("\n");
     }
 
     /**
@@ -94,7 +95,7 @@ class WeeklyDigestBuilder
 
         return [
             'weekly_total' => $weeklyTotal,
-            'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->toDateString()} ({$bestScore->score})",
+            'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->format('n/j/Y')} ({$bestScore->score})",
             'trend' => $this->trendLabel($firstScore?->score, $lastScore?->score),
             'top_boats' => $topBoats,
             'top_landings' => $topLandings,

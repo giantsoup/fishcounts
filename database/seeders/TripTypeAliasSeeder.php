@@ -13,6 +13,7 @@ class TripTypeAliasSeeder extends Seeder
     {
         $aliases = [
             '1/2 Day' => ['Half Day', '1/2 Day'],
+            '1/2 Day Twilight' => ['Twilight'],
             '3/4 Day' => ['Three Quarter Day', '3/4 Day'],
             'Full Day' => ['Full Day'],
         ];

@@ -4,6 +4,7 @@ namespace App\Services\Parsing;
 
 use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
+use App\Enums\SourceType;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeSource;
@@ -38,9 +39,12 @@ class TripReportNormalizer
 
             foreach ($parsed->tripReports as $index => $report) {
                 $region = $this->normalizer->region($report->regionName);
-                $landing = $this->normalizer->landing($report->landingName, $region);
+                $landingName = $report->landingName ?? $this->landingNameFromSource($source);
+                $landing = $this->normalizer->landing($landingName, $region);
                 $boat = $this->normalizer->boat($report->boatName, $landing);
                 $tripType = $this->normalizer->tripType($report->tripTypeName, $payload);
+                $rawBoatName = $report->boatName ?? $this->aggregateBoatLabel($report->metadata);
+                $rawTripType = $report->tripTypeName ?? $this->aggregateTripTypeLabel($report->metadata);
                 $dedupeKey = $this->dedupeKey($source, $report->tripDate->toDateString(), $report->boatName, $report->tripTypeName, $report->anglers);
 
                 $tripReport = TripReport::query()->create([
@@ -53,9 +57,9 @@ class TripReportNormalizer
                     'trip_date' => $report->tripDate,
                     'source_trip_identifier' => $report->metadata['source_trip_identifier'] ?? "{$payload->id}:{$index}:{$dedupeKey}",
                     'anglers' => $report->anglers,
-                    'raw_boat_name' => $report->boatName,
-                    'raw_landing_name' => $report->landingName,
-                    'raw_trip_type' => $report->tripTypeName,
+                    'raw_boat_name' => $rawBoatName,
+                    'raw_landing_name' => $landingName,
+                    'raw_trip_type' => $rawTripType,
                     'raw_fish_count_text' => $report->rawFishCountText,
                     'dedupe_key' => $dedupeKey,
                     'source_confidence' => max(1, 100 - $source->priority),
@@ -76,6 +80,23 @@ class TripReportNormalizer
 
             return $count;
         });
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function aggregateBoatLabel(array $metadata): ?string
+    {
+        return ($metadata['format'] ?? null) === 'dock-total' ? 'Dock Total' : null;
+    }
+
+    /** @param array<string, mixed> $metadata */
+    private function aggregateTripTypeLabel(array $metadata): ?string
+    {
+        return ($metadata['format'] ?? null) === 'dock-total' ? 'All Trips' : null;
+    }
+
+    private function landingNameFromSource(ScrapeSource $source): ?string
+    {
+        return $source->source_type === SourceType::Landing ? $source->name : null;
     }
 
     public function refreshPrimaryReports(string $date): void

@@ -21,7 +21,7 @@
                 <div class="py-5 border-b space-y-4">
                     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                            <p class="font-medium text-gray-900">#{{ $backfill->id }} · {{ $backfill->from_date->toDateString() }} to {{ $backfill->to_date->toDateString() }}</p>
+                            <p class="font-medium text-gray-900">#{{ $backfill->id }} · {{ $backfill->from_date->format('n/j/Y') }} to {{ $backfill->to_date->format('n/j/Y') }}</p>
                             <p class="text-sm text-gray-600">
                                 {{ $backfill->status->value }} · {{ $finishedItems }} of {{ $backfill->items_count }} source dates complete · {{ $progress }}%
                             </p>
@@ -70,7 +70,7 @@
                             <div class="mt-2 grid gap-2 md:grid-cols-2">
                                 @foreach ($backfill->items->take(8) as $item)
                                     <p class="text-sm text-gray-700">
-                                        {{ $item->target_date->toDateString() }} · {{ $item->scrapeSource->name }} · {{ $item->status->value }}
+                                        {{ $item->target_date->format('n/j/Y') }} · {{ $item->scrapeSource->name }} · {{ $item->status->value }}
                                         @if ($item->error_message)
                                             <span class="text-gray-500">· {{ $item->error_message }}</span>
                                         @endif

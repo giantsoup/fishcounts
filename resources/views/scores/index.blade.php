@@ -75,7 +75,7 @@
                         <tbody class="divide-y divide-gray-100 bg-white">
                             @forelse ($scores as $score)
                                 <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $score->score_date->toDateString() }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $score->score_date->format('n/j/Y') }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{{ $score->alertRule->name }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $score->alertRule->species->name }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-900">{{ $score->score }}</td>

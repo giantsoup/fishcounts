@@ -25,7 +25,9 @@ class ReferenceDataSeederTest extends TestCase
         );
 
         $this->assertSame('1/2 Day', TripTypeAlias::query()->where('normalized_alias', 'half day')->firstOrFail()->tripType->name);
+        $this->assertSame('1/2 Day Twilight', TripTypeAlias::query()->where('normalized_alias', 'twilight')->firstOrFail()->tripType->name);
         $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'sandbass')->firstOrFail()->species->name);
+        $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'barred sand bass')->firstOrFail()->species->name);
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion rockfish')->firstOrFail()->species->name);
     }
 }

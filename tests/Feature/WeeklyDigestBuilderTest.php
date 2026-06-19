@@ -98,7 +98,7 @@ class WeeklyDigestBuilderTest extends TestCase
         $content = app(WeeklyDigestBuilder::class)->discordContent($user, CarbonImmutable::parse('2026-06-17'));
 
         $this->assertStringContainsString('Local Yellowtail', $content);
-        $this->assertStringContainsString('best 2026-06-17 (82)', $content);
+        $this->assertStringContainsString('best 6/17/2026 (82)', $content);
         $this->assertStringContainsString('trend +27', $content);
         $this->assertStringContainsString('top boats: Mission Belle 84', $content);
         $this->assertStringContainsString('top landings: Point Loma Sportfishing 84', $content);

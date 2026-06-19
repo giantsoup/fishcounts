@@ -67,10 +67,16 @@ class AliasNormalizer
             return null;
         }
 
-        return Landing::query()->firstOrCreate(
+        $landing = Landing::query()->firstOrCreate(
             ['slug' => Str::slug($rawValue)],
             ['name' => Str::title($rawValue), 'region_id' => $region?->id],
         );
+
+        if ($landing->region_id === null && $region !== null) {
+            $landing->update(['region_id' => $region->id]);
+        }
+
+        return $landing;
     }
 
     public function boat(?string $rawValue, ?Landing $landing): ?Boat
@@ -79,10 +85,16 @@ class AliasNormalizer
             return null;
         }
 
-        return Boat::query()->firstOrCreate(
+        $boat = Boat::query()->firstOrCreate(
             ['slug' => Str::slug($rawValue)],
             ['name' => Str::title($rawValue), 'landing_id' => $landing?->id],
         );
+
+        if ($boat->landing_id === null && $landing !== null) {
+            $boat->update(['landing_id' => $landing->id]);
+        }
+
+        return $boat;
     }
 
     private function recordUnknown(RawScrapePayload $payload, string $type, string $field, string $rawValue): void

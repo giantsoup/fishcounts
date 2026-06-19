@@ -23,7 +23,7 @@
                     </div>
                     <div>
                         <dt class="font-medium text-gray-500">Date</dt>
-                        <dd class="text-gray-900">{{ $payload->target_date->toDateString() }}</dd>
+                        <dd class="text-gray-900">{{ $payload->target_date->format('n/j/Y') }}</dd>
                     </div>
                     <div>
                         <dt class="font-medium text-gray-500">HTTP status</dt>

@@ -59,6 +59,12 @@ class GenericFishCountParser
     /** @return Collection<int, ParsedSpeciesCountData> */
     public function parseSpeciesCounts(string $line): Collection
     {
+        $line = preg_replace_callback(
+            '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)\s*\(\s*(?<released>\d+)\s+released\s*\)/i',
+            fn (array $matches): string => "{$matches['retained']} {$matches['species']}, {$matches['released']} {$matches['species']} Released",
+            $line,
+        ) ?? $line;
+
         $line = Str::of($line)
             ->replace("\u{00A0}", ' ')
             ->replaceMatches('/\([^)]*\b(?:lbs?|pounds?)\b[^)]*\)/i', '')
@@ -67,12 +73,13 @@ class GenericFishCountParser
             ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
+            ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:trip\s+)?(?:with|wth)\b/i', '')
             ->replaceMatches('/\bfor\s+\d+\s+anglers?\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?\d+(?:\.\d+)?\s*day\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
             ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
             ->toString();
 
-        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|$)|\s+\d+\s+)/i', $line, $matches, PREG_SET_ORDER);
+        preg_match_all('/(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|!|$)|\s+\d+\s+)/i', $line, $matches, PREG_SET_ORDER);
 
         return collect($matches)
             ->map(function (array $match): ParsedSpeciesCountData {
@@ -132,6 +139,10 @@ class GenericFishCountParser
 
     private function extractTripType(string $line): ?string
     {
+        if (preg_match('/\b(?<period>AM|PM)\s+trip\b/i', $line, $matches)) {
+            return '1/2 Day '.Str::upper($matches['period']);
+        }
+
         if (preg_match('/\b(?<trip>\d+(?:\.\d+)?\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight)\b/i', $line, $matches)) {
             return Str::of($matches['trip'])->squish()->title()->toString();
         }
@@ -148,8 +159,8 @@ class GenericFishCountParser
     private function extractNarrativeBoatName(string $line): ?string
     {
         foreach ([
+            '/\b(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+caught\b/',
             '/\bThe\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:returned|had|has|just checked|checked|ended|caught|called in)\b/',
-            '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+caught\b/',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
             if (preg_match($pattern, $line, $matches)) {

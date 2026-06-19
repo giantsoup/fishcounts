@@ -7,7 +7,7 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-[1480px] mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="bg-white p-6 shadow sm:rounded-lg">
                 <form method="GET" action="{{ route('counts.index') }}" class="grid gap-4 md:grid-cols-4">
                     <div>
@@ -92,7 +92,7 @@
                                     $perAngler = $report?->anglers ? round($count->count / $report->anglers, 2) : null;
                                 @endphp
                                 <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->trip_date?->toDateString() }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->trip_date?->format('n/j/Y') }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-900">{{ $report?->landing?->name ?? $report?->raw_landing_name ?? 'Unknown' }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->boat?->name ?? $report?->raw_boat_name ?? 'Unknown' }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->tripType?->name ?? $report?->raw_trip_type ?? 'Unknown' }}</td>
