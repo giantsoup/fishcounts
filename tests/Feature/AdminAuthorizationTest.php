@@ -25,4 +25,17 @@ class AdminAuthorizationTest extends TestCase
             ->assertOk()
             ->assertSee(route('admin.backfills.index'));
     }
+
+    public function test_normal_user_cannot_create_reference_data(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->post(route('admin.species.store'), ['name' => 'Soupfin Shark'])
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->post(route('admin.trip-types.store'), ['name' => '3.5 Day'])
+            ->assertForbidden();
+    }
 }

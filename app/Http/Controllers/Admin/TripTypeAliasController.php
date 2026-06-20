@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTripTypeAliasRequest;
+use App\Http\Requests\StoreTripTypeRequest;
 use App\Models\ParserError;
 use App\Models\TripType;
 use App\Models\TripTypeAlias;
@@ -20,6 +21,18 @@ class TripTypeAliasController extends Controller
             'aliases' => TripTypeAlias::query()->with('tripType')->latest()->paginate(50),
             'tripTypes' => TripType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(),
         ]);
+    }
+
+    public function storeTripType(StoreTripTypeRequest $request): RedirectResponse
+    {
+        TripType::query()->create([
+            'name' => $request->validated('name'),
+            'slug' => $request->slug(),
+            'sort_order' => $request->validated('sort_order') ?? ((int) TripType::query()->max('sort_order') + 1),
+            'is_active' => true,
+        ]);
+
+        return redirect()->route('admin.trip-type-aliases.index')->with('status', 'Trip type saved.');
     }
 
     public function store(StoreTripTypeAliasRequest $request): RedirectResponse

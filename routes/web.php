@@ -67,8 +67,10 @@ Route::middleware('auth')->group(function (): void {
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');
+        Route::post('species', [SpeciesAliasController::class, 'storeSpecies'])->name('species.store');
         Route::post('species/aliases', [SpeciesAliasController::class, 'store'])->name('species-aliases.store');
         Route::get('trip-types', [TripTypeAliasController::class, 'index'])->name('trip-type-aliases.index');
+        Route::post('trip-types', [TripTypeAliasController::class, 'storeTripType'])->name('trip-types.store');
         Route::post('trip-types/aliases', [TripTypeAliasController::class, 'store'])->name('trip-type-aliases.store');
         Route::get('notification-logs', NotificationDeliveryController::class)->name('notification-logs.index');
         Route::get('failed-jobs', FailedJobController::class)->name('failed-jobs.index');

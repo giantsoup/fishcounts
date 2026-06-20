@@ -16,6 +16,20 @@ class AliasManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_can_view_species_management_page(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.species-aliases.index'))
+            ->assertOk()
+            ->assertSee('Add species')
+            ->assertSee('Save species')
+            ->assertSee('Add species alias')
+            ->assertSee('Yellowtail');
+    }
+
     public function test_admin_can_resolve_species_parser_error_by_creating_alias(): void
     {
         $admin = User::factory()->admin()->create();
@@ -46,6 +60,38 @@ class AliasManagementTest extends TestCase
         $this->assertNotNull($error->fresh()->resolved_at);
     }
 
+    public function test_admin_can_create_species(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.species.store'), [
+                'name' => 'Soupfin Shark',
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHas('status', 'Species saved.');
+
+        $this->assertDatabaseHas('species', [
+            'name' => 'Soupfin Shark',
+            'slug' => 'soupfin-shark',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_duplicate_species_slug_is_rejected(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Species::query()->create(['name' => 'Mako Shark', 'slug' => 'mako-shark']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->post(route('admin.species.store'), [
+                'name' => 'Mako Shark!',
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('name');
+    }
+
     public function test_admin_can_resolve_trip_type_parser_error_by_creating_alias(): void
     {
         $admin = User::factory()->admin()->create();
@@ -74,6 +120,54 @@ class AliasManagementTest extends TestCase
             'normalized_alias' => 'three quarter day',
         ]);
         $this->assertNotNull($error->fresh()->resolved_at);
+    }
+
+    public function test_admin_can_view_trip_type_management_page(): void
+    {
+        $admin = User::factory()->admin()->create();
+        TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.trip-type-aliases.index'))
+            ->assertOk()
+            ->assertSee('Add trip type')
+            ->assertSee('Save trip type')
+            ->assertSee('Add trip type alias')
+            ->assertSee('Full Day');
+    }
+
+    public function test_admin_can_create_trip_type(): void
+    {
+        $admin = User::factory()->admin()->create();
+        TripType::query()->create(['name' => '3 Day', 'slug' => '3-day', 'sort_order' => 3]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.trip-types.store'), [
+                'name' => '3.5 Day',
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHas('status', 'Trip type saved.');
+
+        $this->assertDatabaseHas('trip_types', [
+            'name' => '3.5 Day',
+            'slug' => '35-day',
+            'sort_order' => 4,
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_duplicate_trip_type_slug_is_rejected(): void
+    {
+        $admin = User::factory()->admin()->create();
+        TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-types.store'), [
+                'name' => 'Full Day!',
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('name');
     }
 
     public function test_duplicate_normalized_alias_is_rejected(): void

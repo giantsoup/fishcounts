@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSpeciesAliasRequest;
+use App\Http\Requests\StoreSpeciesRequest;
 use App\Models\ParserError;
 use App\Models\Species;
 use App\Models\SpeciesAlias;
@@ -20,6 +21,17 @@ class SpeciesAliasController extends Controller
             'aliases' => SpeciesAlias::query()->with('species')->latest()->paginate(50),
             'species' => Species::query()->where('is_active', true)->orderBy('name')->get(),
         ]);
+    }
+
+    public function storeSpecies(StoreSpeciesRequest $request): RedirectResponse
+    {
+        Species::query()->create([
+            'name' => $request->validated('name'),
+            'slug' => $request->slug(),
+            'is_active' => true,
+        ]);
+
+        return redirect()->route('admin.species-aliases.index')->with('status', 'Species saved.');
     }
 
     public function store(StoreSpeciesAliasRequest $request): RedirectResponse
