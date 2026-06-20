@@ -36,7 +36,18 @@
                                 <td class="px-6 py-4">{{ $user->is_active ? 'Active' : 'Inactive' }}</td>
                                 <td class="px-6 py-4">{{ $user->last_login_at?->toDayDateTimeString() ?? 'Never' }}</td>
                                 <td class="px-6 py-4 text-right">
-                                    <a href="{{ route('admin.users.edit', $user) }}" class="font-medium text-blue-700">Edit</a>
+                                    <div class="flex items-center justify-end gap-3">
+                                        <a href="{{ route('admin.users.edit', $user) }}" class="font-medium text-blue-700">Edit</a>
+
+                                        @can('delete', $user)
+                                            <form method="POST" action="{{ route('admin.users.destroy', $user) }}" onsubmit="return confirm('Delete this user account? This cannot be undone.');">
+                                                @csrf
+                                                @method('DELETE')
+
+                                                <button type="submit" class="font-medium text-red-700">Delete</button>
+                                            </form>
+                                        @endcan
+                                    </div>
                                 </td>
                             </tr>
                         @endforeach

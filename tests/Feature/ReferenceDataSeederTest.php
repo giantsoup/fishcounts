@@ -7,6 +7,7 @@ use App\Models\AlertRule;
 use App\Models\ScrapeSource;
 use App\Models\SpeciesAlias;
 use App\Models\TripTypeAlias;
+use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ScrapeSourceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +19,10 @@ class ReferenceDataSeederTest extends TestCase
 
     public function test_reference_seeders_create_expected_aliases_and_default_rule_filters(): void
     {
+        User::factory()->admin()->create([
+            'email' => config('fish.admin.email'),
+        ]);
+
         $this->seed(DatabaseSeeder::class);
 
         $rule = AlertRule::query()->where('name', 'Local Yellowtail')->firstOrFail();

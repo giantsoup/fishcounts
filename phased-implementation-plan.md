@@ -1945,7 +1945,6 @@ SpeciesAliasSeeder
 TripTypeSeeder
 TripTypeAliasSeeder
 ScrapeSourceSeeder
-AdminUserSeeder
 DefaultAlertRuleSeeder
 ```
 

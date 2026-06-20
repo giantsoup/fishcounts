@@ -39,6 +39,14 @@ class UserPolicy
     }
 
     /**
+     * Determine whether the user can send a password reset link.
+     */
+    public function sendPasswordResetLink(User $user, User $model): bool
+    {
+        return $user->isAdmin() && ! $user->is($model);
+    }
+
+    /**
      * Determine whether the user can delete the model.
      */
     public function delete(User $user, User $model): bool

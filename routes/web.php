@@ -51,7 +51,8 @@ Route::middleware('auth')->group(function (): void {
 
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('/', AdminDashboardController::class)->name('dashboard');
-        Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update']);
+        Route::post('users/{user}/password-reset', [UserController::class, 'sendPasswordResetLink'])->name('users.password-reset');
+        Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
         Route::resource('sources', ScrapeSourceController::class)->only(['index', 'update']);
         Route::get('backfills/poll', [BackfillController::class, 'poll'])->name('backfills.poll');
         Route::resource('backfills', BackfillController::class)->only(['index', 'create', 'store']);

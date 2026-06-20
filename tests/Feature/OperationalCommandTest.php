@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\NotificationChannel;
-use App\Enums\Role;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Jobs\ComputeScoreForRuleJob;
@@ -17,7 +16,6 @@ use App\Models\ScrapeSource;
 use App\Models\Species;
 use App\Models\User;
 use App\Notifications\TestNotification;
-use Database\Seeders\AdminUserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -56,31 +54,6 @@ class OperationalCommandTest extends TestCase
         $this->assertFalse(
             User::query()->where('email', 'second-admin@example.test')->exists()
         );
-    }
-
-    public function test_admin_user_seeder_preserves_existing_admin_password(): void
-    {
-        config([
-            'fish.admin.email' => 'admin@example.test',
-            'fish.admin.name' => 'Fish Counts Admin',
-            'fish.admin.password' => 'new-seeded-password',
-        ]);
-
-        $user = User::factory()->create([
-            'email' => 'admin@example.test',
-            'password' => Hash::make('existing-password'),
-            'role' => Role::User,
-            'email_verified_at' => null,
-        ]);
-
-        $this->seed(AdminUserSeeder::class);
-
-        $user->refresh();
-
-        $this->assertSame(Role::Admin, $user->role);
-        $this->assertNotNull($user->email_verified_at);
-        $this->assertTrue(Hash::check('existing-password', $user->password));
-        $this->assertFalse(Hash::check('new-seeded-password', $user->password));
     }
 
     public function test_parse_payload_command_queues_parser_job(): void

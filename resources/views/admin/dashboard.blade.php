@@ -6,7 +6,10 @@
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="grid gap-6 md:grid-cols-5">
-                <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Users</p><p class="text-3xl font-semibold">{{ $userCount }}</p></div>
+                <a href="{{ route('admin.users.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                    <p class="text-sm text-gray-500">Users</p>
+                    <p class="text-3xl font-semibold">{{ $userCount }}</p>
+                </a>
                 <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Latest scrape</p><p class="text-sm">{{ $latestScrapeRun?->status?->value ?? 'None' }}</p></div>
                 <a href="{{ route('admin.backfills.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
                     <p class="text-sm text-gray-500">Latest backfill</p>
