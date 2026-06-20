@@ -16,6 +16,45 @@ class WeeklyDigestBuilder
      */
     public function lines(User $user, CarbonImmutable $weekEnding): Collection
     {
+        return $this->summaries($user, $weekEnding)
+            ->map(function (array $summary): string {
+                if (! $summary['has_scores']) {
+                    return "{$summary['rule_name']}: no scores this week.";
+                }
+
+                $topBoats = $summary['top_boats']->isEmpty()
+                    ? 'no boat detail'
+                    : $summary['top_boats']->map(fn (array $boat): string => "{$boat['name']} {$boat['total']}")->implode(', ');
+                $topLandings = $summary['top_landings']->isEmpty()
+                    ? 'no landing detail'
+                    : $summary['top_landings']->map(fn (array $landing): string => "{$landing['name']} {$landing['total']}")->implode(', ');
+
+                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$summary['boat_count']} boats · {$summary['count_per_angler']} fish/angler · top boats: {$topBoats} · top landings: {$topLandings} · data: {$summary['data_quality']}.";
+            })
+            ->values();
+    }
+
+    /**
+     * @return Collection<int, array{
+     *     rule_name: string,
+     *     species_name: string,
+     *     has_scores: bool,
+     *     score: int|null,
+     *     level: string|null,
+     *     level_label: string|null,
+     *     score_date: string|null,
+     *     weekly_total: int,
+     *     best_day: string,
+     *     trend: string,
+     *     boat_count: int|null,
+     *     count_per_angler: string,
+     *     top_boats: Collection<int, array{name: string, total: int}>,
+     *     top_landings: Collection<int, array{name: string, total: int}>,
+     *     data_quality: string
+     * }>
+     */
+    public function summaries(User $user, CarbonImmutable $weekEnding): Collection
+    {
         return $user->alertRules()
             ->with(['species', 'scoreResults' => fn ($query) => $query
                 ->whereDate('score_date', '>=', $weekEnding->subDays(6)->toDateString())
@@ -24,19 +63,48 @@ class WeeklyDigestBuilder
             ->where('include_in_weekly_digest', true)
             ->orderBy('name')
             ->get()
-            ->map(function (AlertRule $rule) use ($weekEnding): string {
+            ->map(function (AlertRule $rule) use ($weekEnding): array {
                 $latest = $rule->scoreResults->first();
 
                 if ($latest === null) {
-                    return "{$rule->name}: no scores this week.";
+                    return [
+                        'rule_name' => $rule->name,
+                        'species_name' => $rule->species->name,
+                        'has_scores' => false,
+                        'score' => null,
+                        'level' => null,
+                        'level_label' => null,
+                        'score_date' => null,
+                        'weekly_total' => 0,
+                        'best_day' => 'n/a',
+                        'trend' => 'n/a',
+                        'boat_count' => null,
+                        'count_per_angler' => 'n/a',
+                        'top_boats' => collect(),
+                        'top_landings' => collect(),
+                        'data_quality' => 'no score data available',
+                    ];
                 }
 
                 $summary = $this->summaryForRule($rule, $weekEnding);
-                $countPerAngler = $latest->count_per_angler === null ? 'n/a' : $latest->count_per_angler;
-                $topBoats = $summary['top_boats']->isEmpty() ? 'no boat detail' : $summary['top_boats']->implode(', ');
-                $topLandings = $summary['top_landings']->isEmpty() ? 'no landing detail' : $summary['top_landings']->implode(', ');
 
-                return "{$rule->name}: {$latest->score} {$latest->level->value} on {$latest->score_date->format('n/j/Y')} · {$summary['weekly_total']} fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$latest->boat_count} boats · {$countPerAngler} fish/angler · top boats: {$topBoats} · top landings: {$topLandings} · data: {$summary['data_quality']}.";
+                return [
+                    'rule_name' => $rule->name,
+                    'species_name' => $rule->species->name,
+                    'has_scores' => true,
+                    'score' => $latest->score,
+                    'level' => $latest->level->value,
+                    'level_label' => str($latest->level->value)->replace('_', ' ')->headline()->toString(),
+                    'score_date' => $latest->score_date->format('n/j/Y'),
+                    'weekly_total' => $summary['weekly_total'],
+                    'best_day' => $summary['best_day'],
+                    'trend' => $summary['trend'],
+                    'boat_count' => $latest->boat_count,
+                    'count_per_angler' => $latest->count_per_angler === null ? 'n/a' : (string) $latest->count_per_angler,
+                    'top_boats' => $summary['top_boats'],
+                    'top_landings' => $summary['top_landings'],
+                    'data_quality' => $summary['data_quality'],
+                ];
             })
             ->values();
     }
@@ -54,7 +122,7 @@ class WeeklyDigestBuilder
     }
 
     /**
-     * @return array{weekly_total: int, best_day: string, trend: string, top_boats: Collection<int, string>, top_landings: Collection<int, string>, data_quality: string}
+     * @return array{weekly_total: int, best_day: string, trend: string, top_boats: Collection<int, array{name: string, total: int}>, top_landings: Collection<int, array{name: string, total: int}>, data_quality: string}
      */
     private function summaryForRule(AlertRule $rule, CarbonImmutable $weekEnding): array
     {
@@ -78,7 +146,10 @@ class WeeklyDigestBuilder
             ->orderByDesc('total')
             ->limit(3)
             ->get()
-            ->map(fn ($row): string => "{$row->name} {$row->total}");
+            ->map(fn ($row): array => [
+                'name' => $row->name,
+                'total' => (int) $row->total,
+            ]);
 
         $topLandings = (clone $reportsQuery)
             ->leftJoin('landings', 'landings.id', '=', 'trip_reports.landing_id')
@@ -87,7 +158,10 @@ class WeeklyDigestBuilder
             ->orderByDesc('total')
             ->limit(3)
             ->get()
-            ->map(fn ($row): string => "{$row->name} {$row->total}");
+            ->map(fn ($row): array => [
+                'name' => $row->name,
+                'total' => (int) $row->total,
+            ]);
 
         $missingAnglerReports = (clone $reportsQuery)
             ->whereNull('trip_reports.anglers')

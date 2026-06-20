@@ -23,17 +23,12 @@ class WeeklyFishingDigestNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        $lines = app(WeeklyDigestBuilder::class)->lines($this->user, $this->weekEnding);
-
-        $message = (new MailMessage)
+        return (new MailMessage)
             ->subject('Weekly fishing digest')
-            ->greeting('Weekly fishing digest')
-            ->line('Scores for your digest-enabled alert rules:');
-
-        foreach ($lines as $line) {
-            $message->line($line);
-        }
-
-        return $message->action('View scores', route('scores.index'));
+            ->markdown('mail.weekly-fishing-digest', [
+                'scoresUrl' => route('scores.index'),
+                'summaries' => app(WeeklyDigestBuilder::class)->summaries($this->user, $this->weekEnding),
+                'weekEnding' => $this->weekEnding,
+            ]);
     }
 }

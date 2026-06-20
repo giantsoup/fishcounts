@@ -20,12 +20,17 @@ class HotBiteAlertNotification extends Notification
     {
         $this->alertEvent->loadMissing(['alertRule.species', 'scoreResult']);
         $rule = $this->alertEvent->alertRule;
+        $scoreResult = $this->alertEvent->scoreResult;
 
         return (new MailMessage)
             ->subject("Hot bite alert: {$rule->name}")
-            ->greeting('Hot bite threshold crossed')
-            ->line("{$rule->species->name} scored {$this->alertEvent->score} for {$this->alertEvent->event_date->toFormattedDateString()}.")
-            ->line("Total count: {$this->alertEvent->scoreResult?->total_count}.")
-            ->action('View scores', route('scores.index'));
+            ->markdown('mail.hot-bite-alert', [
+                'alertEvent' => $this->alertEvent,
+                'countPerAngler' => $scoreResult?->count_per_angler === null ? 'n/a' : (string) $scoreResult->count_per_angler,
+                'levelLabel' => str($this->alertEvent->level->value)->replace('_', ' ')->headline()->toString(),
+                'rule' => $rule,
+                'scoreResult' => $scoreResult,
+                'scoresUrl' => route('scores.index'),
+            ]);
     }
 }
