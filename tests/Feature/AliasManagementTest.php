@@ -27,7 +27,8 @@ class AliasManagementTest extends TestCase
             ->assertSee('Add species')
             ->assertSee('Save species')
             ->assertSee('Add species alias')
-            ->assertSee('Yellowtail');
+            ->assertSee('Yellowtail')
+            ->assertDontSee('yellowtail');
     }
 
     public function test_admin_can_resolve_species_parser_error_by_creating_alias(): void

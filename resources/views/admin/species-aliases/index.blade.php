@@ -27,9 +27,8 @@
                     <h3 class="font-semibold text-gray-900">Active species</h3>
                     <div class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2 text-sm">
                         @foreach ($species as $item)
-                            <div class="rounded border border-gray-200 px-3 py-2">
-                                <p class="font-medium text-gray-900">{{ $item->name }}</p>
-                                <p class="text-xs text-gray-500">{{ $item->slug }}</p>
+                            <div class="flex min-h-20 items-center justify-center rounded border border-gray-200 px-3 py-3 text-center">
+                                <p class="text-lg font-semibold text-gray-900">{{ $item->name }}</p>
                             </div>
                         @endforeach
                     </div>
