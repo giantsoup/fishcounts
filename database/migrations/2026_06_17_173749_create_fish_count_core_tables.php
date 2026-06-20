@@ -115,7 +115,7 @@ return new class extends Migration
             $table->text('error_message')->nullable();
             $table->jsonb('metadata')->nullable();
             $table->timestamps();
-            $table->unique(['scrape_source_id', 'target_date', 'payload_hash']);
+            $table->unique(['scrape_source_id', 'target_date', 'payload_hash'], 'raw_payload_source_date_hash_unique');
         });
 
         Schema::create('trip_reports', function (Blueprint $table): void {
@@ -156,7 +156,7 @@ return new class extends Migration
             $table->string('raw_species_name')->nullable();
             $table->string('raw_count_text')->nullable();
             $table->timestamps();
-            $table->unique(['trip_report_id', 'species_id', 'is_retained_count']);
+            $table->unique(['trip_report_id', 'species_id', 'is_retained_count'], 'species_counts_report_species_retained_unique');
         });
     }
 

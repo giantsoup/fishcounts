@@ -2,9 +2,7 @@
 
 ## Docker Compose
 
-Docker remains available for local or containerized environments.
-
-1. Copy `.env.example` to `.env` and set values for `APP_KEY`, `APP_URL`, mail, database, queue/cache, and Discord settings.
+1. Copy `.env.example` to `.env` and set production values for `APP_KEY`, `APP_URL`, mail, database, queue/cache, and Discord settings.
 2. Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
 3. Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec app php artisan migrate --force`.
 4. Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec app php artisan fish:create-admin`.
@@ -21,7 +19,9 @@ Use `docker/nginx/fishcounts.conf` as the starting Nginx server block and put TL
 
 ## Backups
 
-Run `scripts/backup-postgres.sh` from cron or the VPS backup system. Set `BACKUP_DIR`, `POSTGRES_CONTAINER`, `POSTGRES_DB`, and `POSTGRES_USER` when the defaults do not match your deployment.
+On the native VPS, run `/usr/local/bin/backup-fishcounts-db.sh` from cron to create compressed MariaDB backups under `/var/backups/fishcounts`.
+
+For Docker Compose deployments, run `scripts/backup-postgres.sh` from cron or the container host backup system. Set `BACKUP_DIR`, `POSTGRES_CONTAINER`, `POSTGRES_DB`, and `POSTGRES_USER` when the defaults do not match your deployment.
 
 ## Deploy Procedure
 

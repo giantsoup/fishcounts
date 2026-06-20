@@ -37,7 +37,7 @@ return new class extends Migration
             $table->timestamp('finished_at')->nullable();
             $table->text('error_message')->nullable();
             $table->timestamps();
-            $table->unique(['backfill_run_id', 'scrape_source_id', 'target_date']);
+            $table->unique(['backfill_run_id', 'scrape_source_id', 'target_date'], 'backfill_item_run_source_date_unique');
             $table->index(['status', 'target_date']);
         });
 
