@@ -15,7 +15,7 @@ class RawPayloadController extends Controller
         $this->authorize('view', $rawScrapePayload);
 
         return view('admin.raw-payloads.show', [
-            'payload' => $rawScrapePayload->load(['scrapeSource', 'tripReports.speciesCounts.species', 'tripReports.boat', 'tripReports.landing', 'tripReports.tripType']),
+            'payload' => $rawScrapePayload->load(['scrapeRun', 'scrapeSource', 'tripReports.speciesCounts.species', 'tripReports.boat', 'tripReports.landing', 'tripReports.tripType']),
         ]);
     }
 

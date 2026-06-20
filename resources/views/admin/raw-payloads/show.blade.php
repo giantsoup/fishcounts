@@ -1,11 +1,19 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-xl text-gray-800">Raw payload</h2>
-            <form method="POST" action="{{ route('admin.raw-payloads.reparse', $payload) }}">
-                @csrf
-                <x-secondary-button>Reparse</x-secondary-button>
-            </form>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="font-semibold text-xl text-gray-800">Raw payload</h2>
+                @if ($payload->scrapeRun)
+                    <a class="mt-1 block text-sm text-blue-700" href="{{ route('admin.scrape-runs.show', $payload->scrapeRun) }}">Back to scrape run #{{ $payload->scrapeRun->id }}</a>
+                @endif
+            </div>
+            <div class="flex items-center gap-3">
+                <a class="text-sm text-blue-700" href="{{ route('admin.scrape-runs.index') }}">All scrape runs</a>
+                <form method="POST" action="{{ route('admin.raw-payloads.reparse', $payload) }}">
+                    @csrf
+                    <x-secondary-button type="submit">Reparse</x-secondary-button>
+                </form>
+            </div>
         </div>
     </x-slot>
 

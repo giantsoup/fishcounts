@@ -18,6 +18,11 @@
                             <p class="mt-2 text-xs text-gray-500">
                                 {{ $error->scrapeSource->name }} · {{ $error->target_date?->format('n/j/Y') ?? 'No date' }} · {{ $error->created_at->format('n/j/Y g:i A') }}
                             </p>
+                            @if ($error->rawScrapePayload)
+                                <p class="mt-2 text-xs">
+                                    <a class="text-blue-700" href="{{ route('admin.raw-payloads.show', $error->rawScrapePayload) }}">View raw payload</a>
+                                </p>
+                            @endif
                             @if ($error->resolved_at)
                                 <p class="mt-2 text-xs text-green-700">Resolved {{ $error->resolved_at->diffForHumans() }}</p>
                             @endif
@@ -44,7 +49,7 @@
                                             <option value="{{ $item->id }}">{{ $item->name }}</option>
                                         @endforeach
                                     </x-form.select>
-                                    <x-secondary-button>Resolve as species</x-secondary-button>
+                                    <x-secondary-button type="submit">Resolve as species</x-secondary-button>
                                 </form>
                             @elseif (! $error->resolved_at && $error->error_type === 'unknown_trip_type_alias' && $error->raw_value)
                                 <form method="POST" action="{{ route('admin.trip-type-aliases.store') }}" class="space-y-2">
@@ -56,7 +61,7 @@
                                             <option value="{{ $tripType->id }}">{{ $tripType->name }}</option>
                                         @endforeach
                                     </x-form.select>
-                                    <x-secondary-button>Resolve as trip type</x-secondary-button>
+                                    <x-secondary-button type="submit">Resolve as trip type</x-secondary-button>
                                 </form>
                             @else
                                 <p class="text-sm text-gray-500">No alias action.</p>

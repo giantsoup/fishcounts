@@ -18,6 +18,10 @@
         <div class="min-h-screen bg-gray-100">
             @include('layouts.navigation')
 
+            @if (request()->routeIs('admin.*'))
+                @include('admin._nav')
+            @endif
+
             <!-- Page Heading -->
             @isset($header)
                 <header class="bg-white shadow">

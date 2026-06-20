@@ -144,6 +144,10 @@ const initializeBackfillPolling = (root = document) => {
         const status = panel.querySelector('[data-backfill-poll-status]');
         const url = panel.dataset.backfillPollUrl;
         const interval = Number.parseInt(panel.dataset.backfillPollInterval || '5000', 10);
+        const activeKey = panel.dataset.backfillPollActiveKey || 'has_active_backfills';
+        const activeMessage = panel.dataset.backfillPollActiveMessage || 'Live updates enabled';
+        const completeMessage = panel.dataset.backfillPollCompleteMessage || 'Live updates complete';
+        const pausedMessage = panel.dataset.backfillPollPausedMessage || 'Live updates paused';
 
         if (! target || ! url) {
             return;
@@ -185,16 +189,16 @@ const initializeBackfillPolling = (root = document) => {
 
                 target.innerHTML = data.html;
 
-                if (data.has_active_backfills) {
-                    updateBackfillPollStatus(status, 'Live updates enabled', true);
+                if (data[activeKey]) {
+                    updateBackfillPollStatus(status, activeMessage, true);
 
                     return;
                 }
 
-                updateBackfillPollStatus(status, 'Live updates complete', false);
+                updateBackfillPollStatus(status, completeMessage, false);
                 stopPolling();
             } catch (error) {
-                updateBackfillPollStatus(status, 'Live updates paused', false);
+                updateBackfillPollStatus(status, pausedMessage, false);
                 stopPolling();
             } finally {
                 isRefreshing = false;

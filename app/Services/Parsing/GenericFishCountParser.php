@@ -77,8 +77,9 @@ class GenericFishCountParser
             ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
+            ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:trip\s+)?(?:with|wth)\b/i', '')
-            ->replaceMatches('/\bfor\s+\d+\s+anglers?\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?\d+(?:\.\d+)?\s*day\s+(?:trip|charter))?/i', '')
+            ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
             ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
             ->toString();
@@ -148,7 +149,7 @@ class GenericFishCountParser
         }
 
         if (preg_match('/\b(?<trip>\d+(?:\.\d+)?\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight)\b/i', $line, $matches)) {
-            return Str::of($matches['trip'])->squish()->title()->toString();
+            return $this->normalizeTripType($matches['trip']);
         }
 
         foreach (['1/2 Day', '3/4 Day', 'Full Day', 'Overnight', '1.5 Day', '2 Day', 'Twilight'] as $tripType) {
@@ -163,7 +164,7 @@ class GenericFishCountParser
     private function extractNarrativeBoatName(string $line): ?string
     {
         foreach ([
-            '/\b(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+caught\b/',
+            '/\b(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:AM|PM)\s+trip\s+(?:caught|returned|had|has|finished|ended)\b/',
             '/\bThe\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+(?:returned|had|has|just checked|checked|ended|caught|called in)\b/',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
@@ -173,6 +174,19 @@ class GenericFishCountParser
         }
 
         return null;
+    }
+
+    private function normalizeTripType(string $tripType): string
+    {
+        $normalized = Str::of($tripType)->squish()->title()->toString();
+
+        if (preg_match('/^(?<period>Am|Pm)\s+Half\s+Day$/', $normalized, $matches)) {
+            return '1/2 Day '.Str::upper($matches['period']);
+        }
+
+        return Str::of($normalized)
+            ->replaceMatches('/\s+Trip$/i', '')
+            ->toString();
     }
 
     private function isAggregateLine(string $line): bool

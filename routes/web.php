@@ -55,7 +55,9 @@ Route::middleware('auth')->group(function (): void {
         Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
         Route::resource('sources', ScrapeSourceController::class)->only(['index', 'update']);
         Route::get('backfills/poll', [BackfillController::class, 'poll'])->name('backfills.poll');
-        Route::resource('backfills', BackfillController::class)->only(['index', 'create', 'store']);
+        Route::resource('backfills', BackfillController::class)->only(['index', 'create', 'store', 'show'])->parameters(['backfills' => 'backfillRun']);
+        Route::get('backfills/{backfillRun}/reparse-poll', [BackfillController::class, 'pollReparse'])->name('backfills.reparse-poll');
+        Route::post('backfills/{backfillRun}/reparse', [BackfillController::class, 'reparse'])->name('backfills.reparse');
         Route::post('backfills/{backfillRun}/pause', [BackfillController::class, 'pause'])->name('backfills.pause');
         Route::post('backfills/{backfillRun}/resume', [BackfillController::class, 'resume'])->name('backfills.resume');
         Route::post('backfills/{backfillRun}/retry-failed', [BackfillController::class, 'retryFailed'])->name('backfills.retry-failed');

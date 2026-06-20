@@ -34,7 +34,7 @@
                         </p>
                         <form method="POST" action="{{ route('notification-settings.test', $destination) }}">
                             @csrf
-                            <x-secondary-button>Send test</x-secondary-button>
+                            <x-secondary-button type="submit">Send test</x-secondary-button>
                         </form>
                     </div>
                 @empty

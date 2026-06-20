@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\BackfillReparseRunStatus;
 use App\Enums\BackfillRunStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBackfillRunRequest;
 use App\Jobs\BackfillRunJob;
+use App\Jobs\ReparseBackfillRunJob;
+use App\Models\BackfillReparseRun;
 use App\Models\BackfillRun;
 use App\Models\ScrapeSource;
 use Carbon\CarbonImmutable;
@@ -13,6 +16,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BackfillController extends Controller
@@ -40,12 +44,53 @@ class BackfillController extends Controller
         ]);
     }
 
+    public function pollReparse(BackfillRun $backfillRun): JsonResponse
+    {
+        $this->authorize('view', $backfillRun);
+
+        $data = $this->reparseViewData($backfillRun);
+
+        return response()->json([
+            'html' => view('admin.backfills._reparse', [
+                'backfill' => $backfillRun,
+                ...$data,
+            ])->render(),
+            'has_active_reparse' => $data['hasActiveReparseRun'],
+            'refreshed_at' => now()->toISOString(),
+        ]);
+    }
+
     public function create(): View
     {
         $this->authorize('create', BackfillRun::class);
 
         return view('admin.backfills.create', [
             'sources' => ScrapeSource::query()->where('is_enabled', true)->orderBy('priority')->get(),
+        ]);
+    }
+
+    public function show(BackfillRun $backfillRun): View
+    {
+        $this->authorize('view', $backfillRun);
+
+        $reparseData = $this->reparseViewData($backfillRun);
+
+        return view('admin.backfills.show', [
+            'backfill' => $backfillRun->loadCount([
+                'items',
+                'items as pending_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Pending->value),
+                'items as running_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Running->value),
+                'items as succeeded_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Succeeded->value),
+                'items as failed_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Failed->value),
+                'items as unavailable_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Unavailable->value),
+            ]),
+            'items' => $backfillRun->items()
+                ->with(['scrapeSource', 'scrapeRun', 'rawScrapePayload'])
+                ->orderBy('target_date')
+                ->orderBy('scrape_source_id')
+                ->paginate(100)
+                ->withPath(route('admin.backfills.show', $backfillRun)),
+            ...$reparseData,
         ]);
     }
 
@@ -81,6 +126,45 @@ class BackfillController extends Controller
         BackfillRunJob::dispatch($backfill->id);
 
         return redirect()->route('admin.backfills.index')->with('status', "Backfill {$backfill->id} queued.");
+    }
+
+    public function reparse(Request $request, BackfillRun $backfillRun): RedirectResponse
+    {
+        $this->authorize('update', $backfillRun);
+
+        $activeReparseRun = $backfillRun->reparseRuns()
+            ->whereIn('status', [BackfillReparseRunStatus::Pending->value, BackfillReparseRunStatus::Running->value])
+            ->latest()
+            ->first();
+
+        if ($activeReparseRun !== null) {
+            return redirect()
+                ->route('admin.backfills.show', $backfillRun)
+                ->with('status', "Backfill reparse #{$activeReparseRun->id} is already {$activeReparseRun->status->value}.");
+        }
+
+        $payloadCount = $this->reparseablePayloadCount($backfillRun);
+        $reparseRun = BackfillReparseRun::query()->create([
+            'backfill_run_id' => $backfillRun->id,
+            'created_by_user_id' => $request->user()?->id,
+            'status' => $payloadCount > 0 ? BackfillReparseRunStatus::Pending : BackfillReparseRunStatus::Succeeded,
+            'total_payloads' => $payloadCount,
+            'queued_payloads' => 0,
+            'started_at' => $payloadCount === 0 ? now() : null,
+            'finished_at' => $payloadCount === 0 ? now() : null,
+        ]);
+
+        if ($payloadCount === 0) {
+            return redirect()
+                ->route('admin.backfills.show', $backfillRun)
+                ->with('status', 'No saved raw payloads are available to reparse for this backfill.');
+        }
+
+        ReparseBackfillRunJob::dispatch($reparseRun->id);
+
+        return redirect()
+            ->route('admin.backfills.show', $backfillRun)
+            ->with('status', "Backfill reparse #{$reparseRun->id} queued for {$payloadCount} saved payload(s).");
     }
 
     public function cancel(BackfillRun $backfillRun): RedirectResponse
@@ -176,5 +260,25 @@ class BackfillController extends Controller
         return BackfillRun::query()
             ->whereIn('status', [BackfillRunStatus::Pending->value, BackfillRunStatus::Running->value])
             ->exists();
+    }
+
+    private function reparseablePayloadCount(BackfillRun $backfillRun): int
+    {
+        return $backfillRun->items()
+            ->whereNotNull('raw_scrape_payload_id')
+            ->distinct()
+            ->count('raw_scrape_payload_id');
+    }
+
+    /** @return array{latestReparseRun: BackfillReparseRun|null, reparseablePayloadCount: int, hasActiveReparseRun: bool} */
+    private function reparseViewData(BackfillRun $backfillRun): array
+    {
+        $latestReparseRun = $backfillRun->reparseRuns()->latest()->first();
+
+        return [
+            'latestReparseRun' => $latestReparseRun,
+            'reparseablePayloadCount' => $this->reparseablePayloadCount($backfillRun),
+            'hasActiveReparseRun' => $latestReparseRun !== null && in_array($latestReparseRun->status, [BackfillReparseRunStatus::Pending, BackfillReparseRunStatus::Running], true),
+        ];
     }
 }

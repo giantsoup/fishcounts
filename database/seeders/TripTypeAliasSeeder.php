@@ -12,10 +12,18 @@ class TripTypeAliasSeeder extends Seeder
     public function run(): void
     {
         $aliases = [
-            '1/2 Day' => ['Half Day', '1/2 Day'],
+            '1/2 Day' => ['Half Day', '1/2 Day', '4 Hour'],
+            '1/2 Day AM' => ['AM Half Day', '1/2 Day AM'],
+            '1/2 Day PM' => ['PM Half Day', '1/2 Day PM'],
             '1/2 Day Twilight' => ['Twilight'],
             '3/4 Day' => ['Three Quarter Day', '3/4 Day'],
-            'Full Day' => ['Full Day'],
+            'Full Day' => ['Full Day', 'Full Day Trip', 'Full Day Offshore'],
+            'Overnight' => ['Overnight'],
+            '1.5 Day' => ['1.5 Day'],
+            '2 Day' => ['2 Day'],
+            '2.5 Day' => ['2.5 Day'],
+            '3 Day' => ['3 Day'],
+            '3.5 Day' => ['3.5 Day'],
         ];
 
         foreach ($aliases as $name => $values) {

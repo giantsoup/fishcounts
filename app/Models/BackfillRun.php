@@ -46,4 +46,10 @@ class BackfillRun extends Model
     {
         return $this->hasMany(BackfillRunItem::class);
     }
+
+    /** @return HasMany<BackfillReparseRun, $this> */
+    public function reparseRuns(): HasMany
+    {
+        return $this->hasMany(BackfillReparseRun::class);
+    }
 }

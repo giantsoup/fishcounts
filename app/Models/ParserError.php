@@ -24,6 +24,12 @@ class ParserError extends Model
         return $this->belongsTo(ScrapeSource::class);
     }
 
+    /** @return BelongsTo<RawScrapePayload, $this> */
+    public function rawScrapePayload(): BelongsTo
+    {
+        return $this->belongsTo(RawScrapePayload::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function resolver(): BelongsTo
     {

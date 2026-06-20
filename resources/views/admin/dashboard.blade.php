@@ -10,12 +10,29 @@
                     <p class="text-sm text-gray-500">Users</p>
                     <p class="text-3xl font-semibold">{{ $userCount }}</p>
                 </a>
-                <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Latest scrape</p><p class="text-sm">{{ $latestScrapeRun?->status?->value ?? 'None' }}</p></div>
+                <div class="bg-white p-6 shadow sm:rounded-lg">
+                    <p class="text-sm text-gray-500">Latest scrape</p>
+                    @if ($latestScrapeRun)
+                        <a class="text-sm text-blue-700" href="{{ route('admin.scrape-runs.show', $latestScrapeRun) }}">
+                            {{ $latestScrapeRun->status->value }}
+                        </a>
+                    @else
+                        <p class="text-sm">None</p>
+                    @endif
+                    @if ($openParserErrorCount > 0)
+                        <a href="{{ route('admin.parser-errors.index') }}" class="mt-2 block text-xs font-medium text-amber-700">
+                            {{ $openParserErrorCount }} parser {{ Str::plural('warning', $openParserErrorCount) }} {{ $openParserErrorCount === 1 ? 'needs' : 'need' }} alias review
+                        </a>
+                    @endif
+                </div>
                 <a href="{{ route('admin.backfills.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
                     <p class="text-sm text-gray-500">Latest backfill</p>
                     <p class="text-sm">{{ $latestBackfillRun?->status?->value ?? 'None' }}</p>
                 </a>
-                <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Parser errors</p><p class="text-3xl font-semibold">{{ $openParserErrorCount }}</p></div>
+                <a href="{{ route('admin.parser-errors.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                    <p class="text-sm text-gray-500">Parser errors</p>
+                    <p class="text-3xl font-semibold">{{ $openParserErrorCount }}</p>
+                </a>
                 <a href="{{ route('admin.failed-jobs.index') }}" class="bg-white p-6 shadow sm:rounded-lg">
                     <p class="text-sm text-gray-500">Failed jobs</p>
                     <p class="text-3xl font-semibold">{{ $failedJobCount }}</p>

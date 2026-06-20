@@ -116,6 +116,34 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(['Yellowtail'], collect($pacificQueen->speciesCounts)->pluck('speciesName')->all());
     }
 
+    public function test_landing_source_parser_ignores_trip_duration_text_inside_species_counts(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-06-19'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: <<<'HTML'
+                <p>The Dolphin PM trip returned with 111 mixed Rockfish, 4 Sheephead, 3 Calico Bass, 4 Sand Bass, 6 Sculpin, and 1 Cabezon for 32 anglers.</p>
+                <p>The Liberty caught 5 Yellowtail, 1 Bonito, 185 Whitefish and 22 Sculpin for 37 anglers on a Full Day trip.</p>
+                <p>The Tomahawk called in with 35 Yellowtail and 1 Dorado on their 1.5 day trip for 28 anglers.</p>
+            HTML,
+        ));
+
+        $dolphin = $parsed->tripReports->first();
+        $liberty = $parsed->tripReports->get(1);
+        $tomahawk = $parsed->tripReports->get(2);
+
+        $this->assertCount(3, $parsed->tripReports);
+        $this->assertSame('Dolphin', $dolphin->boatName);
+        $this->assertSame('1/2 Day PM', $dolphin->tripTypeName);
+        $this->assertSame(['Mixed Rockfish', 'Sheephead', 'Calico Bass', 'Sand Bass', 'Sculpin', 'Cabezon'], collect($dolphin->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame('Liberty', $liberty->boatName);
+        $this->assertSame('Full Day', $liberty->tripTypeName);
+        $this->assertSame(['Yellowtail', 'Bonito', 'Whitefish', 'Sculpin'], collect($liberty->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame('Tomahawk', $tomahawk->boatName);
+        $this->assertSame(['Yellowtail', 'Dorado'], collect($tomahawk->speciesCounts)->pluck('speciesName')->all());
+    }
+
     public function test_landing_source_parser_infers_half_day_trip_type_from_am_pm_trip_narrative(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(

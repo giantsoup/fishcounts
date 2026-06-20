@@ -17,7 +17,7 @@ class SpeciesAliasSeeder extends Seeder
             'yellowfin-tuna' => ['Yellowfin', 'YFT'],
             'calico-bass' => ['Calicos'],
             'sand-bass' => ['Sandbass', 'Barred Sand Bass'],
-            'rockfish' => ['Misc Rockfish', 'Misc. Rockfish', 'Vermilion Rockfish', 'Vermillion Rockfish'],
+            'rockfish' => ['Misc Rockfish', 'Misc. Rockfish', 'Mixed Rockfish', 'Vermilion Rockfish', 'Vermillion Rockfish', 'Vermillion Red Rockfish', 'Red Rockfish'],
         ];
 
         foreach ($aliases as $slug => $values) {
