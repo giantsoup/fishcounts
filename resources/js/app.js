@@ -40,6 +40,68 @@ const initializeSelects = (root = document) => {
     });
 };
 
+const formatAmericanDateInput = (value) => {
+    if (value.includes('/')) {
+        return value
+            .replace(/[^\d/]/g, '')
+            .split('/')
+            .slice(0, 3)
+            .map((part, index) => part.slice(0, index === 2 ? 4 : 2))
+            .join('/');
+    }
+
+    const digits = value.replace(/\D/g, '').slice(0, 8);
+
+    if (digits.length <= 2) {
+        return digits;
+    }
+
+    if (digits.length <= 4) {
+        return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+};
+
+const initializeDateMask = (picker, input) => {
+    const visibleInput = picker.altInput || input;
+    const originalId = input.getAttribute('id');
+
+    if (originalId && visibleInput !== input) {
+        input.setAttribute('id', `${originalId}_iso`);
+        visibleInput.setAttribute('id', originalId);
+    }
+
+    visibleInput.setAttribute('placeholder', 'MM/DD/YYYY');
+    visibleInput.setAttribute('inputmode', 'numeric');
+    visibleInput.setAttribute('autocomplete', 'off');
+
+    const syncDateValue = () => {
+        const value = visibleInput.value.trim();
+
+        if (value === '') {
+            picker.clear();
+
+            return;
+        }
+
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(value)) {
+            picker.setDate(value, true, 'n/j/Y');
+        }
+    };
+
+    visibleInput.addEventListener('input', () => {
+        const formattedValue = formatAmericanDateInput(visibleInput.value);
+
+        if (formattedValue !== visibleInput.value) {
+            visibleInput.value = formattedValue;
+        }
+    });
+
+    visibleInput.addEventListener('blur', syncDateValue);
+    visibleInput.form?.addEventListener('submit', syncDateValue);
+};
+
 const initializeDates = (root = document) => {
     root.querySelectorAll('[data-enhance="date"]').forEach((input) => {
         if (input._flatpickr || input.dataset.enhanced === 'true') {
@@ -47,18 +109,106 @@ const initializeDates = (root = document) => {
         }
 
         input.dataset.enhanced = 'true';
-        flatpickr(input, {
+        const picker = flatpickr(input, {
             allowInput: true,
+            altFormat: 'm/d/Y',
+            altInput: true,
+            ariaDateFormat: 'm/d/Y',
             dateFormat: 'Y-m-d',
             maxDate: input.getAttribute('max') || undefined,
             minDate: input.getAttribute('min') || undefined,
         });
+
+        initializeDateMask(picker, input);
+    });
+};
+
+const updateBackfillPollStatus = (status, message, isActive) => {
+    if (! status) {
+        return;
+    }
+
+    status.innerHTML = `
+        <span class="h-2 w-2 rounded-full ${isActive ? 'bg-blue-600' : 'bg-gray-300'}"></span>
+        <span>${message}</span>
+    `;
+};
+
+const initializeBackfillPolling = (root = document) => {
+    root.querySelectorAll('[data-backfill-poll]').forEach((panel) => {
+        if (panel.dataset.enhanced === 'true' || panel.dataset.backfillPollActive !== 'true') {
+            return;
+        }
+
+        const target = panel.querySelector('[data-backfill-poll-target]');
+        const status = panel.querySelector('[data-backfill-poll-status]');
+        const url = panel.dataset.backfillPollUrl;
+        const interval = Number.parseInt(panel.dataset.backfillPollInterval || '5000', 10);
+
+        if (! target || ! url) {
+            return;
+        }
+
+        panel.dataset.enhanced = 'true';
+
+        let isRefreshing = false;
+        let timerId = null;
+
+        const stopPolling = () => {
+            if (timerId !== null) {
+                window.clearInterval(timerId);
+                timerId = null;
+            }
+        };
+
+        const refreshBackfills = async () => {
+            if (isRefreshing) {
+                return;
+            }
+
+            isRefreshing = true;
+
+            try {
+                const response = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                if (! response.ok) {
+                    throw new Error('Unable to refresh backfills.');
+                }
+
+                const data = await response.json();
+
+                target.innerHTML = data.html;
+
+                if (data.has_active_backfills) {
+                    updateBackfillPollStatus(status, 'Live updates enabled', true);
+
+                    return;
+                }
+
+                updateBackfillPollStatus(status, 'Live updates complete', false);
+                stopPolling();
+            } catch (error) {
+                updateBackfillPollStatus(status, 'Live updates paused', false);
+                stopPolling();
+            } finally {
+                isRefreshing = false;
+            }
+        };
+
+        timerId = window.setInterval(refreshBackfills, Number.isNaN(interval) ? 5000 : interval);
     });
 };
 
 const initializeFormControls = (root = document) => {
     initializeSelects(root);
     initializeDates(root);
+    initializeBackfillPolling(root);
 };
 
 if (document.readyState === 'loading') {

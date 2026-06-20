@@ -53,6 +53,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', AdminDashboardController::class)->name('dashboard');
         Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update']);
         Route::resource('sources', ScrapeSourceController::class)->only(['index', 'update']);
+        Route::get('backfills/poll', [BackfillController::class, 'poll'])->name('backfills.poll');
         Route::resource('backfills', BackfillController::class)->only(['index', 'create', 'store']);
         Route::post('backfills/{backfillRun}/pause', [BackfillController::class, 'pause'])->name('backfills.pause');
         Route::post('backfills/{backfillRun}/resume', [BackfillController::class, 'resume'])->name('backfills.resume');

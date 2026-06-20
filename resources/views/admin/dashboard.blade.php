@@ -8,7 +8,10 @@
             <div class="grid gap-6 md:grid-cols-5">
                 <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Users</p><p class="text-3xl font-semibold">{{ $userCount }}</p></div>
                 <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Latest scrape</p><p class="text-sm">{{ $latestScrapeRun?->status?->value ?? 'None' }}</p></div>
-                <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Latest backfill</p><p class="text-sm">{{ $latestBackfillRun?->status?->value ?? 'None' }}</p></div>
+                <a href="{{ route('admin.backfills.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                    <p class="text-sm text-gray-500">Latest backfill</p>
+                    <p class="text-sm">{{ $latestBackfillRun?->status?->value ?? 'None' }}</p>
+                </a>
                 <div class="bg-white p-6 shadow sm:rounded-lg"><p class="text-sm text-gray-500">Parser errors</p><p class="text-3xl font-semibold">{{ $openParserErrorCount }}</p></div>
                 <a href="{{ route('admin.failed-jobs.index') }}" class="bg-white p-6 shadow sm:rounded-lg">
                     <p class="text-sm text-gray-500">Failed jobs</p>

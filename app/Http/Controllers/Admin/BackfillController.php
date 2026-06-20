@@ -9,7 +9,9 @@ use App\Jobs\BackfillRunJob;
 use App\Models\BackfillRun;
 use App\Models\ScrapeSource;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -20,18 +22,21 @@ class BackfillController extends Controller
         $this->authorize('viewAny', BackfillRun::class);
 
         return view('admin.backfills.index', [
-            'backfills' => BackfillRun::query()
-                ->withCount([
-                    'items',
-                    'items as pending_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Pending->value),
-                    'items as running_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Running->value),
-                    'items as succeeded_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Succeeded->value),
-                    'items as failed_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Failed->value),
-                    'items as unavailable_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Unavailable->value),
-                ])
-                ->with(['items' => fn ($query) => $query->with('scrapeSource')->whereIn('status', [BackfillRunStatus::Failed->value, BackfillRunStatus::Unavailable->value])->latest('target_date')])
-                ->latest()
-                ->paginate(25),
+            'backfills' => $this->backfills(),
+            'hasActiveBackfills' => $this->hasActiveBackfills(),
+        ]);
+    }
+
+    public function poll(): JsonResponse
+    {
+        $this->authorize('viewAny', BackfillRun::class);
+
+        $backfills = $this->backfills();
+
+        return response()->json([
+            'html' => view('admin.backfills._list', ['backfills' => $backfills])->render(),
+            'has_active_backfills' => $this->hasActiveBackfills(),
+            'refreshed_at' => now()->toISOString(),
         ]);
     }
 
@@ -54,8 +59,8 @@ class BackfillController extends Controller
         $backfill = DB::transaction(function () use ($request, $validated, $from, $to, $totalItems): BackfillRun {
             $backfill = BackfillRun::query()->create([
                 'created_by_user_id' => $request->user()->id,
-                'from_date' => $from,
-                'to_date' => $to,
+                'from_date' => $from->toDateString(),
+                'to_date' => $to->toDateString(),
                 'source_ids' => $validated['source_ids'],
                 'batch_size_days' => $validated['batch_size_days'],
                 'total_days' => $totalItems,
@@ -65,7 +70,7 @@ class BackfillController extends Controller
                 for ($date = $from; $date->lte($to); $date = $date->addDay()) {
                     $backfill->items()->create([
                         'scrape_source_id' => $sourceId,
-                        'target_date' => $date,
+                        'target_date' => $date->toDateString(),
                     ]);
                 }
             }
@@ -146,5 +151,30 @@ class BackfillController extends Controller
         BackfillRunJob::dispatch($backfillRun->id);
 
         return redirect()->route('admin.backfills.index')->with('status', 'Failed and unavailable dates were re-queued.');
+    }
+
+    /** @return LengthAwarePaginator<int, BackfillRun> */
+    private function backfills(): LengthAwarePaginator
+    {
+        return BackfillRun::query()
+            ->withCount([
+                'items',
+                'items as pending_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Pending->value),
+                'items as running_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Running->value),
+                'items as succeeded_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Succeeded->value),
+                'items as failed_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Failed->value),
+                'items as unavailable_items_count' => fn ($query) => $query->where('status', BackfillRunStatus::Unavailable->value),
+            ])
+            ->with(['items' => fn ($query) => $query->with('scrapeSource')->whereIn('status', [BackfillRunStatus::Failed->value, BackfillRunStatus::Unavailable->value])->latest('target_date')])
+            ->latest()
+            ->paginate(25)
+            ->withPath(route('admin.backfills.index'));
+    }
+
+    private function hasActiveBackfills(): bool
+    {
+        return BackfillRun::query()
+            ->whereIn('status', [BackfillRunStatus::Pending->value, BackfillRunStatus::Running->value])
+            ->exists();
     }
 }

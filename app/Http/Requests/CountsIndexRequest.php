@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\DateInputNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -14,12 +15,20 @@ class CountsIndexRequest extends FormRequest
         return $this->user() !== null;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'from' => DateInputNormalizer::toIsoDate($this->input('from')),
+            'to' => DateInputNormalizer::toIsoDate($this->input('to')),
+        ]);
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
             'species_id' => ['nullable', 'integer', Rule::exists('species', 'id')->where('is_active', true)],
             'trip_type_id' => ['nullable', 'integer', Rule::exists('trip_types', 'id')->where('is_active', true)],
             'landing_id' => ['nullable', 'integer', Rule::exists('landings', 'id')->where('is_active', true)],

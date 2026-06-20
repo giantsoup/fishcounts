@@ -54,8 +54,8 @@ class CountsAndScoresIndexTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->get(route('counts.index', [
-            'from' => '2026-06-01',
-            'to' => '2026-06-30',
+            'from' => '06/01/2026',
+            'to' => '06/30/2026',
             'species_id' => $yellowtail->id,
             'trip_type_id' => $context['tripType']->id,
             'landing_id' => $context['landing']->id,
@@ -151,8 +151,8 @@ class CountsAndScoresIndexTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('scores.index', [
-                'from' => '2026-06-01',
-                'to' => '2026-06-30',
+                'from' => '06/01/2026',
+                'to' => '06/30/2026',
                 'alert_rule_id' => $rule->id,
                 'level' => ScoreLevel::Hot->value,
                 'minimum_score' => 80,

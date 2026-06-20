@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ScoreLevel;
+use App\Support\DateInputNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -15,12 +16,20 @@ class ScoresIndexRequest extends FormRequest
         return $this->user() !== null;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'from' => DateInputNormalizer::toIsoDate($this->input('from')),
+            'to' => DateInputNormalizer::toIsoDate($this->input('to')),
+        ]);
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
         return [
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date'],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
             'alert_rule_id' => ['nullable', 'integer', Rule::exists('alert_rules', 'id')->where('user_id', $this->user()?->id)],
             'level' => ['nullable', Rule::enum(ScoreLevel::class)],
             'minimum_score' => ['nullable', 'integer', 'min:0', 'max:100'],
