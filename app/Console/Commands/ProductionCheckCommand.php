@@ -18,9 +18,9 @@ class ProductionCheckCommand extends Command
 
         $this->assert((bool) config('app.key'), 'APP_KEY is configured.', 'APP_KEY is missing.', $failures);
         $this->assert(! (bool) config('app.debug'), 'APP_DEBUG is disabled.', 'APP_DEBUG must be false in production.', $failures);
-        $this->assert(config('database.default') !== 'sqlite', 'Database driver is not SQLite.', 'Production must use PostgreSQL, not SQLite.', $failures);
-        $this->assert(config('queue.default') === 'redis', 'Queue connection is Redis.', 'QUEUE_CONNECTION should be redis for production workers.', $failures);
-        $this->assert(config('cache.default') === 'redis', 'Cache store is Redis.', 'CACHE_STORE should be redis for production.', $failures);
+        $this->assert(config('database.default') !== 'sqlite', 'Database driver is not SQLite.', 'Production must use a production database such as MariaDB, MySQL, or PostgreSQL.', $failures);
+        $this->assert(config('queue.default') === 'database', 'Queue connection uses the database driver for this VPS deployment.', 'QUEUE_CONNECTION should be database for this VPS deployment.', $failures);
+        $this->assert(config('cache.default') === 'database', 'Cache store uses the database driver for this VPS deployment.', 'CACHE_STORE should be database for this VPS deployment.', $failures);
         $this->assert((bool) config('session.secure'), 'Secure session cookies are enabled.', 'SESSION_SECURE_COOKIE must be true behind HTTPS.', $failures);
         $this->assert((bool) config('session.http_only'), 'HTTP-only session cookies are enabled.', 'SESSION_HTTP_ONLY must stay true.', $failures);
 
