@@ -1,8 +1,10 @@
 *.log
 .DS_Store
 .env
-.env.backup
-.env.production
+.env.*
+!.env.example
+!.env.encrypted
+!.env.*.encrypted
 .phpactor.json
 .phpunit.result.cache
 /.codex/*
@@ -19,9 +21,12 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+/backups
 /storage/*.key
 /storage/pail
 /vendor
+*.sql
+*.sql.gz
 _ide_helper.php
 Homestead.json
 Homestead.yaml
