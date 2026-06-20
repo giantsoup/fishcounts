@@ -1,0 +1,176 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    environment: Testing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Create SQLite Database
+        run: touch database/database.sqlite
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Run Database Migrations
+        run: php artisan migrate --force
+
+      - name: Verify Code Style
+        run: vendor/bin/pint --test
+
+      - name: Build Assets
+        run: npm run build
+
+      - name: Verify Built Assets
+        run: |
+          test ! -f public/hot
+          test -f public/build/manifest.json
+
+      - name: Run Tests
+        run: php artisan test --compact
+
+      - name: Package Release Artifact
+        run: |
+          archive_path="${RUNNER_TEMP}/fishcounts-release.tar.gz"
+          package_list_path="${RUNNER_TEMP}/fishcounts-package-list.txt"
+          manifest_path="${GITHUB_WORKSPACE}/.release-manifest"
+          release_sha_path="${GITHUB_WORKSPACE}/.release-sha"
+
+          python3 - "${package_list_path}" <<'PY'
+          import subprocess
+          import sys
+
+          excluded = (
+              '.github/',
+              '.codex/',
+              '.agents/',
+              '.junie/',
+              'node_modules/',
+              'tests/',
+              'vendor/',
+          )
+
+          output = subprocess.check_output(['git', 'ls-files', '-z'])
+          entries = []
+
+          for path in output.split(b'\0'):
+              if not path:
+                  continue
+
+              value = path.decode('utf-8')
+
+              if value.startswith(excluded):
+                  continue
+
+              entries.append(value)
+
+          with open(sys.argv[1], 'w', encoding='utf-8') as handle:
+              for value in sorted(entries):
+                  handle.write(f'{value}\n')
+          PY
+
+          find public/build -type f | sort >> "${package_list_path}"
+          sort -u "${package_list_path}" -o "${package_list_path}"
+
+          while IFS= read -r path; do
+            sha256sum "${path}"
+          done < "${package_list_path}" > "${manifest_path}"
+
+          printf '%s\n' "${GITHUB_SHA}" > "${release_sha_path}"
+          printf '%s\n' ".release-manifest" ".release-sha" >> "${package_list_path}"
+
+          tar -czf "${archive_path}" -C "${GITHUB_WORKSPACE}" -T "${package_list_path}"
+
+          tar -tzf "${archive_path}" | grep -Fx '.release-manifest'
+          tar -tzf "${archive_path}" | grep -Fx '.release-sha'
+          tar -tzf "${archive_path}" | grep -Fx 'public/build/manifest.json'
+          tar -tzf "${archive_path}" | grep -Fx 'artisan'
+
+      - name: Upload Release Artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: fishcounts-release
+          path: ${{ runner.temp }}/fishcounts-release.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: verify
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: fishcounts-release
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.PROD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Guard Against Stale Deploys
+        run: |
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "${GITHUB_SHA}"
+
+      - name: Upload Release Artifact To Server
+        run: |
+          scp -i ~/.ssh/id_ed25519 -P "${{ secrets.PROD_PORT }}" fishcounts-release.tar.gz \
+            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}:/tmp/fishcounts-release.tar.gz"
+
+      - name: Deploy Release On Server
+        env:
+          DEPLOY_PATH: ${{ secrets.PROD_DEPLOY_PATH }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "${{ secrets.PROD_PORT }}" \
+            "${{ secrets.PROD_USER }}@${{ secrets.PROD_HOST }}" \
+            "DEPLOY_PATH='${DEPLOY_PATH}' RELEASE_SHA='${RELEASE_SHA}' bash -s" < .github/scripts/deploy.sh
+
+      - name: Verify Production Health
+        run: curl --fail --silent --show-error --location https://fish.tayloroyer.com/up
