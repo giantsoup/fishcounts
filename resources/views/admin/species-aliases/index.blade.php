@@ -9,7 +9,7 @@
                 <p class="text-sm text-green-700">{{ session('status') }}</p>
             @endif
 
-            <div class="grid gap-6 lg:grid-cols-3">
+            <div class="grid items-start gap-6 lg:grid-cols-3">
                 <div class="bg-white p-6 shadow sm:rounded-lg">
                     <h3 class="font-semibold text-gray-900">Add species</h3>
                     <form method="POST" action="{{ route('admin.species.store') }}" class="mt-4 space-y-4">
