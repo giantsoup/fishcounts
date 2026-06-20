@@ -26,21 +26,34 @@ class OperationalCommandTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_admin_command_creates_active_verified_admin(): void
+    public function test_create_admin_command_prompts_for_email_and_password(): void
     {
-        $this->artisan('fish:create-admin', [
-            'email' => 'local-dev@example.test',
-            '--name' => 'Local Dev Admin',
-            '--password' => 'local-dev-password',
-        ])->assertSuccessful();
+        $this->artisan('fish:create-admin')
+            ->expectsQuestion('Admin email', 'local-dev@example.test')
+            ->expectsQuestion('Admin password', 'local-dev-password')
+            ->assertSuccessful();
 
         $user = User::query()->where('email', 'local-dev@example.test')->firstOrFail();
 
-        $this->assertSame('Local Dev Admin', $user->name);
+        $this->assertSame('Fish Counts Admin', $user->name);
         $this->assertTrue($user->isAdmin());
         $this->assertTrue($user->is_active);
         $this->assertNotNull($user->email_verified_at);
         $this->assertTrue(Hash::check('local-dev-password', $user->password));
+    }
+
+    public function test_create_admin_command_refuses_to_create_another_initial_admin(): void
+    {
+        User::factory()->admin()->create();
+
+        $this->artisan('fish:create-admin', [
+            'email' => 'second-admin@example.test',
+            '--password' => 'second-admin-password',
+        ])->assertFailed();
+
+        $this->assertFalse(
+            User::query()->where('email', 'second-admin@example.test')->exists()
+        );
     }
 
     public function test_parse_payload_command_queues_parser_job(): void
