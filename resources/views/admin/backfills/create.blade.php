@@ -21,7 +21,7 @@
 
                 <div>
                     <x-input-label for="source_ids" value="Sources" />
-                    <x-form.select id="source_ids" name="source_ids[]" multiple class="min-h-40" placeholder="Select sources">
+                    <x-form.select id="source_ids" name="source_ids[]" multiple placeholder="Select sources">
                         @foreach ($sources as $source)
                             <option value="{{ $source->id }}" selected>{{ $source->name }}</option>
                         @endforeach

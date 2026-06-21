@@ -95,6 +95,26 @@ class AdminOperationsTest extends TestCase
             ->assertSee(route('admin.parser-errors.index'));
     }
 
+    public function test_backfill_form_renders_shared_multi_select_without_fixed_height(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.backfills.create'))
+            ->assertOk()
+            ->assertSee('name="source_ids[]"', false)
+            ->assertSee('data-select-mode="multiple"', false)
+            ->assertSee('data-placeholder="Select sources"', false)
+            ->assertDontSee('min-h-40', false);
+    }
+
     public function test_admin_can_view_failed_jobs(): void
     {
         $admin = User::factory()->admin()->create();

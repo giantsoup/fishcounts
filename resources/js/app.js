@@ -10,17 +10,22 @@ window.Alpine = Alpine;
 
 Alpine.plugin(mask);
 
+const isMultipleSelect = (select) => select.multiple || select.dataset.selectMode === 'multiple';
+
+const selectPlugins = (select) => (isMultipleSelect(select) ? ['remove_button'] : []);
+
 const selectConfig = (select) => {
-    const isMultiple = select.multiple;
+    const isMultiple = isMultipleSelect(select);
     const placeholder = select.dataset.placeholder || '';
 
     return {
         allowEmptyOption: ! isMultiple,
         closeAfterSelect: ! isMultiple,
         create: false,
+        hidePlaceholder: isMultiple,
         hideSelected: isMultiple,
         maxOptions: 500,
-        plugins: isMultiple ? ['remove_button'] : [],
+        plugins: selectPlugins(select),
         placeholder,
         render: {
             item: (data, escape) => `<div>${escape(data.text)}</div>`,

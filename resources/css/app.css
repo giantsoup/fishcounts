@@ -3,43 +3,6 @@
 @tailwind utilities;
 
 @layer components {
-    .ts-wrapper {
-        @apply mt-1 w-full;
-    }
-
-    .ts-control {
-        @apply min-h-[42px] rounded-md border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500;
-    }
-
-    .ts-wrapper.single .ts-control,
-    .ts-wrapper.multi .ts-control {
-        @apply border-gray-300;
-    }
-
-    .ts-wrapper.focus .ts-control {
-        @apply border-indigo-500 ring-1 ring-indigo-500;
-    }
-
-    .ts-wrapper.disabled .ts-control {
-        @apply cursor-not-allowed bg-gray-100 text-gray-500;
-    }
-
-    .ts-dropdown {
-        @apply mt-1 rounded-md border border-gray-200 text-sm shadow-lg;
-    }
-
-    .ts-dropdown .active {
-        @apply bg-indigo-50 text-indigo-900;
-    }
-
-    .ts-control > .item {
-        @apply rounded bg-indigo-50 px-2 py-0.5 text-indigo-900;
-    }
-
-    .ts-control .remove {
-        @apply ml-1 border-l border-indigo-200 pl-1 text-indigo-700 hover:text-indigo-950;
-    }
-
     .flatpickr-calendar {
         @apply rounded-md border-gray-200 shadow-lg;
     }
@@ -59,4 +22,41 @@
     .form-select-control {
         @apply disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500;
     }
+}
+
+.ts-wrapper {
+    @apply mt-1 w-full;
+}
+
+.ts-wrapper .ts-control {
+    @apply min-h-[42px] rounded-md border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500;
+}
+
+.ts-wrapper.single .ts-control,
+.ts-wrapper.multi .ts-control {
+    @apply border-gray-300;
+}
+
+.ts-wrapper.focus .ts-control {
+    @apply border-indigo-500 ring-1 ring-indigo-500;
+}
+
+.ts-wrapper.disabled .ts-control {
+    @apply cursor-not-allowed bg-gray-100 text-gray-500;
+}
+
+.ts-wrapper .ts-dropdown {
+    @apply mt-0 rounded-b-md rounded-t-none border border-gray-200 text-sm shadow-lg;
+}
+
+.ts-wrapper .ts-dropdown .active {
+    @apply bg-indigo-50 text-indigo-900;
+}
+
+.ts-wrapper.multi .ts-control > .item {
+    @apply rounded bg-indigo-50 px-2 py-0.5 text-indigo-900;
+}
+
+.ts-wrapper.plugin-remove_button .ts-control .item .remove {
+    @apply ml-1 border-l border-indigo-200 pl-1 text-indigo-700 hover:text-indigo-950;
 }

@@ -53,6 +53,24 @@ class AlertRuleManagementTest extends TestCase
             ->assertSee('name="baseline_window_days"', false);
     }
 
+    public function test_alert_rule_form_renders_enhanced_multi_selects_without_fixed_heights(): void
+    {
+        $user = User::factory()->create();
+        Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+
+        $this->actingAs($user)
+            ->get(route('alert-rules.create'))
+            ->assertOk()
+            ->assertSee('name="region_ids[]"', false)
+            ->assertSee('name="trip_type_ids[]"', false)
+            ->assertSee('name="landing_ids[]"', false)
+            ->assertSee('name="boat_ids[]"', false)
+            ->assertSee('data-select-mode="multiple"', false)
+            ->assertDontSee('min-h-28', false);
+    }
+
     public function test_user_can_disable_alert_rule_boolean_flags(): void
     {
         $user = User::factory()->create();

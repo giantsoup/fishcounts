@@ -71,7 +71,7 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label value="Regions" />
-                        <x-form.select name="region_ids[]" multiple class="min-h-28" placeholder="Select regions">
+                        <x-form.select name="region_ids[]" multiple placeholder="Select regions">
                             @foreach ($regions as $region)
                                 <option value="{{ $region->id }}" @selected(in_array($region->id, array_map('intval', $selectedRegions), true))>{{ $region->name }}</option>
                             @endforeach
@@ -80,7 +80,7 @@
                     </div>
                     <div>
                         <x-input-label value="Trip types" />
-                        <x-form.select name="trip_type_ids[]" multiple class="min-h-28" placeholder="Select trip types">
+                        <x-form.select name="trip_type_ids[]" multiple placeholder="Select trip types">
                             @foreach ($tripTypes as $tripType)
                                 <option value="{{ $tripType->id }}" @selected(in_array($tripType->id, array_map('intval', $selectedTripTypes), true))>{{ $tripType->name }}</option>
                             @endforeach
@@ -92,7 +92,7 @@
                 <div class="grid gap-4 md:grid-cols-2">
                     <div>
                         <x-input-label value="Landings" />
-                        <x-form.select name="landing_ids[]" multiple class="min-h-28" placeholder="Select landings">
+                        <x-form.select name="landing_ids[]" multiple placeholder="Select landings">
                             @foreach ($landings as $landing)
                                 <option value="{{ $landing->id }}" @selected(in_array($landing->id, array_map('intval', $selectedLandings), true))>{{ $landing->name }}</option>
                             @endforeach
@@ -101,7 +101,7 @@
                     </div>
                     <div>
                         <x-input-label value="Boats" />
-                        <x-form.select name="boat_ids[]" multiple class="min-h-28" placeholder="Select boats">
+                        <x-form.select name="boat_ids[]" multiple placeholder="Select boats">
                             @foreach ($boats as $boat)
                                 <option value="{{ $boat->id }}" @selected(in_array($boat->id, array_map('intval', $selectedBoats), true))>{{ $boat->name }}</option>
                             @endforeach
