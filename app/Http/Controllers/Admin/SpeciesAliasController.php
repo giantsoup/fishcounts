@@ -18,8 +18,12 @@ class SpeciesAliasController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         return view('admin.species-aliases.index', [
-            'aliases' => SpeciesAlias::query()->with('species')->latest()->paginate(50),
-            'species' => Species::query()->where('is_active', true)->orderBy('name')->get(),
+            'selectedSpeciesId' => old('species_id', session('selected_species_id')),
+            'species' => Species::query()
+                ->where('is_active', true)
+                ->with(['aliases' => fn ($query) => $query->orderBy('alias')])
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -44,7 +48,10 @@ class SpeciesAliasController extends Controller
 
         $this->resolveParserError($request, $alias->alias);
 
-        return redirect()->back()->with('status', 'Species alias saved.');
+        return redirect()
+            ->back()
+            ->with('status', 'Species alias saved.')
+            ->with('selected_species_id', $request->validated('species_id'));
     }
 
     private function resolveParserError(StoreSpeciesAliasRequest $request, string $alias): void

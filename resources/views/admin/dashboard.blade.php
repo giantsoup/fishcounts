@@ -44,8 +44,8 @@
                     <h3 class="font-semibold text-gray-900">Source health</h3>
                     <div class="flex gap-4 text-sm">
                         <a class="text-blue-700" href="{{ route('admin.sources.index') }}">Manage sources</a>
-                        <a class="text-blue-700" href="{{ route('admin.species-aliases.index') }}">Species aliases</a>
-                        <a class="text-blue-700" href="{{ route('admin.trip-type-aliases.index') }}">Trip aliases</a>
+                        <a class="text-blue-700" href="{{ route('admin.species-aliases.index') }}">Species</a>
+                        <a class="text-blue-700" href="{{ route('admin.trip-type-aliases.index') }}">Trips</a>
                     </div>
                 </div>
                 <div class="mt-4 divide-y">

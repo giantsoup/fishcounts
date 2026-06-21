@@ -38,7 +38,7 @@ class CountsController extends Controller
                 ->withQueryString(),
             'filters' => $filters,
             'species' => Species::query()->where('is_active', true)->orderBy('name')->get(),
-            'tripTypes' => TripType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(),
+            'tripTypes' => TripType::query()->where('is_active', true)->orderedForDisplay()->get(),
             'landings' => Landing::query()->where('is_active', true)->orderBy('name')->get(),
             'boats' => Boat::query()->where('is_active', true)->orderBy('name')->get(),
         ]);

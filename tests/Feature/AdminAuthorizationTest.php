@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\TripType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -36,6 +37,16 @@ class AdminAuthorizationTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('admin.trip-types.store'), ['name' => '3.5 Day'])
+            ->assertForbidden();
+    }
+
+    public function test_normal_user_cannot_update_trip_type_order(): void
+    {
+        $user = User::factory()->create();
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day', 'sort_order' => 6]);
+
+        $this->actingAs($user)
+            ->patch(route('admin.trip-types.update', $tripType), ['order_sort_order' => 1])
             ->assertForbidden();
     }
 }

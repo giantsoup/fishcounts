@@ -24,10 +24,13 @@ class AliasManagementTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.species-aliases.index'))
             ->assertOk()
-            ->assertSee('Add species')
+            ->assertSeeText('Species')
+            ->assertSeeText('Active species')
             ->assertSee('Save species')
-            ->assertSee('Add species alias')
-            ->assertSee('Yellowtail')
+            ->assertSeeText('Select a species to edit it.')
+            ->assertSeeText('Yellowtail')
+            ->assertDontSeeText('Species aliases')
+            ->assertDontSeeText('Add species alias')
             ->assertDontSee('yellowtail');
     }
 
@@ -51,7 +54,8 @@ class AliasManagementTest extends TestCase
                 'alias' => 'Calicos',
                 'parser_error_id' => $error->id,
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('selected_species_id', $species->id);
 
         $this->assertDatabaseHas('species_aliases', [
             'species_id' => $species->id,
@@ -113,7 +117,8 @@ class AliasManagementTest extends TestCase
                 'alias' => 'Three Quarter Day',
                 'parser_error_id' => $error->id,
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHas('selected_trip_type_id', $tripType->id);
 
         $this->assertDatabaseHas('trip_type_aliases', [
             'trip_type_id' => $tripType->id,
@@ -131,10 +136,13 @@ class AliasManagementTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.trip-type-aliases.index'))
             ->assertOk()
-            ->assertSee('Add trip type')
-            ->assertSee('Save trip type')
-            ->assertSee('Add trip type alias')
-            ->assertSee('Full Day');
+            ->assertSeeText('Trips')
+            ->assertSeeText('Active trips')
+            ->assertSee('Save trip')
+            ->assertSeeText('Select a trip to edit it.')
+            ->assertSeeText('Full Day')
+            ->assertDontSeeText('Trip type aliases')
+            ->assertDontSeeText('Add trip type alias');
     }
 
     public function test_admin_can_create_trip_type(): void
@@ -155,6 +163,72 @@ class AliasManagementTest extends TestCase
             'sort_order' => 4,
             'is_active' => true,
         ]);
+    }
+
+    public function test_admin_can_update_trip_type_order(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day', 'sort_order' => 6]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->patch(route('admin.trip-types.update', $tripType), [
+                'order_trip_type_id' => $tripType->id,
+                'order_sort_order' => 2,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'Trip order saved.')
+            ->assertSessionHas('selected_trip_type_id', $tripType->id);
+
+        $this->assertDatabaseHas('trip_types', [
+            'id' => $tripType->id,
+            'sort_order' => 2,
+        ]);
+    }
+
+    public function test_trip_type_order_can_duplicate_existing_order(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $halfDay = TripType::query()->create(['name' => '1/2 Day', 'slug' => '1-2-day', 'sort_order' => 1]);
+        $fullDay = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day', 'sort_order' => 6]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->patch(route('admin.trip-types.update', $fullDay), [
+                'order_trip_type_id' => $fullDay->id,
+                'order_sort_order' => 1,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('trip_types', [
+            'id' => $halfDay->id,
+            'sort_order' => 1,
+        ]);
+        $this->assertDatabaseHas('trip_types', [
+            'id' => $fullDay->id,
+            'sort_order' => 1,
+        ]);
+    }
+
+    public function test_trip_types_use_deterministic_display_order(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $firstSameName = TripType::query()->create(['name' => 'Same Trip', 'slug' => 'same-trip-one', 'sort_order' => 1]);
+        $secondSameName = TripType::query()->create(['name' => 'Same Trip', 'slug' => 'same-trip-two', 'sort_order' => 1]);
+        $alphabeticalFirst = TripType::query()->create(['name' => 'Alpha Trip', 'slug' => 'alpha-trip', 'sort_order' => 1]);
+        $laterOrder = TripType::query()->create(['name' => 'Beta Trip', 'slug' => 'beta-trip', 'sort_order' => 2]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.trip-type-aliases.index'))
+            ->assertOk()
+            ->assertViewHas('tripTypes', fn ($tripTypes): bool => $tripTypes->pluck('id')->all() === [
+                $alphabeticalFirst->id,
+                $firstSameName->id,
+                $secondSameName->id,
+                $laterOrder->id,
+            ]);
     }
 
     public function test_duplicate_trip_type_slug_is_rejected(): void

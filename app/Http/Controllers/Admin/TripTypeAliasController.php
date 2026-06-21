@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTripTypeAliasRequest;
 use App\Http\Requests\StoreTripTypeRequest;
+use App\Http\Requests\UpdateTripTypeRequest;
 use App\Models\ParserError;
 use App\Models\TripType;
 use App\Models\TripTypeAlias;
@@ -18,8 +19,12 @@ class TripTypeAliasController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         return view('admin.trip-type-aliases.index', [
-            'aliases' => TripTypeAlias::query()->with('tripType')->latest()->paginate(50),
-            'tripTypes' => TripType::query()->where('is_active', true)->orderBy('sort_order')->orderBy('name')->get(),
+            'selectedTripTypeId' => old('order_trip_type_id', old('trip_type_id', session('selected_trip_type_id'))),
+            'tripTypes' => TripType::query()
+                ->where('is_active', true)
+                ->with(['aliases' => fn ($query) => $query->orderBy('alias')])
+                ->orderedForDisplay()
+                ->get(),
         ]);
     }
 
@@ -35,6 +40,18 @@ class TripTypeAliasController extends Controller
         return redirect()->route('admin.trip-type-aliases.index')->with('status', 'Trip type saved.');
     }
 
+    public function updateTripType(UpdateTripTypeRequest $request, TripType $tripType): RedirectResponse
+    {
+        $tripType->update([
+            'sort_order' => $request->validated('order_sort_order'),
+        ]);
+
+        return redirect()
+            ->back()
+            ->with('status', 'Trip order saved.')
+            ->with('selected_trip_type_id', $tripType->id);
+    }
+
     public function store(StoreTripTypeAliasRequest $request): RedirectResponse
     {
         $alias = TripTypeAlias::query()->create([
@@ -45,7 +62,10 @@ class TripTypeAliasController extends Controller
 
         $this->resolveParserError($request, $alias->alias);
 
-        return redirect()->back()->with('status', 'Trip type alias saved.');
+        return redirect()
+            ->back()
+            ->with('status', 'Trip type alias saved.')
+            ->with('selected_trip_type_id', $request->validated('trip_type_id'));
     }
 
     private function resolveParserError(StoreTripTypeAliasRequest $request, string $alias): void
