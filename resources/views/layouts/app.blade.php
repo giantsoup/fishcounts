@@ -19,7 +19,7 @@
             @include('layouts.navigation')
 
             @if (request()->routeIs('admin.*'))
-                @include('admin._nav')
+                @include('admin._nav', ['variant' => 'desktop'])
             @endif
 
             <!-- Page Heading -->

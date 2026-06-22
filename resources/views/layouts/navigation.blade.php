@@ -103,6 +103,10 @@
                 <x-responsive-nav-link :href="route('admin.dashboard')" :active="request()->routeIs('admin.*')">
                     {{ __('Admin') }}
                 </x-responsive-nav-link>
+
+                @if (request()->routeIs('admin.*'))
+                    @include('admin._nav', ['variant' => 'mobile'])
+                @endif
             @endcan
         </div>
 
