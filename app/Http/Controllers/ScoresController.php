@@ -16,7 +16,7 @@ class ScoresController extends Controller
 
         return view('scores.index', [
             'scores' => ScoreResult::query()
-                ->with(['alertRule.species'])
+                ->with(['alertRule.species', 'alertRule.user'])
                 ->whereHas('alertRule', fn ($query) => $query->where('user_id', $request->user()->id))
                 ->whereBetween('score_date', [$filters['from'], $filters['to']])
                 ->when($filters['alert_rule_id'], fn ($query, int $alertRuleId) => $query->where('alert_rule_id', $alertRuleId))

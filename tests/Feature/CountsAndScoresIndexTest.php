@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\AlertEventStatus;
+use App\Enums\AlertEventType;
+use App\Enums\NotificationChannel;
+use App\Enums\NotificationDeliveryStatus;
 use App\Enums\ScoreLevel;
 use App\Enums\ScoreRunStatus;
 use App\Enums\SourceType;
+use App\Models\AlertEvent;
 use App\Models\AlertRule;
 use App\Models\Boat;
 use App\Models\Landing;
@@ -17,7 +22,10 @@ use App\Models\SpeciesCount;
 use App\Models\TripReport;
 use App\Models\TripType;
 use App\Models\User;
+use App\Notifications\HotBiteAlertNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class CountsAndScoresIndexTest extends TestCase
@@ -160,9 +168,112 @@ class CountsAndScoresIndexTest extends TestCase
             ->assertOk()
             ->assertSee('6/15/2026')
             ->assertSee('Local Yellowtail')
+            ->assertSee('Resend')
             ->assertSee('82')
+            ->assertDontSee('Breadth')
+            ->assertDontSee('Per Angler')
             ->assertDontSee('Other User Rule')
             ->assertDontSee('999');
+    }
+
+    public function test_user_can_resend_hot_bite_email_for_their_score(): void
+    {
+        $user = User::factory()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $scoreRun = ScoreRun::query()->create(['run_date' => '2026-06-15', 'status' => ScoreRunStatus::Succeeded]);
+        $rule = AlertRule::query()->create([
+            'user_id' => $user->id,
+            'species_id' => $species->id,
+            'name' => 'Local Yellowtail',
+            'minimum_score' => 70,
+        ]);
+        $score = ScoreResult::query()->create([
+            'score_run_id' => $scoreRun->id,
+            'alert_rule_id' => $rule->id,
+            'score_date' => '2026-06-15',
+            'score' => 82,
+            'level' => ScoreLevel::Hot,
+            'total_count' => 100,
+            'boat_count' => 2,
+            'landing_count' => 1,
+            'trend_score' => 80,
+            'count_score' => 100,
+            'count_per_angler_score' => 70,
+            'breadth_score' => 60,
+            'source_confidence_score' => 90,
+            'explanation' => ['test' => true],
+        ]);
+
+        Notification::fake();
+
+        $this->actingAs($user)
+            ->post(route('scores.hot-bite-email', $score))
+            ->assertRedirect()
+            ->assertSessionHas('status', "Hot bite email resent to {$user->email}.");
+
+        Notification::assertSentTo($user, HotBiteAlertNotification::class);
+
+        $this->assertDatabaseHas('alert_events', [
+            'user_id' => $user->id,
+            'alert_rule_id' => $rule->id,
+            'score_result_id' => $score->id,
+            'event_type' => AlertEventType::ThresholdCrossed->value,
+            'level' => ScoreLevel::Hot->value,
+            'score' => 82,
+            'status' => AlertEventStatus::Sent->value,
+        ]);
+        $this->assertTrue(
+            AlertEvent::query()->where('score_result_id', $score->id)->firstOrFail()->event_date->isSameDay('2026-06-15')
+        );
+        $this->assertDatabaseHas('notification_deliveries', [
+            'user_id' => $user->id,
+            'channel' => NotificationChannel::Email->value,
+            'notification_type' => HotBiteAlertNotification::class,
+            'status' => NotificationDeliveryStatus::Sent->value,
+        ]);
+    }
+
+    public function test_user_cannot_resend_hot_bite_email_for_another_users_score(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $scoreRun = ScoreRun::query()->create(['run_date' => '2026-06-15', 'status' => ScoreRunStatus::Succeeded]);
+        $otherRule = AlertRule::query()->create([
+            'user_id' => $otherUser->id,
+            'species_id' => $species->id,
+            'name' => 'Other Yellowtail',
+            'minimum_score' => 70,
+        ]);
+        $otherScore = ScoreResult::query()->create([
+            'score_run_id' => $scoreRun->id,
+            'alert_rule_id' => $otherRule->id,
+            'score_date' => '2026-06-15',
+            'score' => 82,
+            'level' => ScoreLevel::Hot,
+            'total_count' => 100,
+            'boat_count' => 2,
+            'landing_count' => 1,
+            'explanation' => ['test' => true],
+        ]);
+
+        Notification::fake();
+
+        $this->actingAs($user)
+            ->post(route('scores.hot-bite-email', $otherScore))
+            ->assertForbidden();
+
+        Notification::assertNothingSent();
+        $this->assertDatabaseCount('alert_events', 0);
+        $this->assertDatabaseCount('notification_deliveries', 0);
+    }
+
+    public function test_hot_bite_email_resend_route_is_throttled(): void
+    {
+        $this->assertContains(
+            'throttle:6,1',
+            Route::getRoutes()->getByName('scores.hot-bite-email')->gatherMiddleware(),
+        );
     }
 
     public function test_scores_rejects_other_users_rule_filter(): void

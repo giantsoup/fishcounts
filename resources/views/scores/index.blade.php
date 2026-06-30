@@ -55,6 +55,14 @@
             </div>
 
             <div class="bg-white shadow sm:rounded-lg overflow-hidden">
+                @if (session('status'))
+                    <p class="border-b border-gray-200 px-4 py-3 text-sm text-green-700">{{ session('status') }}</p>
+                @endif
+
+                @if (session('error'))
+                    <p class="border-b border-gray-200 px-4 py-3 text-sm text-red-700">{{ session('error') }}</p>
+                @endif
+
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-200 text-sm">
                         <thead class="bg-gray-50">
@@ -65,11 +73,10 @@
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Score</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Level</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Count</th>
-                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Per Angler</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Boats</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Landings</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Trend</th>
-                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Breadth</th>
+                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Resend</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 bg-white">
@@ -85,15 +92,26 @@
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ number_format($score->total_count) }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->count_per_angler !== null ? number_format((float) $score->count_per_angler, 2) : '—' }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->boat_count }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->landing_count }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->trend_score }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->breadth_score }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-right">
+                                        <form method="POST" action="{{ route('scores.hot-bite-email', $score) }}">
+                                            @csrf
+                                            <button
+                                                type="submit"
+                                                class="inline-flex items-center justify-center rounded-md border border-transparent bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white shadow-sm transition ease-in-out duration-150 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-gray-900"
+                                                style="min-width: 6rem; justify-content: center;"
+                                                onclick="return confirm(@js("Resend this hot bite email to {$score->alertRule->user->email}?"))"
+                                            >
+                                                Resend
+                                            </button>
+                                        </form>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="11" class="px-4 py-8 text-center text-sm text-gray-500">No scores match the current filters.</td>
+                                    <td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">No scores match the current filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>

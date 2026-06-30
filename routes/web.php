@@ -18,6 +18,7 @@ use App\Http\Controllers\CountsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ScoreHotBiteEmailController;
 use App\Http\Controllers\ScoresController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +41,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/counts', CountsController::class)->name('counts.index');
     Route::get('/scores', ScoresController::class)->name('scores.index');
+    Route::post('/scores/{scoreResult}/hot-bite-email', ScoreHotBiteEmailController::class)
+        ->middleware('throttle:6,1')
+        ->name('scores.hot-bite-email');
     Route::resource('alert-rules', AlertRuleController::class)->except(['show']);
     Route::get('/notification-settings', [NotificationSettingsController::class, 'edit'])->name('notification-settings.edit');
     Route::put('/notification-settings', [NotificationSettingsController::class, 'update'])->name('notification-settings.update');
