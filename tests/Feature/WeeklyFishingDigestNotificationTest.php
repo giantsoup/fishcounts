@@ -7,9 +7,11 @@ use App\Enums\SourceType;
 use App\Models\AlertRule;
 use App\Models\Boat;
 use App\Models\Landing;
+use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\ScoreResult;
 use App\Models\ScoreRun;
+use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Models\Species;
 use App\Models\SpeciesCount;
@@ -29,8 +31,18 @@ class WeeklyFishingDigestNotificationTest extends TestCase
     {
         $user = User::factory()->create();
         $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
-        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Fisherman\'s Landing', 'slug' => 'fishermans-landing']);
-        $boat = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Pacific Queen', 'slug' => 'pacific-queen']);
+        $landing = Landing::query()->create([
+            'region_id' => $region->id,
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans-landing',
+            'website_url' => 'https://landing.example.test',
+        ]);
+        $boat = Boat::query()->create([
+            'landing_id' => $landing->id,
+            'name' => 'Pacific Queen',
+            'slug' => 'pacific-queen',
+            'booking_url' => 'https://booking.example.test/pacific-queen',
+        ]);
         $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
         $tripType = TripType::query()->create(['name' => 'Overnight', 'slug' => 'overnight']);
         $source = ScrapeSource::query()->create([
@@ -38,6 +50,22 @@ class WeeklyFishingDigestNotificationTest extends TestCase
             'slug' => 'fishermans_landing',
             'source_type' => SourceType::Landing,
             'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+        $scrapeRun = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => 'daily',
+            'target_date' => '2026-06-20',
+            'status' => 'succeeded',
+        ]);
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $scrapeRun->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-06-20',
+            'url' => 'https://www.fishermanslanding.com/fishcounts.php',
+            'http_status' => 200,
+            'payload' => 'fixture',
+            'payload_hash' => hash('sha256', 'fixture'),
+            'fetched_at' => now(),
         ]);
         $rule = AlertRule::query()->create([
             'user_id' => $user->id,
@@ -74,6 +102,7 @@ class WeeklyFishingDigestNotificationTest extends TestCase
 
         $tripReport = TripReport::query()->create([
             'source_id' => $source->id,
+            'raw_scrape_payload_id' => $payload->id,
             'region_id' => $region->id,
             'landing_id' => $landing->id,
             'boat_id' => $boat->id,
@@ -91,6 +120,7 @@ class WeeklyFishingDigestNotificationTest extends TestCase
             'species_id' => $species->id,
             'count' => 68,
             'raw_species_name' => 'Yellowtail',
+            'raw_count_text' => '68 Yellowtail',
         ]);
 
         $html = (string) (new WeeklyFishingDigestNotification($user, CarbonImmutable::parse('2026-06-20')))
@@ -100,12 +130,25 @@ class WeeklyFishingDigestNotificationTest extends TestCase
         $this->assertStringContainsString('Weekly fishing digest', $html);
         $this->assertStringContainsString('LelloTail', $html);
         $this->assertStringContainsString('Wide Open', $html);
-        $this->assertStringContainsString('Weekly fish', $html);
+        $this->assertStringContainsString('Weekly target fish', $html);
         $this->assertStringContainsString('Best day', $html);
-        $this->assertStringContainsString('Top boats', $html);
+        $this->assertStringContainsString('Best trip options', $html);
+        $this->assertStringContainsString('Recommended boats', $html);
+        $this->assertStringContainsString('Book', $html);
         $this->assertStringContainsString('Pacific Queen', $html);
-        $this->assertStringContainsString('Top landings', $html);
-        $this->assertStringContainsString('Data quality', $html);
+        $this->assertStringContainsString('Overnight', $html);
+        $this->assertStringContainsString('6/20/26', $html);
+        $this->assertStringContainsString('68', $html);
+        $this->assertStringContainsString('↗', $html);
+        $this->assertStringContainsString('https://www.fishermanslanding.com/fishcounts.php', $html);
+        $this->assertStringContainsString('#:~:text=Pacific%20Queen', $html);
+        $this->assertStringContainsString('https://booking.example.test/pacific-queen', $html);
+        $this->assertStringNotContainsString('Top landings', $html);
+        $this->assertStringNotContainsString('Count Source', $html);
+        $this->assertStringNotContainsString('Fish / angler', $html);
+        $this->assertStringNotContainsString('/ Angler', $html);
+        $this->assertStringNotContainsString('Data quality', $html);
+        $this->assertStringNotContainsString('/counts?', $html);
         $this->assertStringNotContainsString('wide_open', $html);
         $this->assertStringNotContainsString('Thanks,', $html);
     }

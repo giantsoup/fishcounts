@@ -30,6 +30,12 @@ class TripReport extends Model
         return $this->belongsTo(ScrapeSource::class, 'source_id');
     }
 
+    /** @return BelongsTo<RawScrapePayload, $this> */
+    public function rawScrapePayload(): BelongsTo
+    {
+        return $this->belongsTo(RawScrapePayload::class);
+    }
+
     /** @return BelongsTo<Landing, $this> */
     public function landing(): BelongsTo
     {

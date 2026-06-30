@@ -16,41 +16,35 @@ No scores were recorded for {{ $summary['species_name'] }} this week.
 <x-mail::table>
 | Metric | Value |
 | :-- | --: |
-| Weekly fish | {{ $summary['weekly_total'] }} |
+| Weekly target fish | {{ $summary['weekly_total'] }} |
 | Latest score date | {{ $summary['score_date'] }} |
 | Best day | {{ $summary['best_day'] }} |
 | Trend | {{ $summary['trend'] }} |
 | Boats reporting | {{ $summary['boat_count'] }} |
-| Fish / angler | {{ $summary['count_per_angler'] }} |
-| Data quality | {{ $summary['data_quality'] }} |
 </x-mail::table>
 
-**Top boats**
+**Best trip options**
 
-@if ($summary['top_boats']->isEmpty())
-No boat detail this week.
+@if ($summary['trip_options']->isEmpty())
+No matching boat-level trip counts this week.
 @else
 <x-mail::table>
-| Boat | Fish |
-| :-- | --: |
-@foreach ($summary['top_boats'] as $boat)
-| {{ $boat['name'] }} | {{ $boat['total'] }} |
+| Date | Boat | Landing | Trip | Count |
+| :-- | :-- | :-- | :-- | --: |
+@foreach ($summary['trip_options'] as $trip)
+| {{ $trip['trip_date'] }} | {{ $trip['boat_name'] }} | {{ $trip['landing_name'] }} | {{ $trip['trip_type'] }} | @if ($trip['source_url']) [{{ $trip['target_count'] }} ↗]({{ $trip['source_highlight_url'] ?? $trip['source_url'] }}) @else {{ $trip['target_count'] }} @endif |
 @endforeach
 </x-mail::table>
+
+**Recommended boats**
+
+@if ($summary['trip_recommendations']->isEmpty())
+No booking links are available for the ranked boats.
+@else
+@foreach ($summary['trip_recommendations'] as $trip)
+- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} on {{ $trip['trip_date'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $summary['species_name'] }}) - [Book]({{ $trip['booking_url'] }})
+@endforeach
 @endif
-
-**Top landings**
-
-@if ($summary['top_landings']->isEmpty())
-No landing detail this week.
-@else
-<x-mail::table>
-| Landing | Fish |
-| :-- | --: |
-@foreach ($summary['top_landings'] as $landing)
-| {{ $landing['name'] }} | {{ $landing['total'] }} |
-@endforeach
-</x-mail::table>
 @endif
 @endif
 @empty

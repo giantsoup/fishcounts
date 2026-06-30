@@ -14,11 +14,34 @@
 | Alert level | {{ $levelLabel }} |
 | Score | {{ $alertEvent->score }} |
 | Threshold | {{ $rule->minimum_score }} |
-| Total fish | {{ $scoreResult?->total_count ?? 'n/a' }} |
+| Target fish | {{ $scoreResult?->total_count ?? 'n/a' }} |
 | Boats reporting | {{ $scoreResult?->boat_count ?? 'n/a' }} |
 | Landings reporting | {{ $scoreResult?->landing_count ?? 'n/a' }} |
-| Fish / angler | {{ $countPerAngler }} |
 </x-mail::table>
+
+## Best trip options for {{ $rule->species->name }}
+
+@if ($tripOptions->isEmpty())
+No matching boat-level trip counts were found for this alert date.
+@else
+<x-mail::table>
+| Date | Boat | Landing | Trip | Count |
+| :-- | :-- | :-- | :-- | --: |
+@foreach ($tripOptions as $trip)
+| {{ $trip['trip_date'] }} | {{ $trip['boat_name'] }} | {{ $trip['landing_name'] }} | {{ $trip['trip_type'] }} | @if ($trip['source_url']) [{{ $trip['target_count'] }} ↗]({{ $trip['source_highlight_url'] ?? $trip['source_url'] }}) @else {{ $trip['target_count'] }} @endif |
+@endforeach
+</x-mail::table>
+
+**Recommended boats**
+
+@if ($tripRecommendations->isEmpty())
+No booking links are available for the ranked boats.
+@else
+@foreach ($tripRecommendations as $trip)
+- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} on {{ $trip['trip_date'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $rule->species->name }}) - [Book]({{ $trip['booking_url'] }})
+@endforeach
+@endif
+@endif
 
 <x-mail::button :url="$scoresUrl">
 View scores

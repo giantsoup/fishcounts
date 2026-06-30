@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\SourceType;
+use App\Models\Boat;
+use App\Models\Landing;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
+use App\Models\Region;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Models\User;
@@ -46,6 +49,63 @@ class AdminOperationsTest extends TestCase
             'supports_landing_filter' => true,
             'notes' => 'Verified source.',
         ]);
+    }
+
+    public function test_admin_can_update_boat_booking_url(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Fisherman\'s Landing', 'slug' => 'fishermans-landing']);
+        $boat = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Pacific Queen', 'slug' => 'pacific-queen']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.boats.index'))
+            ->assertOk()
+            ->assertSee('Pacific Queen')
+            ->assertSee('booking_url', false);
+
+        $this->actingAs($admin)
+            ->put(route('admin.boats.update', $boat), [
+                'booking_url' => 'https://booking.example.test/pacific-queen',
+            ])
+            ->assertRedirect(route('admin.boats.index'));
+
+        $this->assertDatabaseHas('boats', [
+            'id' => $boat->id,
+            'booking_url' => 'https://booking.example.test/pacific-queen',
+        ]);
+    }
+
+    public function test_boat_booking_url_validation_error_only_renders_on_submitted_boat_row(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Fisherman\'s Landing', 'slug' => 'fishermans-landing']);
+        $pacificQueen = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Pacific Queen', 'slug' => 'pacific-queen']);
+        $dolphin = Boat::query()->create([
+            'landing_id' => $landing->id,
+            'name' => 'Dolphin',
+            'slug' => 'dolphin',
+            'booking_url' => 'https://booking.example.test/dolphin',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.boats.index'))
+            ->put(route('admin.boats.update', $pacificQueen), [
+                'boat_id' => $pacificQueen->id,
+                'booking_url' => 'not-a-url',
+            ])
+            ->assertSessionHasErrors('booking_url')
+            ->assertRedirect(route('admin.boats.index'));
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.boats.index'))
+            ->assertOk()
+            ->assertSee('not-a-url')
+            ->assertSee('https://booking.example.test/dolphin');
+
+        $this->assertSame(1, substr_count($response->getContent(), 'not-a-url'));
+        $this->assertSame('https://booking.example.test/dolphin', $dolphin->fresh()->booking_url);
     }
 
     public function test_admin_dashboard_distinguishes_parser_warnings_from_scrape_status(): void

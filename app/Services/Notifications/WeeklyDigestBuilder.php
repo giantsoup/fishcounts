@@ -3,14 +3,14 @@
 namespace App\Services\Notifications;
 
 use App\Models\AlertRule;
-use App\Models\TripReport;
 use App\Models\User;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class WeeklyDigestBuilder
 {
+    public function __construct(private readonly TripDecisionBuilder $tripDecisionBuilder) {}
+
     /**
      * @return Collection<int, string>
      */
@@ -22,14 +22,15 @@ class WeeklyDigestBuilder
                     return "{$summary['rule_name']}: no scores this week.";
                 }
 
-                $topBoats = $summary['top_boats']->isEmpty()
-                    ? 'no boat detail'
-                    : $summary['top_boats']->map(fn (array $boat): string => "{$boat['name']} {$boat['total']}")->implode(', ');
-                $topLandings = $summary['top_landings']->isEmpty()
-                    ? 'no landing detail'
-                    : $summary['top_landings']->map(fn (array $landing): string => "{$landing['name']} {$landing['total']}")->implode(', ');
+                $tripOptions = $summary['trip_options']->isEmpty()
+                    ? 'no ranked trip options'
+                    : $summary['trip_options']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']} {$trip['target_count']} target")->implode(', ');
 
-                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$summary['boat_count']} boats · {$summary['count_per_angler']} fish/angler · top boats: {$topBoats} · top landings: {$topLandings} · data: {$summary['data_quality']}.";
+                $recommendedBoats = $summary['trip_recommendations']->isEmpty()
+                    ? 'no booking links available'
+                    : $summary['trip_recommendations']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']}")->implode(', ');
+
+                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
             })
             ->values();
     }
@@ -47,10 +48,8 @@ class WeeklyDigestBuilder
      *     best_day: string,
      *     trend: string,
      *     boat_count: int|null,
-     *     count_per_angler: string,
-     *     top_boats: Collection<int, array{name: string, total: int}>,
-     *     top_landings: Collection<int, array{name: string, total: int}>,
-     *     data_quality: string
+     *     trip_options: Collection<int, array<string, mixed>>,
+     *     trip_recommendations: Collection<int, array<string, mixed>>
      * }>
      */
     public function summaries(User $user, CarbonImmutable $weekEnding): Collection
@@ -79,10 +78,8 @@ class WeeklyDigestBuilder
                         'best_day' => 'n/a',
                         'trend' => 'n/a',
                         'boat_count' => null,
-                        'count_per_angler' => 'n/a',
-                        'top_boats' => collect(),
-                        'top_landings' => collect(),
-                        'data_quality' => 'no score data available',
+                        'trip_options' => collect(),
+                        'trip_recommendations' => collect(),
                     ];
                 }
 
@@ -100,10 +97,8 @@ class WeeklyDigestBuilder
                     'best_day' => $summary['best_day'],
                     'trend' => $summary['trend'],
                     'boat_count' => $latest->boat_count,
-                    'count_per_angler' => $latest->count_per_angler === null ? 'n/a' : (string) $latest->count_per_angler,
-                    'top_boats' => $summary['top_boats'],
-                    'top_landings' => $summary['top_landings'],
-                    'data_quality' => $summary['data_quality'],
+                    'trip_options' => $summary['trip_options'],
+                    'trip_recommendations' => $summary['trip_recommendations'],
                 ];
             })
             ->values();
@@ -122,7 +117,7 @@ class WeeklyDigestBuilder
     }
 
     /**
-     * @return array{weekly_total: int, best_day: string, trend: string, top_boats: Collection<int, array{name: string, total: int}>, top_landings: Collection<int, array{name: string, total: int}>, data_quality: string}
+     * @return array{weekly_total: int, best_day: string, trend: string, trip_options: Collection<int, array<string, mixed>>, trip_recommendations: Collection<int, array<string, mixed>>}
      */
     private function summaryForRule(AlertRule $rule, CarbonImmutable $weekEnding): array
     {
@@ -133,73 +128,15 @@ class WeeklyDigestBuilder
         $lastScore = $scores->last();
         $bestScore = $scores->sortByDesc('score')->first();
         $weeklyTotal = (int) $scores->sum('total_count');
-        $reportsQuery = $this->filteredReports($rule)
-            ->whereDate('trip_date', '>=', $weekStart)
-            ->whereDate('trip_date', '<=', $weekEnd)
-            ->join('species_counts', 'species_counts.trip_report_id', '=', 'trip_reports.id')
-            ->where('species_counts.species_id', $rule->species_id);
-
-        $topBoats = (clone $reportsQuery)
-            ->leftJoin('boats', 'boats.id', '=', 'trip_reports.boat_id')
-            ->selectRaw("COALESCE(boats.name, trip_reports.raw_boat_name, 'Unknown boat') as name, SUM(species_counts.count) as total")
-            ->groupByRaw("COALESCE(boats.name, trip_reports.raw_boat_name, 'Unknown boat')")
-            ->orderByDesc('total')
-            ->limit(3)
-            ->get()
-            ->map(fn ($row): array => [
-                'name' => $row->name,
-                'total' => (int) $row->total,
-            ]);
-
-        $topLandings = (clone $reportsQuery)
-            ->leftJoin('landings', 'landings.id', '=', 'trip_reports.landing_id')
-            ->selectRaw("COALESCE(landings.name, trip_reports.raw_landing_name, 'Unknown landing') as name, SUM(species_counts.count) as total")
-            ->groupByRaw("COALESCE(landings.name, trip_reports.raw_landing_name, 'Unknown landing')")
-            ->orderByDesc('total')
-            ->limit(3)
-            ->get()
-            ->map(fn ($row): array => [
-                'name' => $row->name,
-                'total' => (int) $row->total,
-            ]);
-
-        $missingAnglerReports = (clone $reportsQuery)
-            ->whereNull('trip_reports.anglers')
-            ->count('trip_reports.id');
+        $tripOptions = $this->tripDecisionBuilder->rankedTrips($rule, CarbonImmutable::parse($weekStart), CarbonImmutable::parse($weekEnd));
 
         return [
             'weekly_total' => $weeklyTotal,
             'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->format('n/j/Y')} ({$bestScore->score})",
             'trend' => $this->trendLabel($firstScore?->score, $lastScore?->score),
-            'top_boats' => $topBoats,
-            'top_landings' => $topLandings,
-            'data_quality' => $missingAnglerReports > 0 ? "{$missingAnglerReports} report(s) missing anglers" : 'complete angler data where available',
+            'trip_options' => $tripOptions,
+            'trip_recommendations' => $this->tripDecisionBuilder->recommendedBoats($tripOptions),
         ];
-    }
-
-    /** @return Builder<TripReport> */
-    private function filteredReports(AlertRule $rule): Builder
-    {
-        $rule->loadMissing(['regions:id', 'landings:id', 'boats:id', 'tripTypes:id']);
-        $query = TripReport::query()->where('is_deduped_primary', true);
-
-        if ($rule->regions->isNotEmpty()) {
-            $query->whereIn('trip_reports.region_id', $rule->regions->pluck('id'));
-        }
-
-        if ($rule->landings->isNotEmpty()) {
-            $query->whereIn('trip_reports.landing_id', $rule->landings->pluck('id'));
-        }
-
-        if ($rule->boats->isNotEmpty()) {
-            $query->whereIn('trip_reports.boat_id', $rule->boats->pluck('id'));
-        }
-
-        if ($rule->tripTypes->isNotEmpty()) {
-            $query->whereIn('trip_reports.trip_type_id', $rule->tripTypes->pluck('id'));
-        }
-
-        return $query;
     }
 
     private function trendLabel(?int $firstScore, ?int $lastScore): string

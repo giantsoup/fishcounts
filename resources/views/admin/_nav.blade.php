@@ -6,6 +6,7 @@
         ['label' => 'Scrape runs', 'route' => 'admin.scrape-runs.index', 'active' => ['admin.scrape-runs.*', 'admin.raw-payloads.*']],
         ['label' => 'Parser errors', 'route' => 'admin.parser-errors.index', 'active' => ['admin.parser-errors.*']],
         ['label' => 'Sources', 'route' => 'admin.sources.index', 'active' => ['admin.sources.*']],
+        ['label' => 'Boats', 'route' => 'admin.boats.index', 'active' => ['admin.boats.*']],
         ['label' => 'Species', 'route' => 'admin.species-aliases.index', 'active' => ['admin.species-aliases.*']],
         ['label' => 'Trips', 'route' => 'admin.trip-type-aliases.index', 'active' => ['admin.trip-type-aliases.*']],
         ['label' => 'Notification logs', 'route' => 'admin.notification-logs.index', 'active' => ['admin.notification-logs.*']],
