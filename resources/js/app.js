@@ -134,7 +134,7 @@ const updateBackfillPollStatus = (status, message, isActive) => {
     }
 
     status.innerHTML = `
-        <span class="h-2 w-2 rounded-full ${isActive ? 'bg-blue-600' : 'bg-gray-300'}"></span>
+        <span class="h-2 w-2 rounded-full ${isActive ? 'bg-link' : 'bg-border'}"></span>
         <span>${message}</span>
     `;
 };

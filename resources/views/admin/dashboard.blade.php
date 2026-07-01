@@ -20,7 +20,7 @@
                         <p class="text-sm">None</p>
                     @endif
                     @if ($openParserErrorCount > 0)
-                        <a href="{{ route('admin.parser-errors.index') }}" class="mt-2 block text-xs font-medium text-amber-700">
+                        <a href="{{ route('admin.parser-errors.index') }}" class="mt-2 block text-xs font-medium text-danger">
                             {{ $openParserErrorCount }} parser {{ Str::plural('warning', $openParserErrorCount) }} {{ $openParserErrorCount === 1 ? 'needs' : 'need' }} alias review
                         </a>
                     @endif

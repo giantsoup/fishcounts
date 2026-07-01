@@ -6,5 +6,5 @@
     autocomplete="off"
     data-enhance="date"
     @disabled($disabled)
-    {{ $attributes->merge(['class' => 'form-date-control mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500']) }}
+    {{ $attributes->merge(['class' => 'form-date-control mt-1 block w-full rounded-md border-border shadow-sm focus:border-focus focus:ring-focus']) }}
 >

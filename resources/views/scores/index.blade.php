@@ -87,7 +87,7 @@
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $score->alertRule->species->name }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-900">{{ $score->score }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap">
-                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $score->score >= 80 ? 'bg-red-100 text-red-800' : ($score->score >= 70 ? 'bg-orange-100 text-orange-800' : ($score->score >= 60 ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700')) }}">
+                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $score->score >= 80 ? 'bg-fc-blue-soft text-danger' : ($score->score >= 70 ? 'bg-fc-blue-soft text-primary' : ($score->score >= 60 ? 'bg-fc-blue-soft text-link' : 'bg-gray-100 text-muted')) }}">
                                             {{ str($score->level->value)->replace('_', ' ')->title() }}
                                         </span>
                                     </td>
@@ -100,8 +100,7 @@
                                             @csrf
                                             <button
                                                 type="submit"
-                                                class="inline-flex items-center justify-center rounded-md border border-transparent bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white shadow-sm transition ease-in-out duration-150 hover:bg-gray-700 focus:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-gray-900"
-                                                style="min-width: 6rem; justify-content: center;"
+                                                class="inline-flex min-w-24 items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-widest text-surface shadow-sm transition ease-in-out duration-150 hover:bg-link focus:bg-link focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 active:bg-primary"
                                                 onclick="return confirm(@js("Resend this hot bite email to {$score->alertRule->user->email}?"))"
                                             >
                                                 Resend

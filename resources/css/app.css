@@ -2,25 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+    :root {
+        --fc-navy: #00365F;
+        --fc-blue: #0A5F95;
+        --fc-blue-soft: #E8F5FC;
+        --fc-bg: #F6FBFE;
+        --fc-red: #B61E2E;
+        --fc-red-dark: #861524;
+        --fc-text: #102A43;
+        --fc-muted: #4A6475;
+        --fc-border: #B8D3E5;
+        --fc-white: #FFFFFF;
+        --color-background: var(--fc-bg);
+        --color-surface: var(--fc-white);
+        --color-text: var(--fc-text);
+        --color-muted: var(--fc-muted);
+        --color-border: var(--fc-border);
+        --color-primary: var(--fc-navy);
+        --color-link: var(--fc-blue);
+        --color-focus: var(--fc-blue);
+        --color-danger: var(--fc-red-dark);
+        --color-danger-accent: var(--fc-red);
+    }
+
+    body {
+        @apply bg-background text-text;
+    }
+
+    a {
+        @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2;
+    }
+}
+
 @layer components {
     .flatpickr-calendar {
-        @apply rounded-md border-gray-200 shadow-lg;
+        @apply rounded-md border-border bg-surface shadow-lg;
     }
 
     .flatpickr-day.selected,
     .flatpickr-day.startRange,
     .flatpickr-day.endRange {
-        @apply border-indigo-600 bg-indigo-600;
+        @apply border-primary bg-primary text-surface;
     }
 
     .flatpickr-day.today {
-        @apply border-indigo-500;
+        @apply border-focus;
     }
 
     .form-date-control,
     .form-number-control,
     .form-select-control {
-        @apply disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500;
+        @apply disabled:cursor-not-allowed disabled:bg-background disabled:text-muted;
     }
 }
 
@@ -29,34 +62,34 @@
 }
 
 .ts-wrapper .ts-control {
-    @apply min-h-[42px] rounded-md border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500;
+    @apply min-h-[42px] rounded-md border-border bg-surface px-3 py-2 text-sm shadow-sm transition focus-within:border-focus focus-within:ring-1 focus-within:ring-focus;
 }
 
 .ts-wrapper.single .ts-control,
 .ts-wrapper.multi .ts-control {
-    @apply border-gray-300;
+    @apply border-border;
 }
 
 .ts-wrapper.focus .ts-control {
-    @apply border-indigo-500 ring-1 ring-indigo-500;
+    @apply border-focus ring-1 ring-focus;
 }
 
 .ts-wrapper.disabled .ts-control {
-    @apply cursor-not-allowed bg-gray-100 text-gray-500;
+    @apply cursor-not-allowed bg-background text-muted;
 }
 
 .ts-wrapper .ts-dropdown {
-    @apply mt-0 rounded-b-md rounded-t-none border border-gray-200 text-sm shadow-lg;
+    @apply mt-0 rounded-b-md rounded-t-none border border-border bg-surface text-sm shadow-lg;
 }
 
 .ts-wrapper .ts-dropdown .active {
-    @apply bg-indigo-50 text-indigo-900;
+    @apply bg-fc-blue-soft text-text;
 }
 
 .ts-wrapper.multi .ts-control > .item {
-    @apply rounded bg-indigo-50 px-2 py-0.5 text-indigo-900;
+    @apply rounded bg-fc-blue-soft px-2 py-0.5 text-text;
 }
 
 .ts-wrapper.plugin-remove_button .ts-control .item .remove {
-    @apply ml-1 border-l border-indigo-200 pl-1 text-indigo-700 hover:text-indigo-950;
+    @apply ml-1 border-l border-border pl-1 text-link hover:text-primary;
 }

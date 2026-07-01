@@ -112,7 +112,7 @@
                                         </span>
                                     </td>
                                     <td class="px-4 py-3 whitespace-nowrap">
-                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $summary->is_partial ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800' }}">
+                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $summary->is_partial ? 'bg-fc-blue-soft text-danger' : 'bg-fc-blue-soft text-primary' }}">
                                             {{ $summary->is_partial ? 'Partial' : 'Finalized' }}
                                         </span>
                                     </td>

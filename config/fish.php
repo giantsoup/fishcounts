@@ -55,7 +55,7 @@ return [
         ],
         'profiles' => [
             'san_diego_bight' => [
-                'label' => 'San Diego Bight',
+                'label' => 'San Diego',
                 'location_type' => 'local',
                 'latitude' => (float) env('FISH_CONDITIONS_LATITUDE', 32.75),
                 'longitude' => (float) env('FISH_CONDITIONS_LONGITUDE', -117.25),

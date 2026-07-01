@@ -82,6 +82,8 @@ class EnvironmentalConditionAdminTest extends TestCase
             ->assertSee('Environmental conditions')
             ->assertSee('md:grid-cols-2 lg:grid-cols-6', false)
             ->assertSee('Location type')
+            ->assertSee('San Diego')
+            ->assertDontSee('San Diego Bight')
             ->assertDontSee('data-placeholder="All sources"', false)
             ->assertDontSee('data-placeholder="All metrics"', false)
             ->assertSee('NOAA CO-OPS La Jolla')

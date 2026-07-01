@@ -17,8 +17,8 @@
 @endphp
 
 @if ($variant === 'mobile')
-    <nav class="mt-2 border-t border-gray-200 pt-3" aria-label="Admin navigation">
-        <p class="px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">Admin tools</p>
+    <nav class="mt-2 border-t border-border pt-3" aria-label="Admin navigation">
+        <p class="px-4 text-xs font-semibold uppercase tracking-wider text-muted">Admin tools</p>
 
         <div class="mt-2 space-y-1">
             @foreach ($adminNavigationItems as $adminNavigationItem)
@@ -30,17 +30,17 @@
                     href="{{ route($adminNavigationItem['route']) }}"
                     @if ($isActive) aria-current="page" @endif
                     @class([
-                        'flex items-center gap-3 border-l-4 py-2 pl-7 pr-4 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-inset',
-                        'border-indigo-400 bg-indigo-50 text-indigo-800' => $isActive,
-                        'border-transparent text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900' => ! $isActive,
+                        'flex items-center gap-3 border-l-4 py-2 pl-7 pr-4 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-focus focus:ring-inset',
+                        'border-link bg-fc-blue-soft text-primary' => $isActive,
+                        'border-transparent text-muted hover:border-border hover:bg-fc-blue-soft hover:text-text' => ! $isActive,
                     ])
                 >
                     <span
                         aria-hidden="true"
                         @class([
                             'h-1.5 w-1.5 rounded-full',
-                            'bg-indigo-500' => $isActive,
-                            'bg-gray-300' => ! $isActive,
+                            'bg-link' => $isActive,
+                            'bg-border' => ! $isActive,
                         ])
                     ></span>
                     <span>{{ $adminNavigationItem['label'] }}</span>
@@ -49,10 +49,10 @@
         </div>
     </nav>
 @else
-    <div class="hidden border-b border-gray-200 bg-white sm:block">
+    <div class="hidden border-b border-border bg-surface sm:block">
         <nav class="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8" aria-label="Admin navigation">
-            <div class="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-1 shadow-sm">
-                <div class="hidden shrink-0 border-r border-gray-200 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500 lg:block">
+            <div class="flex items-center gap-3 rounded-lg border border-border bg-fc-blue-soft p-1 shadow-sm">
+                <div class="hidden shrink-0 border-r border-border px-3 text-xs font-semibold uppercase tracking-wider text-muted lg:block">
                     Admin
                 </div>
 
@@ -66,9 +66,9 @@
                             href="{{ route($adminNavigationItem['route']) }}"
                             @if ($isActive) aria-current="page" @endif
                             @class([
-                                'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-                                'bg-white text-gray-950 shadow-sm ring-1 ring-gray-200' => $isActive,
-                                'text-gray-600 hover:bg-white hover:text-gray-900' => ! $isActive,
+                                'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2',
+                                'bg-surface text-primary shadow-sm ring-1 ring-border' => $isActive,
+                                'text-muted hover:bg-surface hover:text-text' => ! $isActive,
                             ])
                         >
                             {{ $adminNavigationItem['label'] }}
