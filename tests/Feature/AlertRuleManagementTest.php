@@ -25,8 +25,8 @@ class AlertRuleManagementTest extends TestCase
             'name' => 'Local Yellowtail',
             'species_id' => $species->id,
             'minimum_score' => 70,
-            'trend_window_days' => 3,
-            'baseline_window_days' => 7,
+            'recent_window_days' => 3,
+            'comparison_window_days' => 7,
             'region_ids' => [$region->id],
             'trip_type_ids' => [$tripType->id],
             'is_enabled' => '1',
@@ -36,11 +36,13 @@ class AlertRuleManagementTest extends TestCase
 
         $response->assertRedirect();
         $rule = AlertRule::query()->firstOrFail();
+        $this->assertSame(3, $rule->recent_window_days);
+        $this->assertSame(7, $rule->comparison_window_days);
         $this->assertTrue($rule->regions()->whereKey($region)->exists());
         $this->assertTrue($rule->tripTypes()->whereKey($tripType)->exists());
     }
 
-    public function test_alert_rule_form_includes_required_baseline_window_field(): void
+    public function test_alert_rule_form_includes_recent_and_comparison_window_fields(): void
     {
         $user = User::factory()->create();
         Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
@@ -50,7 +52,14 @@ class AlertRuleManagementTest extends TestCase
         $this->actingAs($user)
             ->get(route('alert-rules.create'))
             ->assertOk()
-            ->assertSee('name="baseline_window_days"', false);
+            ->assertSee('Recent window days')
+            ->assertSee('Days ending on the score date.')
+            ->assertSee('name="recent_window_days"', false)
+            ->assertSee('Comparison window days')
+            ->assertSee('Days immediately before the recent window.')
+            ->assertSee('name="comparison_window_days"', false)
+            ->assertDontSee('name="trend_window_days"', false)
+            ->assertDontSee('name="baseline_window_days"', false);
     }
 
     public function test_alert_rule_form_renders_enhanced_multi_selects_without_fixed_heights(): void
@@ -93,8 +102,8 @@ class AlertRuleManagementTest extends TestCase
             'name' => 'Owner rule',
             'species_id' => $species->id,
             'minimum_score' => 70,
-            'trend_window_days' => 3,
-            'baseline_window_days' => 7,
+            'recent_window_days' => 4,
+            'comparison_window_days' => 10,
             'region_ids' => [$region->id],
             'trip_type_ids' => [$tripType->id],
             'is_enabled' => '0',
@@ -109,6 +118,8 @@ class AlertRuleManagementTest extends TestCase
         $this->assertFalse($rule->email_enabled);
         $this->assertFalse($rule->discord_enabled);
         $this->assertFalse($rule->include_in_weekly_digest);
+        $this->assertSame(4, $rule->recent_window_days);
+        $this->assertSame(10, $rule->comparison_window_days);
     }
 
     public function test_user_cannot_edit_another_users_alert_rule(): void

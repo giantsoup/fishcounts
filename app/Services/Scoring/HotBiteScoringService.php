@@ -17,7 +17,7 @@ class HotBiteScoringService
         $rule->loadMissing(['species', 'regions:id', 'landings:id', 'boats:id', 'tripTypes:id']);
 
         $metrics = $this->metricsFor($rule, $date);
-        $baselineMetrics = $this->baselineMetricsFor($rule, $date);
+        $trendMetrics = $this->trendMetricsFor($rule, $date);
         $config = config('fish.scoring.targets.'.$rule->species->slug, config('fish.scoring.targets.default'));
 
         $countScore = $this->boundedScore($metrics['total_count'], (float) $config['count_full_score']);
@@ -25,7 +25,7 @@ class HotBiteScoringService
         $boatBreadthScore = $this->boundedScore($metrics['boat_count'], (float) $config['boat_breadth_full_score']);
         $landingBreadthScore = $this->boundedScore($metrics['landing_count'], (float) $config['landing_breadth_full_score']);
         $breadthScore = (int) round(($boatBreadthScore * 0.65) + ($landingBreadthScore * 0.35));
-        $trendScore = $this->trendScore($metrics['total_count'], $baselineMetrics['average_total_count']);
+        $trendScore = $this->trendScore($trendMetrics['recent_average_total_count'], $trendMetrics['comparison_average_total_count']);
         $sourceConfidenceScore = (int) min(100, round($metrics['average_source_confidence']));
 
         $score = (int) round(
@@ -62,7 +62,14 @@ class HotBiteScoringService
                         'breadth' => 15,
                         'source_confidence' => 10,
                     ],
-                    'baseline_average_total_count' => $baselineMetrics['average_total_count'],
+                    'recent_window_days' => $trendMetrics['recent_window_days'],
+                    'comparison_window_days' => $trendMetrics['comparison_window_days'],
+                    'recent_window_start' => $trendMetrics['recent_window_start'],
+                    'recent_window_end' => $trendMetrics['recent_window_end'],
+                    'comparison_window_start' => $trendMetrics['comparison_window_start'],
+                    'comparison_window_end' => $trendMetrics['comparison_window_end'],
+                    'recent_average_total_count' => $trendMetrics['recent_average_total_count'],
+                    'comparison_average_total_count' => $trendMetrics['comparison_average_total_count'],
                     'rule_minimums_met' => $score > 0,
                 ],
             ],
@@ -96,14 +103,44 @@ class HotBiteScoringService
         ];
     }
 
-    /** @return array{average_total_count: float} */
-    private function baselineMetricsFor(AlertRule $rule, CarbonImmutable $date): array
+    /**
+     * @return array{
+     *     recent_window_days: int,
+     *     comparison_window_days: int,
+     *     recent_window_start: string,
+     *     recent_window_end: string,
+     *     comparison_window_start: string,
+     *     comparison_window_end: string,
+     *     recent_average_total_count: float,
+     *     comparison_average_total_count: float
+     * }
+     */
+    private function trendMetricsFor(AlertRule $rule, CarbonImmutable $date): array
     {
-        $start = $date->subDays($rule->baseline_window_days);
-        $end = $date->subDay();
+        $recentWindowDays = max(1, (int) $rule->recent_window_days);
+        $comparisonWindowDays = max(1, (int) $rule->comparison_window_days);
+        $recentWindowEnd = $date;
+        $recentWindowStart = $date->subDays($recentWindowDays - 1);
+        $comparisonWindowEnd = $recentWindowStart->subDay();
+        $comparisonWindowStart = $comparisonWindowEnd->subDays($comparisonWindowDays - 1);
 
+        return [
+            'recent_window_days' => $recentWindowDays,
+            'comparison_window_days' => $comparisonWindowDays,
+            'recent_window_start' => $recentWindowStart->toDateString(),
+            'recent_window_end' => $recentWindowEnd->toDateString(),
+            'comparison_window_start' => $comparisonWindowStart->toDateString(),
+            'comparison_window_end' => $comparisonWindowEnd->toDateString(),
+            'recent_average_total_count' => $this->averageDailyTotalCount($rule, $recentWindowStart, $recentWindowEnd, $recentWindowDays),
+            'comparison_average_total_count' => $this->averageDailyTotalCount($rule, $comparisonWindowStart, $comparisonWindowEnd, $comparisonWindowDays),
+        ];
+    }
+
+    private function averageDailyTotalCount(AlertRule $rule, CarbonImmutable $start, CarbonImmutable $end, int $windowDays): float
+    {
         $dailyCounts = $this->filteredReports($rule)
-            ->whereBetween('trip_date', [$start->toDateString(), $end->toDateString()])
+            ->where('trip_date', '>=', $start->toDateString())
+            ->where('trip_date', '<', $end->addDay()->toDateString())
             ->join('species_counts', 'species_counts.trip_report_id', '=', 'trip_reports.id')
             ->where('species_counts.species_id', $rule->species_id)
             ->groupBy('trip_reports.trip_date')
@@ -111,7 +148,7 @@ class HotBiteScoringService
             ->get()
             ->pluck('total_count');
 
-        return ['average_total_count' => $dailyCounts->isNotEmpty() ? round((float) $dailyCounts->avg(), 2) : 0.0];
+        return $windowDays > 0 ? round((float) $dailyCounts->sum() / $windowDays, 2) : 0.0;
     }
 
     /** @return Builder<TripReport> */
@@ -152,17 +189,17 @@ class HotBiteScoringService
         return (int) min(100, round(($value / $fullScoreAt) * 100));
     }
 
-    private function trendScore(int $totalCount, float $baselineAverage): int
+    private function trendScore(float $recentAverage, float $comparisonAverage): int
     {
-        if ($totalCount <= 0) {
+        if ($recentAverage <= 0) {
             return 0;
         }
 
-        if ($baselineAverage <= 0) {
+        if ($comparisonAverage <= 0) {
             return 80;
         }
 
-        return (int) max(0, min(100, round((($totalCount - $baselineAverage) / $baselineAverage) * 50 + 50)));
+        return (int) max(0, min(100, round((($recentAverage - $comparisonAverage) / $comparisonAverage) * 50 + 50)));
     }
 
     /** @param array{total_count: int, count_per_angler: float} $metrics */

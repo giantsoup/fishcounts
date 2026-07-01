@@ -57,14 +57,16 @@
                         <x-input-error :messages="$errors->get('minimum_count_per_angler')" class="mt-2" />
                     </div>
                     <div>
-                        <x-input-label for="trend_window_days" value="Trend window days" />
-                        <x-form.number id="trend_window_days" name="trend_window_days" min="1" max="30" :value="old('trend_window_days', $rule->trend_window_days ?? 3)" required />
-                        <x-input-error :messages="$errors->get('trend_window_days')" class="mt-2" />
+                        <x-input-label for="recent_window_days" value="Recent window days" />
+                        <x-form.number id="recent_window_days" name="recent_window_days" min="1" max="30" :value="old('recent_window_days', $rule->recent_window_days ?? 3)" required />
+                        <p class="mt-1 text-sm text-gray-500">Days ending on the score date.</p>
+                        <x-input-error :messages="$errors->get('recent_window_days')" class="mt-2" />
                     </div>
                     <div>
-                        <x-input-label for="baseline_window_days" value="Baseline window days" />
-                        <x-form.number id="baseline_window_days" name="baseline_window_days" min="1" max="90" :value="old('baseline_window_days', $rule->baseline_window_days ?? 7)" required />
-                        <x-input-error :messages="$errors->get('baseline_window_days')" class="mt-2" />
+                        <x-input-label for="comparison_window_days" value="Comparison window days" />
+                        <x-form.number id="comparison_window_days" name="comparison_window_days" min="1" max="90" :value="old('comparison_window_days', $rule->comparison_window_days ?? 7)" required />
+                        <p class="mt-1 text-sm text-gray-500">Days immediately before the recent window.</p>
+                        <x-input-error :messages="$errors->get('comparison_window_days')" class="mt-2" />
                     </div>
                 </div>
 

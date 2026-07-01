@@ -14,8 +14,8 @@ class AlertRule extends Model
     protected $attributes = [
         'is_enabled' => true,
         'minimum_score' => 70,
-        'trend_window_days' => 3,
-        'baseline_window_days' => 7,
+        'recent_window_days' => 3,
+        'comparison_window_days' => 7,
         'email_enabled' => true,
         'discord_enabled' => false,
         'include_in_weekly_digest' => true,
