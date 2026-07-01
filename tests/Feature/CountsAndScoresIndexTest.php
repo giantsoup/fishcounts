@@ -188,11 +188,11 @@ class CountsAndScoresIndexTest extends TestCase
             'minimum_score' => 70,
         ]);
         $badgeClasses = [
-            ScoreLevel::WideOpen->value => 'bg-danger',
-            ScoreLevel::Hot->value => 'bg-danger-accent',
-            ScoreLevel::Active->value => 'bg-primary',
-            ScoreLevel::Watch->value => 'bg-link',
-            ScoreLevel::Cold->value => 'bg-muted',
+            ScoreLevel::WideOpen->value => 'bg-[#fee2e2] text-[#991b1b] ring-[#fecaca]',
+            ScoreLevel::Hot->value => 'bg-[#ffedd5] text-[#9a3412] ring-[#fed7aa]',
+            ScoreLevel::Active->value => 'bg-[#dcfce7] text-[#166534] ring-[#bbf7d0]',
+            ScoreLevel::Watch->value => 'bg-[#fef3c7] text-[#92400e] ring-[#fde68a]',
+            ScoreLevel::Cold->value => 'bg-[#f1f5f9] text-[#475569] ring-[#cbd5e1]',
         ];
 
         foreach (ScoreLevel::cases() as $index => $level) {
@@ -227,7 +227,7 @@ class CountsAndScoresIndexTest extends TestCase
         foreach (ScoreLevel::cases() as $level) {
             $response
                 ->assertSee(str($level->value)->replace('_', ' ')->title())
-                ->assertSee("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold text-surface shadow-sm {$badgeClasses[$level->value]}", false);
+                ->assertSee("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {$badgeClasses[$level->value]}", false);
         }
     }
 

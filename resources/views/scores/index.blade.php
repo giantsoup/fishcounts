@@ -93,15 +93,15 @@
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         @php
                                             $levelBadgeClass = match ($score->level) {
-                                                ScoreLevel::WideOpen => 'bg-danger',
-                                                ScoreLevel::Hot => 'bg-danger-accent',
-                                                ScoreLevel::Active => 'bg-primary',
-                                                ScoreLevel::Watch => 'bg-link',
-                                                ScoreLevel::Cold => 'bg-muted',
+                                                ScoreLevel::WideOpen => 'bg-[#fee2e2] text-[#991b1b] ring-[#fecaca]',
+                                                ScoreLevel::Hot => 'bg-[#ffedd5] text-[#9a3412] ring-[#fed7aa]',
+                                                ScoreLevel::Active => 'bg-[#dcfce7] text-[#166534] ring-[#bbf7d0]',
+                                                ScoreLevel::Watch => 'bg-[#fef3c7] text-[#92400e] ring-[#fde68a]',
+                                                ScoreLevel::Cold => 'bg-[#f1f5f9] text-[#475569] ring-[#cbd5e1]',
                                             };
                                         @endphp
 
-                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold text-surface shadow-sm {{ $levelBadgeClass }}">
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset {{ $levelBadgeClass }}">
                                             {{ str($score->level->value)->replace('_', ' ')->title() }}
                                         </span>
                                     </td>
