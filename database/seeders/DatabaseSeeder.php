@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             TripTypeSeeder::class,
             TripTypeAliasSeeder::class,
             ScrapeSourceSeeder::class,
+            EnvironmentalSourceSeeder::class,
             DefaultAlertRuleSeeder::class,
         ]);
     }

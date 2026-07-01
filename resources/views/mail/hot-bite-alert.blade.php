@@ -19,6 +19,12 @@
 | Landings reporting | {{ $scoreResult?->landing_count ?? 'n/a' }} |
 </x-mail::table>
 
+@if ($environmentalCondition)
+**Official conditions:** {{ $environmentalCondition }}
+@else
+Official environmental conditions are not available for this alert date yet.
+@endif
+
 ## Best trip options for {{ $rule->species->name }}
 
 @if ($tripOptions->isEmpty())

@@ -4,6 +4,7 @@
         ['label' => 'Overview', 'route' => 'admin.dashboard', 'active' => ['admin.dashboard']],
         ['label' => 'Backfills', 'route' => 'admin.backfills.index', 'active' => ['admin.backfills.*']],
         ['label' => 'Scrape runs', 'route' => 'admin.scrape-runs.index', 'active' => ['admin.scrape-runs.*', 'admin.raw-payloads.*']],
+        ['label' => 'Conditions', 'route' => 'admin.conditions.index', 'active' => ['admin.conditions.*']],
         ['label' => 'Parser errors', 'route' => 'admin.parser-errors.index', 'active' => ['admin.parser-errors.*']],
         ['label' => 'Sources', 'route' => 'admin.sources.index', 'active' => ['admin.sources.*']],
         ['label' => 'Boats', 'route' => 'admin.boats.index', 'active' => ['admin.boats.*']],

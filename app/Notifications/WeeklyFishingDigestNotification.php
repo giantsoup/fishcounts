@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use App\Services\Environmental\EnvironmentalConditionFormatter;
 use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -26,6 +27,7 @@ class WeeklyFishingDigestNotification extends Notification
         return (new MailMessage)
             ->subject('Weekly fishing digest')
             ->markdown('mail.weekly-fishing-digest', [
+                'weeklyEnvironmentalLine' => app(EnvironmentalConditionFormatter::class)->weeklyLine($this->weekEnding->subDays(6), $this->weekEnding),
                 'scoresUrl' => route('scores.index'),
                 'summaries' => app(WeeklyDigestBuilder::class)->summaries($this->user, $this->weekEnding),
                 'weekEnding' => $this->weekEnding,

@@ -6,6 +6,7 @@ use App\Enums\ScoreLevel;
 use App\Enums\SourceType;
 use App\Models\AlertRule;
 use App\Models\Boat;
+use App\Models\EnvironmentalDailySummary;
 use App\Models\Landing;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
@@ -124,6 +125,16 @@ class WeeklyDigestBuilderTest extends TestCase
             'landing_count' => 1,
             'explanation' => [],
         ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'san_diego_bight',
+            'observed_date' => '2026-06-17',
+            'moon_phase' => 'New Moon',
+            'water_temp_f_avg' => 67.8,
+            'swell_direction_degrees_dominant' => 210,
+            'condition_summary' => 'moon New Moon; water 67.8 F; swell 2.1 ft @ 11s SSW.',
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
         ScoreResult::query()->create([
             'score_run_id' => $scoreRun->id,
             'alert_rule_id' => $rule->id,
@@ -207,6 +218,8 @@ class WeeklyDigestBuilderTest extends TestCase
         $this->assertFalse($tripOptions->contains(fn (array $trip): bool => $trip['boat_name'] === 'Daily Double'));
         $this->assertStringContainsString('Local Yellowtail', $content);
         $this->assertStringContainsString('best 6/17/2026 (82)', $content);
+        $this->assertStringContainsString('Weekly conditions: moon New Moon; avg water 67.8 F; dominant swell SSW.', $content);
+        $this->assertStringContainsString('conditions moon New Moon; water 67.8 F; swell 2.1 ft @ 11s SSW.', $content);
         $this->assertStringContainsString('trend +27', $content);
         $this->assertStringContainsString('ranked trips: New Lo-An 3/4 Day 6/17/26 60 target, Mission Belle 3/4 Day 6/17/26 40 target, Searcher 3/4 Day 6/16/26 25 target', $content);
         $this->assertStringContainsString('recommended: New Lo-An 3/4 Day 6/17/26, Mission Belle 3/4 Day 6/17/26, Searcher 3/4 Day 6/16/26', $content);

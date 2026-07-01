@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\AlertEvent;
+use App\Services\Environmental\EnvironmentalConditionFormatter;
 use App\Services\Notifications\TripDecisionBuilder;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -23,6 +24,7 @@ class HotBiteAlertNotification extends Notification
         $rule = $this->alertEvent->alertRule;
         $scoreResult = $this->alertEvent->scoreResult;
         $tripDecisionBuilder = app(TripDecisionBuilder::class);
+        $environmentalCondition = app(EnvironmentalConditionFormatter::class)->forDate($this->alertEvent->event_date->toImmutable());
         $tripOptions = $tripDecisionBuilder->rankedTrips(
             $rule,
             $this->alertEvent->event_date->toImmutable(),
@@ -39,6 +41,7 @@ class HotBiteAlertNotification extends Notification
                 'scoresUrl' => route('scores.index'),
                 'tripOptions' => $tripOptions,
                 'tripRecommendations' => $tripDecisionBuilder->recommendedBoats($tripOptions),
+                'environmentalCondition' => $environmentalCondition,
             ]);
     }
 }

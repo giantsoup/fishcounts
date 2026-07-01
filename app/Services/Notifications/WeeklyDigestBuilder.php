@@ -4,12 +4,16 @@ namespace App\Services\Notifications;
 
 use App\Models\AlertRule;
 use App\Models\User;
+use App\Services\Environmental\EnvironmentalConditionFormatter;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
 class WeeklyDigestBuilder
 {
-    public function __construct(private readonly TripDecisionBuilder $tripDecisionBuilder) {}
+    public function __construct(
+        private readonly TripDecisionBuilder $tripDecisionBuilder,
+        private readonly EnvironmentalConditionFormatter $environmentalConditionFormatter,
+    ) {}
 
     /**
      * @return Collection<int, string>
@@ -30,7 +34,11 @@ class WeeklyDigestBuilder
                     ? 'no booking links available'
                     : $summary['trip_recommendations']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']}")->implode(', ');
 
-                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week · best {$summary['best_day']} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
+                $conditions = $summary['environmental_condition'] === null
+                    ? 'conditions unavailable'
+                    : "conditions {$summary['environmental_condition']}";
+
+                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week · best {$summary['best_day']} · {$conditions} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
             })
             ->values();
     }
@@ -48,6 +56,7 @@ class WeeklyDigestBuilder
      *     best_day: string,
      *     trend: string,
      *     boat_count: int|null,
+     *     environmental_condition: string|null,
      *     trip_options: Collection<int, array<string, mixed>>,
      *     trip_recommendations: Collection<int, array<string, mixed>>
      * }>
@@ -78,6 +87,7 @@ class WeeklyDigestBuilder
                         'best_day' => 'n/a',
                         'trend' => 'n/a',
                         'boat_count' => null,
+                        'environmental_condition' => null,
                         'trip_options' => collect(),
                         'trip_recommendations' => collect(),
                     ];
@@ -97,6 +107,7 @@ class WeeklyDigestBuilder
                     'best_day' => $summary['best_day'],
                     'trend' => $summary['trend'],
                     'boat_count' => $latest->boat_count,
+                    'environmental_condition' => $summary['environmental_condition'],
                     'trip_options' => $summary['trip_options'],
                     'trip_recommendations' => $summary['trip_recommendations'],
                 ];
@@ -113,11 +124,16 @@ class WeeklyDigestBuilder
             return "Weekly fishing digest for week ending {$formattedWeekEnding}: no digest-enabled alert rules.";
         }
 
-        return "Weekly fishing digest for week ending {$formattedWeekEnding}:\n".$lines->implode("\n");
+        $weekStart = $weekEnding->subDays(6);
+        $weeklyConditions = $this->environmentalConditionFormatter->weeklyLine($weekStart, $weekEnding);
+
+        return "Weekly fishing digest for week ending {$formattedWeekEnding}:"
+            .($weeklyConditions === null ? '' : "\n{$weeklyConditions}")
+            ."\n".$lines->implode("\n");
     }
 
     /**
-     * @return array{weekly_total: int, best_day: string, trend: string, trip_options: Collection<int, array<string, mixed>>, trip_recommendations: Collection<int, array<string, mixed>>}
+     * @return array{weekly_total: int, best_day: string, trend: string, environmental_condition: string|null, trip_options: Collection<int, array<string, mixed>>, trip_recommendations: Collection<int, array<string, mixed>>}
      */
     private function summaryForRule(AlertRule $rule, CarbonImmutable $weekEnding): array
     {
@@ -134,6 +150,7 @@ class WeeklyDigestBuilder
             'weekly_total' => $weeklyTotal,
             'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->format('n/j/Y')} ({$bestScore->score})",
             'trend' => $this->trendLabel($firstScore?->score, $lastScore?->score),
+            'environmental_condition' => $bestScore === null ? null : $this->environmentalConditionFormatter->forDate($bestScore->score_date->toImmutable()),
             'trip_options' => $tripOptions,
             'trip_recommendations' => $this->tripDecisionBuilder->recommendedBoats($tripOptions),
         ];

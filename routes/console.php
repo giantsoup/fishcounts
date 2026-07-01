@@ -14,6 +14,18 @@ Schedule::command('fish:scrape-daily')
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::command('fish:collect-environmental-data today')
+    ->dailyAt('00:45')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('fish:collect-environmental-data yesterday --finalize')
+    ->dailyAt('00:50')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('fish:score-latest')
     ->dailyAt('01:15')
     ->timezone('America/Los_Angeles')

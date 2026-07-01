@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\BackfillController;
 use App\Http\Controllers\Admin\BoatController;
+use App\Http\Controllers\Admin\EnvironmentalConditionController;
 use App\Http\Controllers\Admin\FailedJobController;
 use App\Http\Controllers\Admin\NotificationDeliveryController;
 use App\Http\Controllers\Admin\ParserErrorController;
@@ -69,6 +70,7 @@ Route::middleware('auth')->group(function (): void {
         Route::post('backfills/{backfillRun}/retry-failed', [BackfillController::class, 'retryFailed'])->name('backfills.retry-failed');
         Route::post('backfills/{backfillRun}/cancel', [BackfillController::class, 'cancel'])->name('backfills.cancel');
         Route::resource('scrape-runs', ScrapeRunController::class)->only(['index', 'show']);
+        Route::get('conditions', EnvironmentalConditionController::class)->name('conditions.index');
         Route::get('raw-payloads/{rawScrapePayload}', RawPayloadController::class)->name('raw-payloads.show');
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');

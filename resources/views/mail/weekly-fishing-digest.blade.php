@@ -3,6 +3,12 @@
 
 Week ending {{ $weekEnding->toFormattedDateString() }}
 
+@if ($weeklyEnvironmentalLine)
+{{ $weeklyEnvironmentalLine }}
+@else
+Official environmental conditions are not available for this week yet.
+@endif
+
 @forelse ($summaries as $summary)
 ## {{ $summary['rule_name'] }}
 
@@ -22,6 +28,12 @@ No scores were recorded for {{ $summary['species_name'] }} this week.
 | Trend | {{ $summary['trend'] }} |
 | Boats reporting | {{ $summary['boat_count'] }} |
 </x-mail::table>
+
+@if ($summary['environmental_condition'])
+**Best-day official conditions:** {{ $summary['environmental_condition'] }}
+@else
+Best-day official conditions are not available yet.
+@endif
 
 **Best trip options**
 

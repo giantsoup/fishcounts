@@ -9,6 +9,7 @@ use App\Enums\SourceType;
 use App\Models\AlertEvent;
 use App\Models\AlertRule;
 use App\Models\Boat;
+use App\Models\EnvironmentalDailySummary;
 use App\Models\Landing;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
@@ -100,6 +101,19 @@ class HotBiteAlertNotificationTest extends TestCase
             'score' => 93,
             'status' => AlertEventStatus::Pending,
         ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'san_diego_bight',
+            'observed_date' => '2026-06-20',
+            'moon_phase' => 'Waxing Crescent',
+            'moon_illumination_percent' => 21,
+            'water_temp_f_avg' => 68.4,
+            'swell_height_ft_avg' => 2.5,
+            'swell_period_seconds_avg' => 12,
+            'swell_direction_degrees_dominant' => 210,
+            'condition_summary' => 'moon Waxing Crescent 21%; water 68.4 F; swell 2.5 ft @ 12s SSW.',
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
         $tripReport = TripReport::query()->create([
             'source_id' => $source->id,
             'raw_scrape_payload_id' => $payload->id,
@@ -140,6 +154,8 @@ class HotBiteAlertNotificationTest extends TestCase
         $this->assertStringContainsString('Threshold', $html);
         $this->assertStringContainsString('Target fish', $html);
         $this->assertStringContainsString('Boats reporting', $html);
+        $this->assertStringContainsString('Official conditions', $html);
+        $this->assertStringContainsString('moon Waxing Crescent 21%', $html);
         $this->assertStringContainsString('Best trip options for Yellowtail', $html);
         $this->assertStringContainsString('Recommended boats', $html);
         $this->assertStringContainsString('Book', $html);
