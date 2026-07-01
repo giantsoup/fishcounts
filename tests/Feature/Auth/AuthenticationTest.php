@@ -30,6 +30,24 @@ class AuthenticationTest extends TestCase
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 
+    public function test_successful_login_records_last_login_timestamp(): void
+    {
+        $loggedInAt = now()->startOfSecond();
+        $this->travelTo($loggedInAt);
+
+        $user = User::factory()->create();
+
+        $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $user->refresh();
+
+        $this->assertNotNull($user->last_login_at);
+        $this->assertTrue($user->last_login_at->equalTo($loggedInAt));
+    }
+
     public function test_inactive_users_cannot_authenticate(): void
     {
         $user = User::factory()->create([
@@ -42,6 +60,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertGuest();
+        $this->assertNull($user->refresh()->last_login_at);
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void
@@ -54,6 +73,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertGuest();
+        $this->assertNull($user->refresh()->last_login_at);
     }
 
     public function test_users_can_logout(): void

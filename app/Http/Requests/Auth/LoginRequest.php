@@ -42,7 +42,9 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $credentials = $this->only('email', 'password') + ['is_active' => true];
+
+        if (! Auth::attempt($credentials, $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
@@ -50,14 +52,11 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        if (! Auth::user()?->is_active) {
-            Auth::logout();
-            RateLimiter::hit($this->throttleKey());
+        $user = Auth::user();
 
-            throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
-            ]);
-        }
+        $user->forceFill([
+            'last_login_at' => now(),
+        ])->saveQuietly();
 
         RateLimiter::clear($this->throttleKey());
     }
