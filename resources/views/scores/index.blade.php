@@ -1,3 +1,7 @@
+@php
+    use App\Enums\ScoreLevel;
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between gap-4">
@@ -87,7 +91,17 @@
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $score->alertRule->species->name }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right font-semibold text-gray-900">{{ $score->score }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap">
-                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $score->score >= 80 ? 'bg-fc-blue-soft text-danger' : ($score->score >= 70 ? 'bg-fc-blue-soft text-primary' : ($score->score >= 60 ? 'bg-fc-blue-soft text-link' : 'bg-gray-100 text-muted')) }}">
+                                        @php
+                                            $levelBadgeClass = match ($score->level) {
+                                                ScoreLevel::WideOpen => 'bg-danger',
+                                                ScoreLevel::Hot => 'bg-danger-accent',
+                                                ScoreLevel::Active => 'bg-primary',
+                                                ScoreLevel::Watch => 'bg-link',
+                                                ScoreLevel::Cold => 'bg-muted',
+                                            };
+                                        @endphp
+
+                                        <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold text-surface shadow-sm {{ $levelBadgeClass }}">
                                             {{ str($score->level->value)->replace('_', ' ')->title() }}
                                         </span>
                                     </td>

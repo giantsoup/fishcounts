@@ -176,6 +176,61 @@ class CountsAndScoresIndexTest extends TestCase
             ->assertDontSee('999');
     }
 
+    public function test_scores_index_renders_level_badges_with_stateful_backgrounds(): void
+    {
+        $user = User::factory()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $scoreRun = ScoreRun::query()->create(['run_date' => '2026-06-15', 'status' => ScoreRunStatus::Succeeded]);
+        $rule = AlertRule::query()->create([
+            'user_id' => $user->id,
+            'species_id' => $species->id,
+            'name' => 'Local Yellowtail',
+            'minimum_score' => 70,
+        ]);
+        $badgeClasses = [
+            ScoreLevel::WideOpen->value => 'bg-danger',
+            ScoreLevel::Hot->value => 'bg-danger-accent',
+            ScoreLevel::Active->value => 'bg-primary',
+            ScoreLevel::Watch->value => 'bg-link',
+            ScoreLevel::Cold->value => 'bg-muted',
+        ];
+
+        foreach (ScoreLevel::cases() as $index => $level) {
+            ScoreResult::query()->create([
+                'score_run_id' => $scoreRun->id,
+                'alert_rule_id' => $rule->id,
+                'score_date' => sprintf('2026-06-%02d', 15 + $index),
+                'score' => match ($level) {
+                    ScoreLevel::WideOpen => 95,
+                    ScoreLevel::Hot => 85,
+                    ScoreLevel::Active => 75,
+                    ScoreLevel::Watch => 65,
+                    ScoreLevel::Cold => 55,
+                },
+                'level' => $level,
+                'total_count' => 100,
+                'boat_count' => 2,
+                'landing_count' => 1,
+                'trend_score' => 80,
+                'count_score' => 100,
+                'count_per_angler_score' => 70,
+                'breadth_score' => 60,
+                'source_confidence_score' => 90,
+                'explanation' => ['test' => true],
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get(route('scores.index'));
+
+        $response->assertOk();
+
+        foreach (ScoreLevel::cases() as $level) {
+            $response
+                ->assertSee(str($level->value)->replace('_', ' ')->title())
+                ->assertSee("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold text-surface shadow-sm {$badgeClasses[$level->value]}", false);
+        }
+    }
+
     public function test_user_can_resend_hot_bite_email_for_their_score(): void
     {
         $user = User::factory()->create();
