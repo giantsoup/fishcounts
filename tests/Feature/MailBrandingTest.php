@@ -20,6 +20,7 @@ class MailBrandingTest extends TestCase
             ->render();
 
         $this->assertStringContainsString('<title>FishCounts</title>', $html);
+        $this->assertStringContainsString('<table class="footer" align="center" width="100%"', $html);
         $this->assertStringContainsString('/images/fishcounts-logo.png', $html);
         $this->assertStringContainsString('alt="FishCounts"', $html);
         $this->assertStringContainsString('FISH', $html);
@@ -34,6 +35,7 @@ class MailBrandingTest extends TestCase
         $this->assertStringContainsString('color: #b61e2e', $html);
         $this->assertStringContainsString("Regards,<br>\nFishCounts", $html);
         $this->assertStringNotContainsString('laravel.com/img/notification-logo', $html);
+        $this->assertStringNotContainsString('<table class="footer" align="center" width="570"', $html);
         $this->assertStringNotContainsString("Regards,<br>\nLaravel", $html);
     }
 }

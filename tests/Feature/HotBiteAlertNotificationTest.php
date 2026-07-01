@@ -148,6 +148,12 @@ class HotBiteAlertNotificationTest extends TestCase
             ->render();
 
         $this->assertStringContainsString('Hot bite threshold crossed', $html);
+        $this->assertStringContainsString('<table class="inner-body" align="center" width="100%"', $html);
+        $this->assertStringContainsString('max-width: 570px', $html);
+        $this->assertStringContainsString('padding: 24px 16px !important;', $html);
+        $this->assertStringContainsString('table-layout: fixed', $html);
+        $this->assertStringContainsString('overflow-wrap: break-word', $html);
+        $this->assertStringContainsString('word-break: break-word', $html);
         $this->assertStringContainsString('LelloTail', $html);
         $this->assertStringContainsString('Yellowtail', $html);
         $this->assertStringContainsString('Wide Open', $html);
@@ -176,5 +182,6 @@ class HotBiteAlertNotificationTest extends TestCase
         $this->assertStringNotContainsString('/counts?', $html);
         $this->assertStringNotContainsString('wide_open', $html);
         $this->assertStringNotContainsString('Thanks,', $html);
+        $this->assertStringNotContainsString('<table class="inner-body" align="center" width="570"', $html);
     }
 }
