@@ -49,12 +49,43 @@ return [
             'noaa_coops_san_diego',
             'ndbc_mission_bay_west',
             'cdip_mission_bay_west',
+            'usno_moon_coronado_islands',
+            'ndbc_point_loma_south',
+            'cdip_point_loma_south',
+        ],
+        'profiles' => [
+            'san_diego_bight' => [
+                'label' => 'San Diego Bight',
+                'location_type' => 'local',
+                'latitude' => (float) env('FISH_CONDITIONS_LATITUDE', 32.75),
+                'longitude' => (float) env('FISH_CONDITIONS_LONGITUDE', -117.25),
+                'sources' => [
+                    'usno_moon',
+                    'noaa_coops_la_jolla',
+                    'noaa_coops_san_diego',
+                    'ndbc_mission_bay_west',
+                    'cdip_mission_bay_west',
+                ],
+            ],
+            'coronado_islands' => [
+                'label' => 'Coronado Islands',
+                'location_type' => 'islands',
+                'latitude' => (float) env('FISH_CONDITIONS_CORONADO_LATITUDE', 32.52),
+                'longitude' => (float) env('FISH_CONDITIONS_CORONADO_LONGITUDE', -117.43),
+                'sources' => [
+                    'usno_moon_coronado_islands',
+                    'ndbc_point_loma_south',
+                    'cdip_point_loma_south',
+                ],
+            ],
         ],
         'stations' => [
             'coops_la_jolla' => '9410230',
             'coops_san_diego' => '9410170',
             'ndbc_mission_bay_west' => '46258',
             'cdip_mission_bay_west' => '220p1',
+            'ndbc_point_loma_south' => '46232',
+            'cdip_point_loma_south' => '191p1',
         ],
     ],
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EnvironmentalLocationType;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ class EnvironmentalPayload extends Model
     {
         return [
             'observed_date' => 'date',
+            'location_type' => EnvironmentalLocationType::class,
             'fetched_at' => 'datetime',
             'metadata' => 'array',
         ];

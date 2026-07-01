@@ -23,7 +23,9 @@ class UsnoMoonAdapter implements EnvironmentalSourceAdapter
         $timezone = (string) config('fish.conditions.timezone', 'America/Los_Angeles');
         $localDate = CarbonImmutable::parse($date->toDateString(), $timezone)->startOfDay();
         $offsetHours = (int) ($localDate->utcOffset() / 60);
-        $coordinates = config('fish.conditions.latitude').','.config('fish.conditions.longitude');
+        $latitude = data_get($source->metadata, 'latitude', config('fish.conditions.latitude'));
+        $longitude = data_get($source->metadata, 'longitude', config('fish.conditions.longitude'));
+        $coordinates = $latitude.','.$longitude;
         $path = '/api/rstt/oneday?date='.$localDate->toDateString().'&coords='.$coordinates.'&tz='.$offsetHours;
 
         return $this->fetcher->fetch($source, $date, $path);
@@ -95,6 +97,7 @@ class UsnoMoonAdapter implements EnvironmentalSourceAdapter
             'environmental_source_id' => $source->id,
             'environmental_payload_id' => $payload->id,
             'location_profile' => $source->location_profile,
+            'location_type' => $source->location_type->value,
             'observed_date' => $payload->observed_date->toDateString(),
             'observed_at' => $observedAt,
             'metric' => $metric,

@@ -2,8 +2,10 @@
 
 namespace App\Services\Environmental;
 
+use App\Enums\EnvironmentalLocationType;
 use App\Models\EnvironmentalDailySummary;
 use App\Models\EnvironmentalObservation;
+use App\Models\EnvironmentalSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -24,8 +26,14 @@ class EnvironmentalDailySummaryBuilder
             ->whereDate('observed_date', $date->toDateString())
             ->first();
         $isFinalized = $finalize || ($summary?->finalized_at !== null && ! $summary->is_partial);
+        $observationLocationType = $observations->first()?->location_type;
+        $locationType = $observationLocationType instanceof EnvironmentalLocationType
+            ? $observationLocationType->value
+            : (EnvironmentalSource::query()->where('location_profile', $locationProfile)->value('location_type')
+                ?? EnvironmentalLocationType::Local->value);
 
         $attributes = [
+            'location_type' => $locationType,
             ...$this->moonAttributes($observations),
             ...$this->tideAttributes($observations),
             ...$this->rangeAttributes($observations, 'water_temperature', 'water_temp_f'),

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EnvironmentalLocationType;
 use App\Enums\EnvironmentalSourceType;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class EnvironmentalSource extends Model
 {
     protected $attributes = [
+        'location_type' => 'local',
         'priority' => 100,
         'is_enabled' => true,
         'supports_historical_dates' => false,
@@ -21,6 +23,7 @@ class EnvironmentalSource extends Model
     {
         return [
             'source_type' => EnvironmentalSourceType::class,
+            'location_type' => EnvironmentalLocationType::class,
             'is_enabled' => 'boolean',
             'supports_historical_dates' => 'boolean',
             'metadata' => 'array',

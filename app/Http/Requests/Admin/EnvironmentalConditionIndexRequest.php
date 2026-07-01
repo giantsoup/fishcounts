@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\EnvironmentalLocationType;
 use App\Support\DateInputNormalizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -34,6 +35,7 @@ class EnvironmentalConditionIndexRequest extends FormRequest
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
             'location_profile' => ['nullable', 'string', 'max:100'],
+            'location_type' => ['nullable', Rule::enum(EnvironmentalLocationType::class)],
             'source_id' => ['nullable', 'integer', Rule::exists('environmental_sources', 'id')],
             'metric' => ['nullable', 'string', 'max:100', 'regex:/^[a-z0-9_]+$/'],
             'status' => ['nullable', Rule::in(['partial', 'finalized'])],
@@ -59,7 +61,7 @@ class EnvironmentalConditionIndexRequest extends FormRequest
         ];
     }
 
-    /** @return array{from: string, to: string, location_profile: string, source_id: ?int, metric: ?string, status: ?string} */
+    /** @return array{from: string, to: string, location_profile: string, location_type: ?string, source_id: ?int, metric: ?string, status: ?string} */
     public function filters(): array
     {
         $validated = $this->validated();
@@ -70,6 +72,7 @@ class EnvironmentalConditionIndexRequest extends FormRequest
             'location_profile' => isset($validated['location_profile']) && $validated['location_profile'] !== ''
                 ? (string) $validated['location_profile']
                 : (string) config('fish.conditions.location_profile', 'san_diego_bight'),
+            'location_type' => isset($validated['location_type']) && $validated['location_type'] !== '' ? (string) $validated['location_type'] : null,
             'source_id' => isset($validated['source_id']) ? (int) $validated['source_id'] : null,
             'metric' => isset($validated['metric']) && $validated['metric'] !== '' ? (string) $validated['metric'] : null,
             'status' => isset($validated['status']) && $validated['status'] !== '' ? (string) $validated['status'] : null,

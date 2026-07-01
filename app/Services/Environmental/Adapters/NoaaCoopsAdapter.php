@@ -108,6 +108,7 @@ class NoaaCoopsAdapter implements EnvironmentalSourceAdapter
             'environmental_source_id' => $source->id,
             'environmental_payload_id' => $payload->id,
             'location_profile' => $source->location_profile,
+            'location_type' => $source->location_type->value,
             'observed_date' => $observedAt->toDateString(),
             'observed_at' => $observedAt,
             'metric' => $metric,

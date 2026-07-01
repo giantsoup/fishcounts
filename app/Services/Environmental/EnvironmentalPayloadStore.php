@@ -12,21 +12,15 @@ class EnvironmentalPayloadStore
     public function store(EnvironmentalSource $source, CarbonImmutable $date, EnvironmentalFetchResult $result): EnvironmentalPayload
     {
         $payloadHash = hash('sha256', $result->body);
-        $payload = EnvironmentalPayload::query()
-            ->where('environmental_source_id', $source->id)
-            ->whereDate('observed_date', $date->toDateString())
-            ->where('payload_hash', $payloadHash)
-            ->first();
-
-        if ($payload !== null) {
-            return $payload;
-        }
-
-        return EnvironmentalPayload::query()->create([
+        $identity = [
             'environmental_source_id' => $source->id,
-            'location_profile' => $source->location_profile,
-            'observed_date' => $date->toDateString(),
+            'observed_date' => $date->startOfDay(),
             'payload_hash' => $payloadHash,
+        ];
+
+        return EnvironmentalPayload::query()->createOrFirst($identity, [
+            'location_profile' => $source->location_profile,
+            'location_type' => $source->location_type->value,
             'url' => $result->url,
             'http_status' => $result->statusCode,
             'content_type' => $result->contentType,

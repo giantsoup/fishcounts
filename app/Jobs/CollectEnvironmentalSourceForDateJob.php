@@ -61,6 +61,7 @@ class CollectEnvironmentalSourceForDateJob implements ShouldBeUnique, ShouldQueu
             EnvironmentalObservation::query()
                 ->where('environmental_source_id', $source->id)
                 ->where('location_profile', $source->location_profile)
+                ->where('location_type', $source->location_type->value)
                 ->whereDate('observed_date', $date->toDateString())
                 ->delete();
 

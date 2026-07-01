@@ -9,13 +9,13 @@ use App\Services\Environmental\Contracts\EnvironmentalSourceAdapter;
 use App\Services\Environmental\EnvironmentalHttpFetcher;
 use Carbon\CarbonImmutable;
 
-class NdbcMissionBayWestAdapter implements EnvironmentalSourceAdapter
+class NdbcStationAdapter implements EnvironmentalSourceAdapter
 {
     public function __construct(private readonly EnvironmentalHttpFetcher $fetcher) {}
 
     public function sourceKey(): string
     {
-        return 'ndbc_mission_bay_west';
+        return 'ndbc_station';
     }
 
     public function fetchForDate(EnvironmentalSource $source, CarbonImmutable $date): EnvironmentalFetchResult
@@ -191,6 +191,7 @@ class NdbcMissionBayWestAdapter implements EnvironmentalSourceAdapter
             'environmental_source_id' => $source->id,
             'environmental_payload_id' => $payload->id,
             'location_profile' => $source->location_profile,
+            'location_type' => $source->location_type->value,
             'observed_date' => $observedAt->toDateString(),
             'observed_at' => $observedAt,
             'metric' => $metric,

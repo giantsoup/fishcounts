@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\EnvironmentalLocationType;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 class EnvironmentalDailySummary extends Model
 {
     protected $attributes = [
+        'location_type' => 'local',
         'is_partial' => true,
     ];
 
@@ -16,6 +18,7 @@ class EnvironmentalDailySummary extends Model
     {
         return [
             'observed_date' => 'date',
+            'location_type' => EnvironmentalLocationType::class,
             'moon_illumination_percent' => 'decimal:2',
             'moonrise_at' => 'datetime',
             'moonset_at' => 'datetime',

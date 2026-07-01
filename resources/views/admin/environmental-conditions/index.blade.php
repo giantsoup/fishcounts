@@ -26,9 +26,20 @@
                         <label for="location_profile" class="block text-sm font-medium text-gray-700">Profile</label>
                         <x-form.select id="location_profile" name="location_profile">
                             @foreach ($locationProfiles as $locationProfile)
-                                <option value="{{ $locationProfile }}" @selected($filters['location_profile'] === $locationProfile)>{{ str($locationProfile)->replace('_', ' ')->headline() }}</option>
+                                <option value="{{ $locationProfile }}" @selected($filters['location_profile'] === $locationProfile)>{{ $profileLabels[$locationProfile] ?? str($locationProfile)->replace('_', ' ')->headline() }}</option>
                             @endforeach
                         </x-form.select>
+                    </div>
+
+                    <div class="lg:col-span-2">
+                        <label for="location_type" class="block text-sm font-medium text-gray-700">Location type</label>
+                        <x-form.select id="location_type" name="location_type">
+                            <option value="">Any type</option>
+                            @foreach ($locationTypes as $locationType)
+                                <option value="{{ $locationType->value }}" @selected($filters['location_type'] === $locationType->value)>{{ str($locationType->value)->headline() }}</option>
+                            @endforeach
+                        </x-form.select>
+                        <x-input-error :messages="$errors->get('location_type')" class="mt-2" />
                     </div>
 
                     <div class="lg:col-span-2">
@@ -36,7 +47,7 @@
                         <x-form.select id="source_id" name="source_id">
                             <option value="">All sources</option>
                             @foreach ($sources as $source)
-                                <option value="{{ $source->id }}" @selected($filters['source_id'] === $source->id)>{{ $source->name }}</option>
+                                <option value="{{ $source->id }}" @selected($filters['source_id'] === $source->id)>{{ $source->name }} · {{ str(data_get($source, 'location_type.value', $source->location_type))->headline() }}</option>
                             @endforeach
                         </x-form.select>
                         <x-input-error :messages="$errors->get('source_id')" class="mt-2" />
@@ -78,6 +89,8 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Profile</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Status</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Moon</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Water</th>
@@ -89,8 +102,15 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 bg-white">
                             @forelse ($summaries as $summary)
+                                @php($summaryLocationType = data_get($summary, 'location_type.value', $summary->location_type))
                                 <tr>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $summary->observed_date->format('n/j/Y') }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-gray-900">{{ $profileLabels[$summary->location_profile] ?? str($summary->location_profile)->replace('_', ' ')->headline() }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $summaryLocationType === 'islands' ? 'bg-sky-100 text-sky-800' : 'bg-gray-100 text-gray-700' }}">
+                                            {{ str($summaryLocationType)->headline() }}
+                                        </span>
+                                    </td>
                                     <td class="px-4 py-3 whitespace-nowrap">
                                         <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $summary->is_partial ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800' }}">
                                             {{ $summary->is_partial ? 'Partial' : 'Finalized' }}
@@ -129,7 +149,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No daily summaries match the current filters.</td>
+                                    <td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">No daily summaries match the current filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -151,6 +171,8 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Observed</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Profile</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Type</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Source</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Metric</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Value</th>
@@ -160,8 +182,15 @@
                         </thead>
                         <tbody class="divide-y divide-gray-100 bg-white">
                             @forelse ($observations as $observation)
+                                @php($observationLocationType = data_get($observation, 'location_type.value', $observation->location_type))
                                 <tr>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $observation->observed_at->format('n/j/Y g:i A') }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-gray-900">{{ $profileLabels[$observation->location_profile] ?? str($observation->location_profile)->replace('_', ' ')->headline() }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap">
+                                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold {{ $observationLocationType === 'islands' ? 'bg-sky-100 text-sky-800' : 'bg-gray-100 text-gray-700' }}">
+                                            {{ str($observationLocationType)->headline() }}
+                                        </span>
+                                    </td>
                                     <td class="px-4 py-3 whitespace-nowrap text-gray-900">{{ $observation->environmentalSource->name }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{{ str($observation->metric)->replace('_', ' ')->headline() }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">
@@ -181,7 +210,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No observations match the current filters.</td>
+                                    <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No observations match the current filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -200,12 +229,25 @@
                 </div>
 
                 @forelse ($payloads as $payload)
+                    @php($payloadLocationType = data_get($payload, 'location_type.value', $payload->location_type))
                     <details class="bg-white p-4 shadow sm:rounded-lg">
                         <summary class="cursor-pointer text-sm font-medium text-gray-900">
-                            #{{ $payload->id }} · {{ $payload->environmentalSource->name }} · {{ $payload->observed_date->format('n/j/Y') }} · HTTP {{ $payload->http_status ?? 'n/a' }}
+                            #{{ $payload->id }} · {{ $profileLabels[$payload->location_profile] ?? str($payload->location_profile)->replace('_', ' ')->headline() }} · {{ str($payloadLocationType)->headline() }} · {{ $payload->environmentalSource->name }} · {{ $payload->observed_date->format('n/j/Y') }} · HTTP {{ $payload->http_status ?? 'n/a' }}
                         </summary>
 
                         <dl class="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                            <div>
+                                <dt class="font-medium text-gray-500">Profile</dt>
+                                <dd class="text-gray-900">{{ $profileLabels[$payload->location_profile] ?? str($payload->location_profile)->replace('_', ' ')->headline() }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-gray-500">Location type</dt>
+                                <dd class="text-gray-900">{{ str($payloadLocationType)->headline() }}</dd>
+                            </div>
+                            <div>
+                                <dt class="font-medium text-gray-500">Source</dt>
+                                <dd class="text-gray-900">{{ $payload->environmentalSource->name }}</dd>
+                            </div>
                             <div class="md:col-span-2">
                                 <dt class="font-medium text-gray-500">URL</dt>
                                 <dd class="break-all text-gray-900">{{ $payload->url }}</dd>
