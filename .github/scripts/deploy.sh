@@ -179,6 +179,8 @@ release_activated=true
 cd "${current_dir}"
 "${PHP_BIN}" artisan queue:restart --no-interaction
 "${PHP_BIN}" artisan schedule:interrupt --no-interaction || true
+"${PHP_BIN}" artisan fish:collect-environmental-data today --no-interaction
+"${PHP_BIN}" artisan fish:collect-environmental-data yesterday --finalize --no-interaction
 
 releases=()
 
