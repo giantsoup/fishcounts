@@ -1,15 +1,65 @@
+@php
+    $formatSpeciesCounts = function ($report): string {
+        return $report->speciesCounts
+            ->flatMap(function ($count) {
+                $parts = collect();
+
+                if ($count->count > 0) {
+                    $parts->push(number_format($count->count).' '.$count->species->name);
+                }
+
+                if ($count->released_count > 0) {
+                    $parts->push(number_format($count->released_count).' '.$count->species->name.' Released');
+                }
+
+                return $parts->isNotEmpty()
+                    ? $parts
+                    : collect([number_format($count->count).' '.$count->species->name]);
+            })
+            ->implode(', ');
+    };
+@endphp
+
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between gap-4">
-            <h2 class="font-semibold text-xl text-gray-800">Counts</h2>
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-xl font-semibold text-gray-800">Counts</h2>
+                <p class="text-sm text-gray-600">{{ $dateLabel }}</p>
+            </div>
             <a href="{{ route('counts.index') }}" class="text-sm text-gray-600 underline">Reset filters</a>
         </div>
     </x-slot>
 
-    <div class="py-8">
-        <div class="max-w-[1480px] mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white p-6 shadow sm:rounded-lg">
-                <form method="GET" action="{{ route('counts.index') }}" class="grid gap-4 md:grid-cols-4">
+    <div class="py-6 sm:py-8">
+        <div class="mx-auto max-w-[1480px] space-y-5 sm:px-6 lg:px-8">
+            <section class="bg-white px-4 py-4 shadow sm:rounded-lg sm:px-5">
+                <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Trips</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['trips']) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Boats</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['boats']) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Anglers</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['anglers']) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Retained</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['retained']) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Released</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['released']) }}</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="bg-white px-4 py-5 shadow sm:rounded-lg sm:p-6">
+                <form method="GET" action="{{ route('counts.index') }}" class="grid gap-4 md:grid-cols-6">
                     <div>
                         <label for="from" class="block text-sm font-medium text-gray-700">From</label>
                         <x-form.date id="from" name="from" value="{{ $filters['from'] }}" />
@@ -62,50 +112,78 @@
                         </x-form.select>
                     </div>
 
-                    <div class="md:col-span-2 flex items-end">
+                    <div class="flex items-end md:col-span-6">
                         <x-primary-button>Apply filters</x-primary-button>
                     </div>
                 </form>
-            </div>
+            </section>
 
-            <div class="bg-white shadow sm:rounded-lg overflow-hidden">
-                <div class="overflow-x-auto">
+            <section class="overflow-hidden bg-white shadow sm:rounded-lg">
+                <div class="divide-y divide-gray-100 md:hidden">
+                    @forelse ($reports as $report)
+                        @php
+                            $boatName = $report->boat?->name ?? $report->raw_boat_name ?? 'Unknown';
+                            $landingName = $report->landing?->name ?? $report->raw_landing_name ?? 'Unknown';
+                            $tripTypeName = $report->tripType?->name ?? $report->raw_trip_type ?? 'Unknown';
+                            $fishCountText = $formatSpeciesCounts($report);
+                        @endphp
+
+                        <article class="px-4 py-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h3 class="truncate text-base font-semibold text-gray-900">{{ $boatName }}</h3>
+                                    <p class="mt-0.5 text-sm text-gray-600">{{ $landingName }}</p>
+                                </div>
+                                <p class="shrink-0 text-sm font-medium text-gray-700">{{ $report->trip_date->format('n/j/Y') }}</p>
+                            </div>
+
+                            <div class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+                                <span>{{ $tripTypeName }}</span>
+                                <span>{{ $report->anglers !== null ? number_format($report->anglers).' Anglers' : 'Anglers —' }}</span>
+                                <span>{{ $report->source?->name ?? 'Unknown' }}</span>
+                            </div>
+
+                            <p class="mt-3 text-sm leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</p>
+                        </article>
+                    @empty
+                        <p class="px-4 py-8 text-center text-sm text-gray-500">No counts match the current filters.</p>
+                    @endforelse
+                </div>
+
+                <div class="hidden overflow-x-auto md:block">
                     <table class="min-w-full divide-y divide-gray-200 text-sm">
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Date</th>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Landing</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Boat</th>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Trip</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Trip Details</th>
                                 <th class="px-4 py-3 text-right font-semibold text-gray-700">Anglers</th>
-                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Species</th>
-                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Retained</th>
-                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Released</th>
-                                <th class="px-4 py-3 text-right font-semibold text-gray-700">Per Angler</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Fish Count</th>
                                 <th class="px-4 py-3 text-left font-semibold text-gray-700">Source</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 bg-white">
-                            @forelse ($counts as $count)
+                            @forelse ($reports as $report)
                                 @php
-                                    $report = $count->tripReport;
-                                    $perAngler = $report?->anglers ? round($count->count / $report->anglers, 2) : null;
+                                    $boatName = $report->boat?->name ?? $report->raw_boat_name ?? 'Unknown';
+                                    $landingName = $report->landing?->name ?? $report->raw_landing_name ?? 'Unknown';
+                                    $tripTypeName = $report->tripType?->name ?? $report->raw_trip_type ?? 'Unknown';
+                                    $fishCountText = $formatSpeciesCounts($report);
                                 @endphp
                                 <tr>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->trip_date?->format('n/j/Y') }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-900">{{ $report?->landing?->name ?? $report?->raw_landing_name ?? 'Unknown' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->boat?->name ?? $report?->raw_boat_name ?? 'Unknown' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->tripType?->name ?? $report?->raw_trip_type ?? 'Unknown' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $report?->anglers ?? '—' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{{ $count->species->name }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-900">{{ number_format($count->count) }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $count->released_count > 0 ? number_format($count->released_count) : '—' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $perAngler !== null ? number_format($perAngler, 2) : '—' }}</td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-gray-700">{{ $report?->source?->name ?? 'Unknown' }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $report->trip_date->format('n/j/Y') }}</td>
+                                    <td class="px-4 py-3">
+                                        <p class="whitespace-nowrap font-semibold text-gray-900">{{ $boatName }}</p>
+                                        <p class="whitespace-nowrap text-xs text-gray-500">{{ $landingName }}</p>
+                                    </td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $tripTypeName }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-right text-gray-700">{{ $report->anglers !== null ? number_format($report->anglers) : '—' }}</td>
+                                    <td class="min-w-[360px] px-4 py-3 leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</td>
+                                    <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $report->source?->name ?? 'Unknown' }}</td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="px-4 py-8 text-center text-sm text-gray-500">No counts match the current filters.</td>
+                                    <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No counts match the current filters.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -113,9 +191,9 @@
                 </div>
 
                 <div class="border-t border-gray-200 px-4 py-3">
-                    {{ $counts->links() }}
+                    {{ $reports->links() }}
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 </x-app-layout>

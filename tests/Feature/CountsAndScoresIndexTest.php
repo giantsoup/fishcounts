@@ -32,6 +32,39 @@ class CountsAndScoresIndexTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_counts_index_groups_species_counts_by_trip(): void
+    {
+        $user = User::factory()->create();
+        $context = $this->countContext();
+        $yellowtail = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $rockfish = Species::query()->create(['name' => 'Rockfish', 'slug' => 'rockfish']);
+        $report = $this->tripReport($context, '2026-06-15', true, 20);
+
+        SpeciesCount::query()->create([
+            'trip_report_id' => $report->id,
+            'species_id' => $yellowtail->id,
+            'count' => 30,
+            'released_count' => 5,
+        ]);
+        SpeciesCount::query()->create([
+            'trip_report_id' => $report->id,
+            'species_id' => $rockfish->id,
+            'count' => 12,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('counts.index', [
+                'from' => '2026-06-15',
+                'to' => '2026-06-15',
+            ]))
+            ->assertOk()
+            ->assertSee('Dolphin')
+            ->assertSee('Fisherman&#039;s Landing', false)
+            ->assertSee('30 Yellowtail')
+            ->assertSee('5 Yellowtail Released')
+            ->assertSee('12 Rockfish');
+    }
+
     public function test_counts_index_filters_counts_and_excludes_non_primary_reports(): void
     {
         $user = User::factory()->create();
@@ -45,6 +78,11 @@ class CountsAndScoresIndexTest extends TestCase
             'species_id' => $yellowtail->id,
             'count' => 30,
             'released_count' => 5,
+        ]);
+        SpeciesCount::query()->create([
+            'trip_report_id' => $primaryReport->id,
+            'species_id' => $rockfish->id,
+            'count' => 12,
         ]);
 
         $otherSpeciesReport = $this->tripReport($context, '2026-06-15', true, 10);
@@ -73,11 +111,11 @@ class CountsAndScoresIndexTest extends TestCase
         $response
             ->assertOk()
             ->assertSee('6/15/2026')
-            ->assertSee('Yellowtail')
-            ->assertSee('30')
-            ->assertSee('5')
-            ->assertDontSeeText('100')
-            ->assertDontSeeText('999');
+            ->assertSee('30 Yellowtail')
+            ->assertSee('5 Yellowtail Released')
+            ->assertDontSeeText('12 Rockfish')
+            ->assertDontSeeText('100 Rockfish')
+            ->assertDontSeeText('999 Yellowtail');
     }
 
     public function test_counts_pagination_preserves_filters(): void
@@ -103,6 +141,66 @@ class CountsAndScoresIndexTest extends TestCase
             ]))
             ->assertOk()
             ->assertSee('species_id='.$species->id, false);
+    }
+
+    public function test_counts_index_defaults_to_latest_available_count_date(): void
+    {
+        $user = User::factory()->create();
+        $context = $this->countContext();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+
+        $olderReport = $this->tripReport($context, '2026-06-15', true, 20, 'older-report');
+        SpeciesCount::query()->create([
+            'trip_report_id' => $olderReport->id,
+            'species_id' => $species->id,
+            'count' => 15,
+        ]);
+
+        $latestReport = $this->tripReport($context, '2026-07-05', true, 18, 'latest-report');
+        SpeciesCount::query()->create([
+            'trip_report_id' => $latestReport->id,
+            'species_id' => $species->id,
+            'count' => 40,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('counts.index'))
+            ->assertOk()
+            ->assertSee('July 5, 2026')
+            ->assertSee('7/5/2026')
+            ->assertSee('40 Yellowtail')
+            ->assertDontSee('6/15/2026')
+            ->assertDontSee('15 Yellowtail');
+    }
+
+    public function test_counts_index_defaults_to_latest_available_count_date_for_direct_filter_links(): void
+    {
+        $user = User::factory()->create();
+        $context = $this->countContext();
+        $yellowtail = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $rockfish = Species::query()->create(['name' => 'Rockfish', 'slug' => 'rockfish']);
+
+        $yellowtailReport = $this->tripReport($context, '2026-06-15', true, 20, 'yellowtail-report');
+        SpeciesCount::query()->create([
+            'trip_report_id' => $yellowtailReport->id,
+            'species_id' => $yellowtail->id,
+            'count' => 15,
+        ]);
+
+        $rockfishReport = $this->tripReport($context, '2026-07-05', true, 18, 'rockfish-report');
+        SpeciesCount::query()->create([
+            'trip_report_id' => $rockfishReport->id,
+            'species_id' => $rockfish->id,
+            'count' => 40,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('counts.index', ['species_id' => $yellowtail->id]))
+            ->assertOk()
+            ->assertSee('June 15, 2026')
+            ->assertSee('15 Yellowtail')
+            ->assertDontSee('7/5/2026')
+            ->assertDontSee('40 Rockfish');
     }
 
     public function test_scores_index_filters_scores_and_only_shows_current_users_rules(): void

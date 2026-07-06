@@ -55,14 +55,24 @@ class CountsIndexRequest extends FormRequest
         ];
     }
 
-    /** @return array{from: string, to: string, species_id: ?int, trip_type_id: ?int, landing_id: ?int, boat_id: ?int} */
+    /** @return array{from: ?string, to: ?string, species_id: ?int, trip_type_id: ?int, landing_id: ?int, boat_id: ?int} */
     public function filters(): array
     {
         $validated = $this->validated();
+        $from = $this->dateFilter('from')?->toDateString();
+        $to = $this->dateFilter('to')?->toDateString();
+
+        if ($from !== null && $to === null) {
+            $to = $from;
+        }
+
+        if ($from === null && $to !== null) {
+            $from = $to;
+        }
 
         return [
-            'from' => $this->dateFilter('from')?->toDateString() ?? now()->subDays(30)->toDateString(),
-            'to' => $this->dateFilter('to')?->toDateString() ?? now()->toDateString(),
+            'from' => $from,
+            'to' => $to,
             'species_id' => isset($validated['species_id']) ? (int) $validated['species_id'] : null,
             'trip_type_id' => isset($validated['trip_type_id']) ? (int) $validated['trip_type_id'] : null,
             'landing_id' => isset($validated['landing_id']) ? (int) $validated['landing_id'] : null,
