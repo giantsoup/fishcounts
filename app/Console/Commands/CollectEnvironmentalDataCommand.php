@@ -26,10 +26,17 @@ class CollectEnvironmentalDataCommand extends Command
             ->orderBy('priority')
             ->pluck('id');
 
-        $sourceIds->each(fn (int $sourceId): mixed => CollectEnvironmentalSourceForDateJob::dispatch($sourceId, $date, $finalize));
-
         $mode = $finalize ? 'finalized' : 'partial';
         $scope = is_string($locationProfile) && $locationProfile !== '' ? " for {$locationProfile}" : '';
+
+        if ($sourceIds->isEmpty()) {
+            $this->components->error("No enabled environmental sources found{$scope}. Run `php artisan db:seed --class=EnvironmentalSourceSeeder --force`.");
+
+            return self::FAILURE;
+        }
+
+        $sourceIds->each(fn (int $sourceId): mixed => CollectEnvironmentalSourceForDateJob::dispatch($sourceId, $date, $finalize));
+
         $this->info("Environmental {$mode} collection jobs queued for {$date}{$scope}: {$sourceIds->count()} sources.");
 
         return self::SUCCESS;

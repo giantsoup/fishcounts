@@ -1,5 +1,18 @@
 <?php
 
+$defaultFishCountsUserAgent = 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)';
+$scraperUserAgent = (string) env('FISH_SCRAPER_USER_AGENT', $defaultFishCountsUserAgent);
+
+if ($scraperUserAgent === '' || str_contains($scraperUserAgent, 'example.com')) {
+    $scraperUserAgent = $defaultFishCountsUserAgent;
+}
+
+$conditionsUserAgent = (string) env('FISH_CONDITIONS_USER_AGENT', $scraperUserAgent);
+
+if ($conditionsUserAgent === '' || str_contains($conditionsUserAgent, 'example.com')) {
+    $conditionsUserAgent = $scraperUserAgent;
+}
+
 return [
     'admin' => [
         'name' => env('FISH_ADMIN_NAME', 'Fish Counts Admin'),
@@ -8,7 +21,7 @@ return [
     ],
 
     'scraping' => [
-        'user_agent' => env('FISH_SCRAPER_USER_AGENT', 'FishCountsBot/1.0 (+https://example.com/contact)'),
+        'user_agent' => $scraperUserAgent,
         'timeout_seconds' => (int) env('FISH_SCRAPER_TIMEOUT', 20),
         'connect_timeout_seconds' => (int) env('FISH_SCRAPER_CONNECT_TIMEOUT', 10),
         'allowed_hosts' => [
@@ -34,7 +47,7 @@ return [
         'timezone' => env('FISH_CONDITIONS_TIMEZONE', 'America/Los_Angeles'),
         'latitude' => (float) env('FISH_CONDITIONS_LATITUDE', 32.75),
         'longitude' => (float) env('FISH_CONDITIONS_LONGITUDE', -117.25),
-        'user_agent' => env('FISH_CONDITIONS_USER_AGENT', env('FISH_SCRAPER_USER_AGENT', 'FishCountsBot/1.0 (+https://example.com/contact)')),
+        'user_agent' => $conditionsUserAgent,
         'timeout_seconds' => (int) env('FISH_CONDITIONS_TIMEOUT', 20),
         'connect_timeout_seconds' => (int) env('FISH_CONDITIONS_CONNECT_TIMEOUT', 10),
         'allowed_hosts' => [

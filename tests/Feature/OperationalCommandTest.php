@@ -148,12 +148,59 @@ class OperationalCommandTest extends TestCase
                 'mail.default' => 'smtp',
                 'mail.from.address' => 'alerts@example.test',
                 'fish.admin.password' => 'not-the-default-password',
+                'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)',
             ]);
 
             $this->artisan('fish:production-check', ['--skip-database' => true])->assertSuccessful();
         } finally {
             config(['database.default' => $databaseConnection]);
         }
+    }
+
+    public function test_production_check_fails_for_invalid_environmental_condition_configuration(): void
+    {
+        $databaseConnection = config('database.default');
+
+        try {
+            config([
+                'app.env' => 'production',
+                'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+                'app.debug' => false,
+                'database.default' => 'mariadb',
+                'queue.default' => 'database',
+                'cache.default' => 'database',
+                'session.secure' => true,
+                'session.http_only' => true,
+                'mail.default' => 'smtp',
+                'mail.from.address' => 'alerts@example.test',
+                'fish.admin.password' => 'not-the-default-password',
+                'fish.conditions.sources' => [],
+                'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://example.com/contact)',
+            ]);
+
+            $this->artisan('fish:production-check', ['--skip-database' => true])->assertFailed();
+        } finally {
+            config(['database.default' => $databaseConnection]);
+        }
+    }
+
+    public function test_production_check_fails_when_environmental_source_reference_data_is_missing(): void
+    {
+        config([
+            'app.env' => 'production',
+            'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+            'app.debug' => false,
+            'queue.default' => 'database',
+            'cache.default' => 'database',
+            'session.secure' => true,
+            'session.http_only' => true,
+            'mail.default' => 'smtp',
+            'mail.from.address' => 'alerts@example.test',
+            'fish.admin.password' => 'not-the-default-password',
+            'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)',
+        ]);
+
+        $this->artisan('fish:production-check')->assertFailed();
     }
 
     private function payload(): RawScrapePayload

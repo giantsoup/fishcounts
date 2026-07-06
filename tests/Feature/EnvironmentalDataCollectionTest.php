@@ -69,6 +69,17 @@ class EnvironmentalDataCollectionTest extends TestCase
         Queue::assertNotPushed(CollectEnvironmentalSourceForDateJob::class, fn (CollectEnvironmentalSourceForDateJob $job): bool => $job->environmentalSourceId === $source->id);
     }
 
+    public function test_collect_environmental_data_command_fails_when_no_enabled_sources_are_configured(): void
+    {
+        Queue::fake();
+
+        $this->artisan('fish:collect-environmental-data', [
+            'date' => '2026-06-30',
+        ])->assertFailed();
+
+        Queue::assertNothingPushed();
+    }
+
     public function test_environmental_source_seeder_creates_local_and_islands_sources_idempotently(): void
     {
         $this->seed(EnvironmentalSourceSeeder::class);

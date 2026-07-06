@@ -166,11 +166,12 @@ fi
 cd "${release_dir}"
 
 "${COMPOSER_BIN}" install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-"${PHP_BIN}" artisan migrate --force
-"${PHP_BIN}" artisan optimize:clear
-"${PHP_BIN}" artisan optimize
-"${PHP_BIN}" artisan storage:link --force
-"${PHP_BIN}" artisan fish:production-check
+"${PHP_BIN}" artisan optimize:clear --no-interaction
+"${PHP_BIN}" artisan migrate --force --no-interaction
+"${PHP_BIN}" artisan db:seed --class=EnvironmentalSourceSeeder --force --no-interaction
+"${PHP_BIN}" artisan optimize --no-interaction
+"${PHP_BIN}" artisan storage:link --force --no-interaction
+"${PHP_BIN}" artisan fish:production-check --no-interaction
 
 ln -sfn "${release_dir}" "${current_dir}"
 release_activated=true
