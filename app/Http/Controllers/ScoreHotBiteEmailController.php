@@ -10,6 +10,7 @@ use App\Models\AlertEvent;
 use App\Models\NotificationDelivery;
 use App\Models\ScoreResult;
 use App\Notifications\HotBiteAlertNotification;
+use App\Services\Notifications\TripDecisionBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -44,6 +45,13 @@ class ScoreHotBiteEmailController extends Controller
 
         $event->save();
         $event->setRelation('alertRule', $rule);
+        $tripDecisionBuilder = app(TripDecisionBuilder::class);
+        $tripOptions = $tripDecisionBuilder->rankedTrips(
+            $rule,
+            $event->event_date->toImmutable(),
+            $event->event_date->toImmutable(),
+        );
+        $tripRecommendations = $tripDecisionBuilder->recommendedBoats($tripOptions);
 
         $delivery = NotificationDelivery::query()->create([
             'alert_event_id' => $event->id,
@@ -56,11 +64,21 @@ class ScoreHotBiteEmailController extends Controller
                 'manual_resend' => true,
                 'score_result_id' => $scoreResult->id,
                 'requested_by_user_id' => $request->user()->id,
+                'booking_availability' => $tripRecommendations
+                    ->map(fn (array $trip): array => [
+                        'boat_name' => $trip['boat_name'],
+                        'landing_name' => $trip['landing_name'],
+                        'trip_type' => $trip['trip_type'],
+                        'trip_date' => $trip['trip_date'],
+                        'booking_availability' => $trip['booking_availability'] ?? null,
+                    ])
+                    ->values()
+                    ->all(),
             ],
         ]);
 
         try {
-            Notification::sendNow($user, new HotBiteAlertNotification($event));
+            Notification::sendNow($user, new HotBiteAlertNotification($event, $tripOptions, $tripRecommendations));
 
             $event->email_sent_at = now();
             $event->status = $this->eventStatus($event);

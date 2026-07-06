@@ -18,9 +18,9 @@ class WeeklyDigestBuilder
     /**
      * @return Collection<int, string>
      */
-    public function lines(User $user, CarbonImmutable $weekEnding): Collection
+    public function lines(User $user, CarbonImmutable $weekEnding, ?Collection $summaries = null): Collection
     {
-        return $this->summaries($user, $weekEnding)
+        return ($summaries ?? $this->summaries($user, $weekEnding))
             ->map(function (array $summary): string {
                 if (! $summary['has_scores']) {
                     return "{$summary['rule_name']}: no scores this week.";
@@ -32,7 +32,7 @@ class WeeklyDigestBuilder
 
                 $recommendedBoats = $summary['trip_recommendations']->isEmpty()
                     ? 'no booking links available'
-                    : $summary['trip_recommendations']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']}")->implode(', ');
+                    : $summary['trip_recommendations']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']} {$trip['booking_url']}")->implode(', ');
 
                 $conditions = $summary['environmental_condition'] === null
                     ? 'conditions unavailable'
@@ -115,9 +115,9 @@ class WeeklyDigestBuilder
             ->values();
     }
 
-    public function discordContent(User $user, CarbonImmutable $weekEnding): string
+    public function discordContent(User $user, CarbonImmutable $weekEnding, ?Collection $summaries = null): string
     {
-        $lines = $this->lines($user, $weekEnding);
+        $lines = $this->lines($user, $weekEnding, $summaries);
         $formattedWeekEnding = $weekEnding->format('n/j/Y');
 
         if ($lines->isEmpty()) {

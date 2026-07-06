@@ -5,13 +5,19 @@ namespace App\Services\Notifications;
 use App\Models\AlertRule;
 use App\Models\SpeciesCount;
 use App\Models\TripReport;
+use App\Services\Booking\BookingAvailabilityResolver;
+use App\Services\Booking\BookingUrlResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class TripDecisionBuilder
 {
-    public function __construct(private readonly SourceHighlightLinkBuilder $sourceHighlightLinkBuilder) {}
+    public function __construct(
+        private readonly SourceHighlightLinkBuilder $sourceHighlightLinkBuilder,
+        private readonly BookingUrlResolver $bookingUrlResolver,
+        private readonly BookingAvailabilityResolver $bookingAvailabilityResolver,
+    ) {}
 
     /**
      * @return Collection<int, array{
@@ -22,7 +28,8 @@ class TripDecisionBuilder
      *     target_count: int,
      *     source_url: ?string,
      *     source_highlight_url: ?string,
-     *     booking_url: ?string
+     *     booking_url: ?string,
+     *     booking_availability: array<string, mixed>
      * }>
      */
     public function rankedTrips(AlertRule $rule, CarbonImmutable $from, CarbonImmutable $to, int $limit = 5): Collection
@@ -37,8 +44,8 @@ class TripDecisionBuilder
                 ->where('is_retained_count', true)
                 ->where('count', '>', 0))
             ->with([
-                'boat:id,name,booking_url',
-                'landing:id,name,website_url',
+                'boat:id,landing_id,name,slug,booking_url,booking_provider_identifier',
+                'landing:id,name,website_url,booking_provider,booking_base_url',
                 'rawScrapePayload:id,url',
                 'speciesCounts.species:id,name',
                 'tripType:id,name',
@@ -101,9 +108,14 @@ class TripDecisionBuilder
         $sourceUrl = $tripReport->rawScrapePayload?->url;
         $boatName = $tripReport->boat?->name ?? $tripReport->raw_boat_name ?? 'Unknown boat';
         $landingName = $tripReport->landing?->name ?? $tripReport->raw_landing_name ?? 'Unknown landing';
-        $bookingUrl = $tripReport->boat?->booking_url
-            ?? $tripReport->landing?->website_url
-            ?? $sourceUrl;
+        $availability = $this->bookingAvailabilityResolver->resolve(
+            $tripReport->boat,
+            $tripReport->landing,
+            $tripReport->trip_date->toImmutable(),
+            $tripReport->tripType?->name ?? $tripReport->raw_trip_type,
+            $sourceUrl,
+        );
+        $bookingUrl = $availability->bookingUrl ?? $this->bookingUrlResolver->resolve($tripReport->boat, $tripReport->landing, $sourceUrl);
 
         return [
             'boat_name' => $boatName,
@@ -119,6 +131,14 @@ class TripDecisionBuilder
                 $this->targetCountText($tripReport, $rule, $targetCount),
             ),
             'booking_url' => $bookingUrl,
+            'booking_availability' => $availability->toArray(),
+            'booking_provider_trip_id' => $availability->providerTripId,
+            'booking_is_direct' => $availability->isDirectBooking,
+            'booking_open_spots' => $availability->openSpots,
+            'booking_availability_pulled_at' => $availability->availabilityPulledAt?->toIso8601String(),
+            'booking_availability_pulled_at_display' => $availability->availabilityPulledAtDisplay(),
+            'booking_status_text' => $availability->statusText,
+            'booking_fallback_reason' => $availability->fallbackReason,
         ];
     }
 

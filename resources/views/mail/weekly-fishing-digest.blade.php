@@ -55,6 +55,9 @@ No booking links are available for the ranked boats.
 @else
 @foreach ($summary['trip_recommendations'] as $trip)
 - {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} on {{ $trip['trip_date'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $summary['species_name'] }}) - [Book]({{ $trip['booking_url'] }})
+@if (isset($trip['booking_open_spots'], $trip['booking_availability_pulled_at_display']) && $trip['booking_open_spots'] !== null)
+  {{ $trip['booking_open_spots'] }} spots open, checked {{ $trip['booking_availability_pulled_at_display'] }}.
+@endif
 @endforeach
 @endif
 @endif

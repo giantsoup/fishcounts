@@ -7,10 +7,19 @@ use App\Services\Environmental\EnvironmentalConditionFormatter;
 use App\Services\Notifications\TripDecisionBuilder;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Collection;
 
 class HotBiteAlertNotification extends Notification
 {
-    public function __construct(public readonly AlertEvent $alertEvent) {}
+    /**
+     * @param  Collection<int, array<string, mixed>>|null  $tripOptions
+     * @param  Collection<int, array<string, mixed>>|null  $tripRecommendations
+     */
+    public function __construct(
+        public readonly AlertEvent $alertEvent,
+        public readonly ?Collection $tripOptions = null,
+        public readonly ?Collection $tripRecommendations = null,
+    ) {}
 
     /** @return array<int, string> */
     public function via(object $notifiable): array
@@ -25,11 +34,12 @@ class HotBiteAlertNotification extends Notification
         $scoreResult = $this->alertEvent->scoreResult;
         $tripDecisionBuilder = app(TripDecisionBuilder::class);
         $environmentalCondition = app(EnvironmentalConditionFormatter::class)->forDate($this->alertEvent->event_date->toImmutable());
-        $tripOptions = $tripDecisionBuilder->rankedTrips(
+        $tripOptions = $this->tripOptions ?? $tripDecisionBuilder->rankedTrips(
             $rule,
             $this->alertEvent->event_date->toImmutable(),
             $this->alertEvent->event_date->toImmutable(),
         );
+        $tripRecommendations = $this->tripRecommendations ?? $tripDecisionBuilder->recommendedBoats($tripOptions);
 
         return (new MailMessage)
             ->subject("Hot bite alert: {$rule->name}")
@@ -40,7 +50,7 @@ class HotBiteAlertNotification extends Notification
                 'scoreResult' => $scoreResult,
                 'scoresUrl' => route('scores.index'),
                 'tripOptions' => $tripOptions,
-                'tripRecommendations' => $tripDecisionBuilder->recommendedBoats($tripOptions),
+                'tripRecommendations' => $tripRecommendations,
                 'environmentalCondition' => $environmentalCondition,
             ]);
     }

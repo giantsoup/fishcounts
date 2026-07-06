@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\BookingProvider;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +17,10 @@ class Landing extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'booking_provider' => BookingProvider::class,
+            'is_active' => 'boolean',
+        ];
     }
 
     /** @return BelongsTo<Region, $this> */

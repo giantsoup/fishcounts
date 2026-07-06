@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\BookingProvider;
 use App\Enums\ScoreLevel;
 use App\Enums\SourceType;
 use App\Models\AlertRule;
@@ -22,6 +23,7 @@ use App\Models\User;
 use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class WeeklyDigestBuilderTest extends TestCase
@@ -30,6 +32,11 @@ class WeeklyDigestBuilderTest extends TestCase
 
     public function test_weekly_digest_includes_trend_best_day_ranked_trip_options_and_recommendations(): void
     {
+        Http::preventStrayRequests();
+        Http::fake([
+            'pointloma.fishingreservations.net/*' => Http::response('<html><body><table></table></body></html>', 200),
+        ]);
+
         $user = User::factory()->create();
         $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
         $landing = Landing::query()->create([
@@ -37,6 +44,8 @@ class WeeklyDigestBuilderTest extends TestCase
             'name' => 'Point Loma Sportfishing',
             'slug' => 'point-loma',
             'website_url' => 'https://landing.example.test/point-loma',
+            'booking_provider' => BookingProvider::FishingReservations,
+            'booking_base_url' => 'https://pointloma.fishingreservations.net/sales/',
         ]);
         $topBoat = Boat::query()->create([
             'landing_id' => $landing->id,
@@ -44,7 +53,12 @@ class WeeklyDigestBuilderTest extends TestCase
             'slug' => 'new-lo-an',
             'booking_url' => 'https://booking.example.test/new-lo-an',
         ]);
-        $secondBoat = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Mission Belle', 'slug' => 'mission-belle']);
+        $secondBoat = Boat::query()->create([
+            'landing_id' => $landing->id,
+            'name' => 'Mission Belle',
+            'slug' => 'mission-belle',
+            'booking_provider_identifier' => '214',
+        ]);
         $sourceFallbackLanding = Landing::query()->create([
             'region_id' => $region->id,
             'name' => 'No Website Landing',
@@ -210,7 +224,7 @@ class WeeklyDigestBuilderTest extends TestCase
         $this->assertArrayNotHasKey('counts_url', $tripOptions[0]);
         $this->assertSame('Mission Belle', $tripOptions[1]['boat_name']);
         $this->assertSame('https://www.pointlomasportfishing.com/fishcounts.php#:~:text=Mission%20Belle', $tripOptions[1]['source_highlight_url']);
-        $this->assertSame('https://landing.example.test/point-loma', $tripOptions[1]['booking_url']);
+        $this->assertSame('https://pointloma.fishingreservations.net/sales/?boat_filter%5B0%5D=214', $tripOptions[1]['booking_url']);
         $this->assertSame('Searcher', $tripOptions[2]['boat_name']);
         $this->assertSame('https://www.pointlomasportfishing.com/fishcounts.php', $tripOptions[2]['booking_url']);
         $this->assertCount(3, $tripRecommendations);
@@ -222,7 +236,7 @@ class WeeklyDigestBuilderTest extends TestCase
         $this->assertStringContainsString('conditions moon New Moon; water 67.8 F; swell 2.1 ft @ 11s SSW.', $content);
         $this->assertStringContainsString('trend +27', $content);
         $this->assertStringContainsString('ranked trips: New Lo-An 3/4 Day 6/17/26 60 target, Mission Belle 3/4 Day 6/17/26 40 target, Searcher 3/4 Day 6/16/26 25 target', $content);
-        $this->assertStringContainsString('recommended: New Lo-An 3/4 Day 6/17/26, Mission Belle 3/4 Day 6/17/26, Searcher 3/4 Day 6/16/26', $content);
+        $this->assertStringContainsString('recommended: New Lo-An 3/4 Day 6/17/26 https://booking.example.test/new-lo-an, Mission Belle 3/4 Day 6/17/26 https://pointloma.fishingreservations.net/sales/?boat_filter%5B0%5D=214, Searcher 3/4 Day 6/16/26 https://www.pointlomasportfishing.com/fishcounts.php', $content);
         $this->assertStringNotContainsString('/angler', $content);
     }
 

@@ -8,12 +8,17 @@ use App\Services\Notifications\WeeklyDigestBuilder;
 use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Collection;
 
 class WeeklyFishingDigestNotification extends Notification
 {
+    /**
+     * @param  Collection<int, array<string, mixed>>|null  $summaries
+     */
     public function __construct(
         public readonly User $user,
         public readonly CarbonImmutable $weekEnding,
+        public readonly ?Collection $summaries = null,
     ) {}
 
     /** @return array<int, string> */
@@ -29,7 +34,7 @@ class WeeklyFishingDigestNotification extends Notification
             ->markdown('mail.weekly-fishing-digest', [
                 'weeklyEnvironmentalLine' => app(EnvironmentalConditionFormatter::class)->weeklyLine($this->weekEnding->subDays(6), $this->weekEnding),
                 'scoresUrl' => route('scores.index'),
-                'summaries' => app(WeeklyDigestBuilder::class)->summaries($this->user, $this->weekEnding),
+                'summaries' => $this->summaries ?? app(WeeklyDigestBuilder::class)->summaries($this->user, $this->weekEnding),
                 'weekEnding' => $this->weekEnding,
             ]);
     }

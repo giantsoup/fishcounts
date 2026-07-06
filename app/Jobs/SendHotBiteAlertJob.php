@@ -10,9 +10,12 @@ use App\Models\NotificationDelivery;
 use App\Models\NotificationDestination;
 use App\Notifications\HotBiteAlertNotification;
 use App\Services\Notifications\DiscordWebhookSender;
+use App\Services\Notifications\TripDecisionBuilder;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
 
@@ -35,7 +38,7 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
         return [60, 300, 900];
     }
 
-    public function handle(DiscordWebhookSender $discord): void
+    public function handle(DiscordWebhookSender $discord, TripDecisionBuilder $tripDecisionBuilder): void
     {
         $event = AlertEvent::query()->with(['user.notificationDestinations', 'alertRule.species', 'scoreResult'])->findOrFail($this->alertEventId);
 
@@ -45,6 +48,28 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
 
         $destination = $this->destination($event);
 
+        if ($this->channel === NotificationChannel::Discord && $destination === null) {
+            NotificationDelivery::query()->create([
+                'alert_event_id' => $event->id,
+                'user_id' => $event->user_id,
+                'channel' => $this->channel,
+                'notification_type' => HotBiteAlertNotification::class,
+                'status' => NotificationDeliveryStatus::Skipped,
+                'attempted_at' => now(),
+                'failed_at' => now(),
+                'error_message' => 'No enabled Discord destination.',
+            ]);
+
+            return;
+        }
+
+        $tripOptions = $tripDecisionBuilder->rankedTrips(
+            $event->alertRule,
+            CarbonImmutable::parse($event->event_date),
+            CarbonImmutable::parse($event->event_date),
+        );
+        $tripRecommendations = $tripDecisionBuilder->recommendedBoats($tripOptions);
+
         $delivery = NotificationDelivery::query()->create([
             'alert_event_id' => $event->id,
             'user_id' => $event->user_id,
@@ -53,21 +78,20 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
             'notification_type' => HotBiteAlertNotification::class,
             'status' => NotificationDeliveryStatus::Pending,
             'attempted_at' => now(),
+            'metadata' => [
+                'booking_availability' => $this->bookingAvailabilityMetadata($tripRecommendations),
+            ],
         ]);
 
         try {
             if ($this->channel === NotificationChannel::Email) {
-                Notification::sendNow($event->user, new HotBiteAlertNotification($event));
+                Notification::sendNow($event->user, new HotBiteAlertNotification($event, $tripOptions, $tripRecommendations));
                 $event->update(['email_sent_at' => now()]);
-            } elseif ($destination !== null) {
+            } else {
                 $discord->send($destination->destination, [
                     'content' => "**Hot bite alert: {$event->alertRule->name}**\n{$event->alertRule->species->name} scored {$event->score} for {$event->event_date->toDateString()}.",
                 ]);
                 $event->update(['discord_sent_at' => now()]);
-            } else {
-                $delivery->update(['status' => NotificationDeliveryStatus::Skipped, 'failed_at' => now(), 'error_message' => 'No enabled Discord destination.']);
-
-                return;
             }
 
             $delivery->update(['status' => NotificationDeliveryStatus::Sent, 'sent_at' => now()]);
@@ -115,5 +139,23 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
     private function maskedError(Throwable $throwable): string
     {
         return str($throwable->getMessage())->replaceMatches('/https:\/\/discord\.com\/api\/webhooks\/[^\s]+/', 'https://discord.com/api/webhooks/[masked]')->limit(1000)->toString();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $tripRecommendations
+     * @return array<int, array<string, mixed>>
+     */
+    private function bookingAvailabilityMetadata(Collection $tripRecommendations): array
+    {
+        return $tripRecommendations
+            ->map(fn (array $trip): array => [
+                'boat_name' => $trip['boat_name'],
+                'landing_name' => $trip['landing_name'],
+                'trip_type' => $trip['trip_type'],
+                'trip_date' => $trip['trip_date'],
+                'booking_availability' => $trip['booking_availability'] ?? null,
+            ])
+            ->values()
+            ->all();
     }
 }

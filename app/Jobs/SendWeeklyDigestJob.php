@@ -13,6 +13,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Notification;
 use Throwable;
 
@@ -40,6 +41,24 @@ class SendWeeklyDigestJob implements ShouldBeUnique, ShouldQueue
         $destination = $user->notificationDestinations
             ->first(fn ($destination): bool => $destination->channel === $this->channel && $destination->is_enabled);
 
+        if ($this->channel === NotificationChannel::Discord && $destination === null) {
+            NotificationDelivery::query()->create([
+                'user_id' => $user->id,
+                'channel' => $this->channel,
+                'notification_type' => WeeklyFishingDigestNotification::class,
+                'status' => NotificationDeliveryStatus::Skipped,
+                'attempted_at' => now(),
+                'failed_at' => now(),
+                'error_message' => 'No enabled destination.',
+                'metadata' => ['week_ending' => $this->date],
+            ]);
+
+            return;
+        }
+
+        $weekEnding = CarbonImmutable::parse($this->date);
+        $summaries = $digestBuilder->summaries($user, $weekEnding);
+
         $delivery = NotificationDelivery::query()->create([
             'user_id' => $user->id,
             'notification_destination_id' => $destination?->id,
@@ -47,20 +66,19 @@ class SendWeeklyDigestJob implements ShouldBeUnique, ShouldQueue
             'notification_type' => WeeklyFishingDigestNotification::class,
             'status' => NotificationDeliveryStatus::Pending,
             'attempted_at' => now(),
-            'metadata' => ['week_ending' => $this->date],
+            'metadata' => [
+                'week_ending' => $this->date,
+                'booking_availability' => $this->bookingAvailabilityMetadata($summaries),
+            ],
         ]);
 
         try {
             if ($this->channel === NotificationChannel::Email) {
-                Notification::sendNow($user, new WeeklyFishingDigestNotification($user, CarbonImmutable::parse($this->date)));
-            } elseif ($destination !== null) {
-                $discord->send($destination->destination, [
-                    'content' => $digestBuilder->discordContent($user, CarbonImmutable::parse($this->date)),
-                ]);
+                Notification::sendNow($user, new WeeklyFishingDigestNotification($user, $weekEnding, $summaries));
             } else {
-                $delivery->update(['status' => NotificationDeliveryStatus::Skipped, 'failed_at' => now(), 'error_message' => 'No enabled destination.']);
-
-                return;
+                $discord->send($destination->destination, [
+                    'content' => $digestBuilder->discordContent($user, $weekEnding, $summaries),
+                ]);
             }
 
             $delivery->update(['status' => NotificationDeliveryStatus::Sent, 'sent_at' => now()]);
@@ -89,5 +107,30 @@ class SendWeeklyDigestJob implements ShouldBeUnique, ShouldQueue
             ->where('status', NotificationDeliveryStatus::Sent)
             ->where('metadata->week_ending', $this->date)
             ->exists();
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $summaries
+     * @return array<int, array<string, mixed>>
+     */
+    private function bookingAvailabilityMetadata(Collection $summaries): array
+    {
+        return $summaries
+            ->filter(fn (array $summary): bool => (bool) ($summary['has_scores'] ?? false))
+            ->map(fn (array $summary): array => [
+                'rule_name' => $summary['rule_name'],
+                'trip_recommendations' => $summary['trip_recommendations']
+                    ->map(fn (array $trip): array => [
+                        'boat_name' => $trip['boat_name'],
+                        'landing_name' => $trip['landing_name'],
+                        'trip_type' => $trip['trip_type'],
+                        'trip_date' => $trip['trip_date'],
+                        'booking_availability' => $trip['booking_availability'] ?? null,
+                    ])
+                    ->values()
+                    ->all(),
+            ])
+            ->values()
+            ->all();
     }
 }
