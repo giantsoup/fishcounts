@@ -13,11 +13,11 @@ class SpeciesAliasSeeder extends Seeder
     {
         $aliases = [
             'yellowtail' => ['YT', 'Yellows'],
-            'bluefin-tuna' => ['Bluefin', 'BFT'],
+            'bluefin-tuna' => ['Bluefin', 'BFT', 'Bleufin Tuna'],
             'yellowfin-tuna' => ['Yellowfin', 'YFT'],
             'calico-bass' => ['Calicos'],
             'sand-bass' => ['Sandbass', 'Barred Sand Bass'],
-            'rockfish' => ['Misc Rockfish', 'Misc. Rockfish', 'Mixed Rockfish', 'Vermilion Rockfish', 'Vermillion Rockfish', 'Vermillion Red Rockfish', 'Red Rockfish'],
+            'rockfish' => ['Assorted Rockfish', 'Lings', 'Misc Rockfish', 'Misc. Rockfish', 'Mixed Rockfish', 'Reds', 'Vermilion Rockfish', 'Vermillion Rockfish', 'Vermillion Red Rockfish', 'Vermilliion Reds', 'Red Rockfish'],
         ];
 
         foreach ($aliases as $slug => $values) {

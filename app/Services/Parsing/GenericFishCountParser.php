@@ -71,15 +71,24 @@ class GenericFishCountParser
 
         $line = Str::of($line)
             ->replace("\u{00A0}", ' ')
+            ->replaceMatches('/\bamd\b/i', 'and')
+            ->replaceMatches('/\bBleufin\s+Tuna\b/i', 'Bluefin Tuna')
+            ->replaceMatches('/\bC\s+Alico\s+Bass\b/i', 'Calico Bass')
             ->replaceMatches('/\([^)]*\b(?:lbs?|pounds?)\b[^)]*\)/i', '')
             ->replaceMatches('/\bMisc\.\s+/i', 'Misc ')
-            ->replaceMatches('/\bfrom\s+(?:\d+\s*(?:-|to)\s*\d+|up to\s+\d+|\d+)\s*(?:lbs?|pounds?)\b/i', '')
-            ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\ball\s+over\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\b(?:from|at|over)\s+(?:\d+\s*(?:-|to|\x{2013})\s*\d+|up to\s+\d+|\d+)\s*(?:lbs?|pounds?)\b/iu', '')
+            ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to|\x{2013})\s*\d+\s*(?:lbs?|pounds?)\b/iu', '')
             ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\b\d+(?:\/\d+)?\s*oz\b/i', '')
+            ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter)\b/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+aboard)?/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
             ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
-            ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:trip\s+)?(?:with|wth)\b/i', '')
-            ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter))?/i', '')
+            ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:trip\s+|today\s+)?(?:with|wth)\b/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+)?\d+\s+(?:anglers?|people|passengers?)\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
             ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
             ->toString();
@@ -107,7 +116,10 @@ class GenericFishCountParser
             ->filter(fn (ParsedSpeciesCountData $count): bool => $count->speciesName !== '' && ! in_array(Str::lower($count->speciesName), [
                 'lbs',
                 'lb',
+                'pound',
+                'pounds',
                 'day',
+                'day trip',
                 'day with',
                 'boats',
                 'trips',
@@ -185,6 +197,8 @@ class GenericFishCountParser
         }
 
         return Str::of($normalized)
+            ->replaceMatches('/\s+Trip\s+With$/i', '')
+            ->replaceMatches('/\s+With$/i', '')
             ->replaceMatches('/\s+Trip$/i', '')
             ->toString();
     }

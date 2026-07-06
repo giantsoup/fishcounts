@@ -332,7 +332,7 @@ class SourceSpecificFishCountParser
     {
         $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*Day|Half\s+Day|Full\s+Day|Overnight|Twilight';
 
-        return '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,60}?)(?:\'s)?\s+(?:(?:checked in|just checked in|returned|finished up)\s+(?:from\s+)?their\s+)?(?<trip>'.$tripPattern.')(?:\s+trip)?\s+(?:finished\s+)?(?:with|wth)\b/i';
+        return '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,60}?)(?:\'s)?\s+(?:(?:checked in|just checked in|returned|finished up)\s+(?:from\s+)?their\s+)?(?<trip>'.$tripPattern.')(?:\s+trip)?(?:\s+today)?\s+(?:finished\s+)?(?:with|wth)\b/i';
     }
 
     /** @param Collection<int, string> $cells */
