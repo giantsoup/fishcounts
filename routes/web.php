@@ -60,7 +60,8 @@ Route::middleware('auth')->group(function (): void {
         Route::post('users/{user}/password-reset', [UserController::class, 'sendPasswordResetLink'])->name('users.password-reset');
         Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
         Route::resource('sources', ScrapeSourceController::class)->only(['index', 'update']);
-        Route::resource('boats', BoatController::class)->only(['index', 'update']);
+        Route::resource('boats', BoatController::class)->only(['index', 'store', 'update']);
+        Route::post('boats/aliases', [BoatController::class, 'storeAlias'])->name('boat-aliases.store');
         Route::get('backfills/poll', [BackfillController::class, 'poll'])->name('backfills.poll');
         Route::resource('backfills', BackfillController::class)->only(['index', 'create', 'store', 'show'])->parameters(['backfills' => 'backfillRun']);
         Route::get('backfills/{backfillRun}/reparse-poll', [BackfillController::class, 'pollReparse'])->name('backfills.reparse-poll');

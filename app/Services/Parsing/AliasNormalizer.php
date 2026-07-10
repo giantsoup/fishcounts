@@ -3,6 +3,7 @@
 namespace App\Services\Parsing;
 
 use App\Models\Boat;
+use App\Models\BoatAlias;
 use App\Models\Landing;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -79,16 +80,27 @@ class AliasNormalizer
         return $landing;
     }
 
-    public function boat(?string $rawValue, ?Landing $landing): ?Boat
+    public function boat(?string $rawValue, ?Landing $landing, RawScrapePayload $payload): ?Boat
     {
         if ($rawValue === null || trim($rawValue) === '') {
             return null;
         }
 
-        $boat = Boat::query()->firstOrCreate(
-            ['slug' => Str::slug($rawValue)],
-            ['name' => Str::title($rawValue), 'landing_id' => $landing?->id],
-        );
+        $normalized = BoatNameNormalizer::normalize($rawValue);
+        $alias = BoatAlias::query()
+            ->whereHas('boat', fn ($query) => $query->where('is_active', true))
+            ->whereIn('normalized_alias', [$normalized, Str::of($rawValue)->lower()->squish()->toString()])
+            ->first();
+        $boat = $alias?->boat ?? Boat::query()
+            ->where('slug', Str::slug($rawValue))
+            ->where('is_active', true)
+            ->first();
+
+        if ($boat === null) {
+            $this->recordUnknown($payload, 'unknown_boat_alias', 'boat', $rawValue);
+
+            return null;
+        }
 
         if ($boat->landing_id === null && $landing !== null) {
             $boat->update(['landing_id' => $landing->id]);

@@ -9,6 +9,7 @@ use App\DTOs\RawPayloadData;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Models\Boat;
+use App\Models\BoatAlias;
 use App\Models\Landing;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
@@ -176,6 +177,57 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame('Dolphin', $report->raw_boat_name);
         $this->assertSame('1/2 Day AM', $report->raw_trip_type);
         $this->assertSame($landing->id, $boat->refresh()->landing_id);
+    }
+
+    public function test_boat_alias_resolves_to_canonical_boat_without_creating_a_duplicate(): void
+    {
+        $source = ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => '2026-07-09',
+        ]);
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-09',
+            'url' => 'https://www.fishermanslanding.com/fishcounts.php',
+            'payload' => 'fixture',
+            'payload_hash' => hash('sha256', 'boat-alias-fixture'),
+            'fetched_at' => now(),
+        ]);
+        $boat = Boat::query()->create(['name' => 'Pacific Queen', 'slug' => 'pacific-queen']);
+        BoatAlias::query()->create(['boat_id' => $boat->id, 'alias' => 'The Pacific Queen', 'normalized_alias' => 'the pacific queen']);
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        SpeciesAlias::query()->create(['species_id' => $species->id, 'alias' => 'Yellowtail', 'normalized_alias' => 'yellowtail']);
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+        TripTypeAlias::query()->create(['trip_type_id' => $tripType->id, 'alias' => 'Full Day', 'normalized_alias' => 'full day']);
+
+        $parsed = new ParsedFishCountCollection(collect([
+            new ParsedTripReportData(
+                sourceKey: $source->slug,
+                tripDate: CarbonImmutable::parse('2026-07-09'),
+                regionName: 'San Diego',
+                landingName: 'Fisherman\'s Landing',
+                boatName: 'The Pacific Queen',
+                tripTypeName: 'Full Day',
+                anglers: 20,
+                rawFishCountText: '10 Yellowtail',
+                speciesCounts: [new ParsedSpeciesCountData('Yellowtail', 10, 0, '10 Yellowtail')],
+                metadata: ['parser' => 'test'],
+            ),
+        ]));
+
+        app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $this->assertSame(1, Boat::query()->count());
+        $this->assertSame($boat->id, TripReport::query()->firstOrFail()->boat_id);
+        $this->assertDatabaseMissing('parser_errors', ['error_type' => 'unknown_boat_alias']);
     }
 
     public function test_normalizer_skips_parsed_reports_without_individual_boats(): void

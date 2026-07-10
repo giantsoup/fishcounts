@@ -11,6 +11,7 @@ use App\Models\ScrapeSource;
 use App\Models\SpeciesCount;
 use App\Models\TripReport;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -47,9 +48,9 @@ class TripReportNormalizer
                 $region = $this->normalizer->region($report->regionName);
                 $landingName = $report->landingName ?? $this->landingNameFromSource($source);
                 $landing = $this->normalizer->landing($landingName, $region);
-                $boat = $this->normalizer->boat($report->boatName, $landing);
+                $boat = $this->normalizer->boat($report->boatName, $landing, $payload);
                 $tripType = $this->normalizer->tripType($report->tripTypeName, $payload);
-                $dedupeKey = $this->dedupeKey($source, $report->tripDate->toDateString(), $report->boatName, $report->tripTypeName, $report->anglers);
+                $dedupeKey = $this->dedupeKey($report->tripDate->toDateString(), $boat?->name ?? $report->boatName, $report->tripTypeName, $report->anglers);
 
                 if ($this->isSportfishingReportFallbackSource($source) && $this->directLandingReportExists($report->tripDate->toDateString(), $boat?->id, $tripType?->id)) {
                     continue;
@@ -179,20 +180,61 @@ class TripReportNormalizer
 
     public function refreshPrimaryReports(string $date): void
     {
-        TripReport::query()
-            ->whereDate('trip_date', $date)
+        $this->refreshPrimaryReportsForDates([$date]);
+    }
+
+    /** @param  array<int, string>  $dates */
+    public function refreshPrimaryReportsForDates(array $dates): void
+    {
+        $dates = collect($dates)->filter()->unique()->values();
+
+        if ($dates->isEmpty()) {
+            return;
+        }
+
+        $this->whereTripDates(TripReport::query(), $dates)
             ->update(['is_deduped_primary' => false]);
 
-        TripReport::query()
-            ->whereDate('trip_date', $date)
+        $primaryReportIds = [];
+        $previousGroup = null;
+
+        foreach ($this->whereTripDates(TripReport::query(), $dates)
+            ->select(['id', 'trip_date', 'dedupe_key'])
+            ->orderBy('trip_date')
+            ->orderBy('dedupe_key')
             ->orderByDesc('source_confidence')
             ->orderBy('source_id')
             ->orderBy('id')
-            ->get()
-            ->groupBy('dedupe_key')
-            ->each(function ($reports): void {
-                $reports->first()->update(['is_deduped_primary' => true]);
+            ->cursor() as $tripReport) {
+            $group = $tripReport->trip_date->toDateString().'|'.$tripReport->dedupe_key;
+
+            if ($group === $previousGroup) {
+                continue;
+            }
+
+            $primaryReportIds[] = $tripReport->id;
+            $previousGroup = $group;
+        }
+
+        collect($primaryReportIds)
+            ->chunk(1000)
+            ->each(fn ($ids) => TripReport::query()->whereKey($ids->all())->update(['is_deduped_primary' => true]));
+    }
+
+    /** @param  Collection<int, string>  $dates */
+    private function whereTripDates(Builder $query, Collection $dates): Builder
+    {
+        return $query->where(function (Builder $query) use ($dates): void {
+            $dates->each(function (string $date, int $index) use ($query): void {
+                if ($index === 0) {
+                    $query->whereDate('trip_date', $date);
+
+                    return;
+                }
+
+                $query->orWhereDate('trip_date', $date);
             });
+        });
     }
 
     private function storeSpeciesCount(RawScrapePayload $payload, TripReport $tripReport, ParsedSpeciesCountData $speciesCount): void
@@ -224,7 +266,7 @@ class TripReportNormalizer
         $storedCount->save();
     }
 
-    private function dedupeKey(ScrapeSource $source, string $date, ?string $boat, ?string $tripType, ?int $anglers): string
+    public function dedupeKey(string $date, ?string $boat, ?string $tripType, ?int $anglers): string
     {
         return Str::of(implode('|', [
             $date,

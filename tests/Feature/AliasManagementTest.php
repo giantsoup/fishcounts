@@ -3,10 +3,16 @@
 namespace Tests\Feature;
 
 use App\Enums\SourceType;
+use App\Models\AlertRule;
+use App\Models\Boat;
+use App\Models\BoatAlias;
+use App\Models\Landing;
 use App\Models\ParserError;
+use App\Models\Region;
 use App\Models\ScrapeSource;
 use App\Models\Species;
 use App\Models\SpeciesAlias;
+use App\Models\TripReport;
 use App\Models\TripType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,6 +21,230 @@ use Tests\TestCase;
 class AliasManagementTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_admin_can_view_boat_management_page(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.boats.index'))
+            ->assertOk()
+            ->assertSeeText('Active boats')
+            ->assertSeeText('Dolphin')
+            ->assertSeeText('Select a boat to edit it or consolidate another name into it.')
+            ->assertSee('Save boat');
+    }
+
+    public function test_admin_can_create_boat(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Seaforth Landing', 'slug' => 'seaforth-landing']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.boats.store'), [
+                'boat_name' => 'New Seaforth',
+                'landing_id' => $landing->id,
+            ])
+            ->assertRedirect(route('admin.boats.index'))
+            ->assertSessionHas('status', 'Boat saved.');
+
+        $this->assertDatabaseHas('boats', [
+            'landing_id' => $landing->id,
+            'name' => 'New Seaforth',
+            'slug' => 'new-seaforth',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_admin_can_consolidate_existing_boat_variant(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $source = $this->source();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $canonicalBoat = Boat::query()->create([
+            'name' => 'Pacific Queen',
+            'slug' => 'pacific-queen',
+            'booking_url' => 'https://canonical.example.test',
+        ]);
+        $variantBoat = Boat::query()->create([
+            'name' => 'The Pacific Queen',
+            'slug' => 'the-pacific-queen',
+            'booking_url' => 'https://variant.example.test',
+            'booking_provider_identifier' => 'provider-42',
+        ]);
+        BoatAlias::query()->create([
+            'boat_id' => $variantBoat->id,
+            'alias' => 'The Pacific Queen',
+            'normalized_alias' => 'the pacific queen',
+        ]);
+        $tripReport = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => $variantBoat->id,
+            'trip_date' => '2026-07-09',
+            'dedupe_key' => 'variant-report',
+            'source_confidence' => 80,
+        ]);
+        $canonicalTripReport = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => $canonicalBoat->id,
+            'trip_date' => '2026-07-09',
+            'dedupe_key' => '2026-07-09|pacific-queen|unknown-trip|unknown-anglers',
+            'source_confidence' => 90,
+        ]);
+        $alertRule = AlertRule::query()->create([
+            'user_id' => $admin->id,
+            'name' => 'Yellowtail alert',
+            'species_id' => $species->id,
+        ]);
+        $alertRule->boats()->attach($variantBoat);
+
+        $this->actingAs($admin)
+            ->post(route('admin.boat-aliases.store'), [
+                'boat_id' => $canonicalBoat->id,
+                'alias' => 'The Pacific Queen',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Boat alias saved.')
+            ->assertSessionHas('selected_boat_id', $canonicalBoat->id);
+
+        $this->assertDatabaseHas('boat_aliases', [
+            'boat_id' => $canonicalBoat->id,
+            'alias' => 'The Pacific Queen',
+            'normalized_alias' => 'the pacific queen',
+        ]);
+        $this->assertSame($canonicalBoat->id, $tripReport->fresh()->boat_id);
+        $this->assertFalse($tripReport->fresh()->is_deduped_primary);
+        $this->assertTrue($canonicalTripReport->fresh()->is_deduped_primary);
+        $this->assertFalse($variantBoat->fresh()->is_active);
+        $this->assertSame('https://canonical.example.test', $canonicalBoat->fresh()->booking_url);
+        $this->assertSame('provider-42', $canonicalBoat->fresh()->booking_provider_identifier);
+        $this->assertDatabaseHas('alert_rule_boat', [
+            'alert_rule_id' => $alertRule->id,
+            'boat_id' => $canonicalBoat->id,
+        ]);
+        $this->assertDatabaseMissing('alert_rule_boat', [
+            'alert_rule_id' => $alertRule->id,
+            'boat_id' => $variantBoat->id,
+        ]);
+    }
+
+    public function test_admin_can_resolve_boat_parser_error_by_creating_alias(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $source = $this->source();
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        $error = ParserError::query()->create([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-09',
+            'error_type' => 'unknown_boat_alias',
+            'raw_field' => 'boat',
+            'raw_value' => 'The Dolphin',
+            'message' => 'Unknown boat alias [The Dolphin].',
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.boat-aliases.store'), [
+                'boat_id' => $boat->id,
+                'alias' => 'The Dolphin',
+                'parser_error_id' => $error->id,
+            ])
+            ->assertRedirect();
+
+        $this->assertNotNull($error->fresh()->resolved_at);
+        $this->assertSame($admin->id, $error->fresh()->resolved_by_user_id);
+    }
+
+    public function test_creating_boat_alias_backfills_previously_unmatched_reports(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $source = $this->source();
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        $tripReport = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => null,
+            'trip_date' => '2026-07-09',
+            'raw_boat_name' => 'The Dolphin',
+            'raw_trip_type' => 'Full Day',
+            'anglers' => 20,
+            'dedupe_key' => 'unmatched-report',
+            'is_deduped_primary' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.boat-aliases.store'), [
+                'boat_id' => $boat->id,
+                'alias' => 'The Dolphin',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $tripReport->refresh();
+
+        $this->assertSame($boat->id, $tripReport->boat_id);
+        $this->assertSame('2026-07-09|dolphin|full-day|20', $tripReport->dedupe_key);
+        $this->assertTrue($tripReport->is_deduped_primary);
+    }
+
+    public function test_existing_normalized_boat_alias_is_idempotent_and_resolves_variants(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $source = $this->source();
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        BoatAlias::query()->create(['boat_id' => $boat->id, 'alias' => 'The Dolphin', 'normalized_alias' => 'the dolphin']);
+        $reports = collect(['The Dolphin', 'THE DOLPHIN!'])->map(fn (string $rawBoatName, int $index): TripReport => TripReport::query()->create([
+            'source_id' => $source->id,
+            'trip_date' => '2026-07-09',
+            'raw_boat_name' => $rawBoatName,
+            'dedupe_key' => 'unmatched-'.$index,
+        ]));
+        $errors = collect(['The Dolphin', 'THE DOLPHIN!'])->map(fn (string $rawBoatName): ParserError => ParserError::query()->create([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-09',
+            'error_type' => 'unknown_boat_alias',
+            'raw_field' => 'boat',
+            'raw_value' => $rawBoatName,
+            'message' => "Unknown boat alias [{$rawBoatName}].",
+        ]));
+        $unrelatedError = ParserError::query()->create([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-09',
+            'error_type' => 'unexpected_boat_data',
+            'raw_field' => 'boat',
+            'raw_value' => 'The Dolphin',
+            'message' => 'Unexpected boat data.',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.boats.index'))
+            ->post(route('admin.boat-aliases.store'), [
+                'boat_id' => $boat->id,
+                'alias' => 'THE DOLPHIN!',
+            ])
+            ->assertRedirect(route('admin.boats.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(1, BoatAlias::query()->count());
+        $this->assertSame([$boat->id], $reports->map(fn (TripReport $tripReport): ?int => $tripReport->fresh()->boat_id)->unique()->values()->all());
+        $this->assertTrue($errors->every(fn (ParserError $parserError): bool => $parserError->fresh()->resolved_at !== null));
+        $this->assertNull($unrelatedError->fresh()->resolved_at);
+    }
+
+    public function test_boat_cannot_be_created_from_an_existing_alias(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        BoatAlias::query()->create(['boat_id' => $boat->id, 'alias' => 'The Dolphin', 'normalized_alias' => 'the dolphin']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.boats.index'))
+            ->post(route('admin.boats.store'), ['boat_name' => 'The Dolphin!'])
+            ->assertRedirect(route('admin.boats.index'))
+            ->assertSessionHasErrors('boat_name');
+
+        $this->assertSame(1, Boat::query()->count());
+    }
 
     public function test_admin_can_view_species_management_page(): void
     {

@@ -39,7 +39,19 @@
                         </div>
 
                         <div>
-                            @if (! $error->resolved_at && $error->error_type === 'unknown_species_alias' && $error->raw_value)
+                            @if (! $error->resolved_at && $error->error_type === 'unknown_boat_alias' && $error->raw_value)
+                                <form method="POST" action="{{ route('admin.boat-aliases.store') }}" class="space-y-2">
+                                    @csrf
+                                    <input type="hidden" name="alias" value="{{ $error->raw_value }}">
+                                    <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
+                                    <x-form.select name="boat_id" class="text-sm">
+                                        @foreach ($boats as $boat)
+                                            <option value="{{ $boat->id }}">{{ $boat->name }}</option>
+                                        @endforeach
+                                    </x-form.select>
+                                    <x-secondary-button type="submit">Resolve as boat</x-secondary-button>
+                                </form>
+                            @elseif (! $error->resolved_at && $error->error_type === 'unknown_species_alias' && $error->raw_value)
                                 <form method="POST" action="{{ route('admin.species-aliases.store') }}" class="space-y-2">
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">

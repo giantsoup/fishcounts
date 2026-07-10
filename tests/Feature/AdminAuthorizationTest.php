@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Boat;
 use App\Models\TripType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,6 +38,16 @@ class AdminAuthorizationTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('admin.trip-types.store'), ['name' => '3.5 Day'])
+            ->assertForbidden();
+
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+
+        $this->actingAs($user)
+            ->post(route('admin.boats.store'), ['boat_name' => 'Pacific Queen'])
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->post(route('admin.boat-aliases.store'), ['boat_id' => $boat->id, 'alias' => 'The Dolphin'])
             ->assertForbidden();
     }
 
