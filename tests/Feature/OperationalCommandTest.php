@@ -120,6 +120,8 @@ class OperationalCommandTest extends TestCase
         $correctedPayload = $this->payload('2026-01-05');
         $ambiguousPayload = $this->payload('2026-01-06');
         $correctedBoatPayload = $this->payload('2026-01-07');
+        $compactFullDayPayload = $this->payload('2026-01-08');
+        $resolvedPayload = $this->payload('2026-01-09');
 
         ParserError::query()->create([
             'raw_scrape_payload_id' => $correctedPayload->id,
@@ -131,6 +133,15 @@ class OperationalCommandTest extends TestCase
             'message' => 'Unknown species alias [Baracuda].',
         ]);
         ParserError::query()->create([
+            'raw_scrape_payload_id' => $compactFullDayPayload->id,
+            'scrape_source_id' => $compactFullDayPayload->scrape_source_id,
+            'target_date' => $compactFullDayPayload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Baracuda On Their Fullday Trip',
+            'message' => 'Unknown species alias [Baracuda On Their Fullday Trip].',
+        ]);
+        ParserError::query()->create([
             'raw_scrape_payload_id' => $ambiguousPayload->id,
             'scrape_source_id' => $ambiguousPayload->scrape_source_id,
             'target_date' => $ambiguousPayload->target_date,
@@ -138,6 +149,16 @@ class OperationalCommandTest extends TestCase
             'raw_field' => 'trip_type',
             'raw_value' => '5 Day',
             'message' => 'Unknown trip_type alias [5 Day].',
+        ]);
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $resolvedPayload->id,
+            'scrape_source_id' => $resolvedPayload->scrape_source_id,
+            'target_date' => $resolvedPayload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Baracuda',
+            'message' => 'Unknown species alias [Baracuda].',
+            'resolved_at' => now(),
         ]);
         TripReport::query()->create([
             'source_id' => $correctedBoatPayload->scrape_source_id,
@@ -151,7 +172,9 @@ class OperationalCommandTest extends TestCase
 
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedPayload->id);
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedBoatPayload->id);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $compactFullDayPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $ambiguousPayload->id);
+        Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $resolvedPayload->id);
     }
 
     public function test_score_backfill_command_queues_score_jobs_for_range(): void

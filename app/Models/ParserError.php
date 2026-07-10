@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ParserErrorResolutionType;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +16,7 @@ class ParserError extends Model
             'target_date' => 'date',
             'context' => 'array',
             'resolved_at' => 'datetime',
+            'resolution_type' => ParserErrorResolutionType::class,
         ];
     }
 

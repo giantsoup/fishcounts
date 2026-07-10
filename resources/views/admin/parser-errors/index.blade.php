@@ -9,6 +9,11 @@
                 <p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>
             @endif
 
+            <nav class="mb-4 flex gap-4 text-sm" aria-label="Parser error filters">
+                <a href="{{ route('admin.parser-errors.index') }}" @class(['font-semibold text-blue-700' => ! $showAll, 'text-gray-600 hover:text-gray-900' => $showAll])>Open</a>
+                <a href="{{ route('admin.parser-errors.index', ['status' => 'all']) }}" @class(['font-semibold text-blue-700' => $showAll, 'text-gray-600 hover:text-gray-900' => ! $showAll])>All</a>
+            </nav>
+
             @forelse ($errors as $error)
                 <div class="border-b py-5">
                     <div class="grid gap-3 lg:grid-cols-5">
@@ -24,7 +29,12 @@
                                 </p>
                             @endif
                             @if ($error->resolved_at)
-                                <p class="mt-2 text-xs text-green-700">Resolved {{ $error->resolved_at->diffForHumans() }}</p>
+                                <p class="mt-2 text-xs text-green-700">
+                                    {{ $error->resolution_type === \App\Enums\ParserErrorResolutionType::Dismissed ? 'Dismissed' : 'Resolved' }} {{ $error->resolved_at->diffForHumans() }}
+                                    @if ($error->resolver)
+                                        by {{ $error->resolver->name }}
+                                    @endif
+                                </p>
                             @endif
                         </div>
 
@@ -38,7 +48,7 @@
                             <p class="text-sm text-gray-900">{{ $error->raw_value ?? 'n/a' }}</p>
                         </div>
 
-                        <div>
+                        <div class="space-y-4">
                             @if (! $error->resolved_at && $error->error_type === 'unknown_boat_alias' && $error->raw_value)
                                 <form method="POST" action="{{ route('admin.boat-aliases.store') }}" class="space-y-2">
                                     @csrf
@@ -75,14 +85,23 @@
                                     </x-form.select>
                                     <x-secondary-button type="submit">Resolve as trip type</x-secondary-button>
                                 </form>
-                            @else
+                            @elseif (! $error->resolved_at)
                                 <p class="text-sm text-gray-500">No alias action.</p>
+                            @endif
+
+                            @if (! $error->resolved_at)
+                                <form method="POST" action="{{ route('admin.parser-errors.dismiss', $error) }}" onsubmit="return confirm('Dismiss this parser error without creating an alias?');">
+                                    @csrf
+                                    @method('PATCH')
+                                    <x-secondary-button type="submit">Dismiss error</x-secondary-button>
+                                    <p class="mt-1 text-xs text-gray-500">Marks this error resolved without creating an alias.</p>
+                                </form>
                             @endif
                         </div>
                     </div>
                 </div>
             @empty
-                <p class="text-sm text-gray-500">No parser errors.</p>
+                <p class="text-sm text-gray-500">{{ $showAll ? 'No parser errors.' : 'No open parser errors.' }}</p>
             @endforelse
 
             {{ $errors->links() }}

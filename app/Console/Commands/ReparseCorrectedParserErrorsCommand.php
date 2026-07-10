@@ -55,6 +55,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
         '6 Hour',
         'Assorted Rockfish',
         'Baracuda',
+        'Baracuda On Their Fullday Trip',
         'Bleufin Tuna',
         'Bluefin Amd',
         'Bluefin For Their',
@@ -97,6 +98,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
     public function handle(): int
     {
         $parserErrorDates = ParserError::query()
+            ->whereNull('resolved_at')
             ->whereNotNull('target_date')
             ->whereIn('raw_value', self::CORRECTED_RAW_VALUES)
             ->orderBy('target_date')

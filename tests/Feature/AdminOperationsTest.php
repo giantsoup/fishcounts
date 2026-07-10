@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ParserErrorResolutionType;
 use App\Enums\SourceType;
 use App\Models\Boat;
 use App\Models\Landing;
@@ -221,7 +222,7 @@ class AdminOperationsTest extends TestCase
             'fetched_at' => now(),
         ]);
 
-        ParserError::query()->create([
+        $parserError = ParserError::query()->create([
             'raw_scrape_payload_id' => $payload->id,
             'scrape_source_id' => $source->id,
             'target_date' => '2026-06-20',
@@ -234,12 +235,116 @@ class AdminOperationsTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.parser-errors.index'))
             ->assertOk()
-            ->assertSee(route('admin.raw-payloads.show', $payload));
+            ->assertSee(route('admin.raw-payloads.show', $payload))
+            ->assertSee(route('admin.parser-errors.dismiss', $parserError))
+            ->assertSee('Dismiss error');
 
         $this->actingAs($admin)
             ->get(route('admin.raw-payloads.show', $payload))
             ->assertOk()
             ->assertSee(route('admin.scrape-runs.show', $scrapeRun))
             ->assertSee(route('admin.scrape-runs.index'));
+    }
+
+    public function test_admin_can_dismiss_parser_error_without_creating_an_alias(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $parserError = $this->createParserError();
+        $aliasCounts = [
+            'boat_aliases' => DB::table('boat_aliases')->count(),
+            'species_aliases' => DB::table('species_aliases')->count(),
+            'trip_type_aliases' => DB::table('trip_type_aliases')->count(),
+        ];
+
+        $this->actingAs($admin)
+            ->from(route('admin.parser-errors.index'))
+            ->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertRedirect(route('admin.parser-errors.index'))
+            ->assertSessionHas('status', 'Parser error dismissed without creating an alias.');
+
+        $parserError->refresh();
+
+        $this->assertNotNull($parserError->resolved_at);
+        $this->assertSame($admin->id, $parserError->resolved_by_user_id);
+        $this->assertSame(ParserErrorResolutionType::Dismissed, $parserError->resolution_type);
+
+        foreach ($aliasCounts as $table => $count) {
+            $this->assertSame($count, DB::table($table)->count());
+        }
+
+        $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSee($parserError->raw_value);
+
+        $this->actingAs($admin)
+            ->get(route('admin.dashboard'))
+            ->assertOk()
+            ->assertDontSee('parser warning needs alias review');
+
+        $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index', ['status' => 'all']))
+            ->assertOk()
+            ->assertSee($parserError->raw_value)
+            ->assertSee('Dismissed')
+            ->assertSee("by {$admin->name}")
+            ->assertDontSee(route('admin.parser-errors.dismiss', $parserError));
+    }
+
+    public function test_non_admin_cannot_dismiss_parser_error(): void
+    {
+        $user = User::factory()->create();
+        $parserError = $this->createParserError();
+
+        $this->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertRedirect(route('login'));
+
+        $this->actingAs($user)
+            ->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertForbidden();
+
+        $this->assertNull($parserError->fresh()->resolved_at);
+    }
+
+    public function test_dismissing_an_already_resolved_parser_error_preserves_its_audit_fields(): void
+    {
+        $originalAdmin = User::factory()->admin()->create();
+        $retryingAdmin = User::factory()->admin()->create();
+        $resolvedAt = now()->subHour()->startOfSecond();
+        $parserError = $this->createParserError([
+            'resolved_at' => $resolvedAt,
+            'resolved_by_user_id' => $originalAdmin->id,
+            'resolution_type' => ParserErrorResolutionType::Alias,
+        ]);
+
+        $this->actingAs($retryingAdmin)
+            ->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertSessionHas('status', 'Parser error was already resolved.');
+
+        $parserError->refresh();
+
+        $this->assertTrue($resolvedAt->equalTo($parserError->resolved_at));
+        $this->assertSame($originalAdmin->id, $parserError->resolved_by_user_id);
+        $this->assertSame(ParserErrorResolutionType::Alias, $parserError->resolution_type);
+    }
+
+    /** @param array<string, mixed> $overrides */
+    private function createParserError(array $overrides = []): ParserError
+    {
+        $source = ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+
+        return ParserError::query()->create(array_merge([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-10',
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Baracuda On Their Fullday Trip',
+            'message' => 'Unknown species alias [Baracuda On Their Fullday Trip].',
+        ], $overrides));
     }
 }

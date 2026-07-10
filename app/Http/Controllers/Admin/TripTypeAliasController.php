@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ParserErrorResolutionType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTripTypeAliasRequest;
 use App\Http\Requests\StoreTripTypeRequest;
@@ -83,6 +84,7 @@ class TripTypeAliasController extends Controller
             ->update([
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $request->user()->id,
+                'resolution_type' => ParserErrorResolutionType::Alias->value,
             ]);
     }
 }

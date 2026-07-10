@@ -2,6 +2,7 @@
 
 namespace App\Actions\Boats;
 
+use App\Enums\ParserErrorResolutionType;
 use App\Models\AlertRule;
 use App\Models\Boat;
 use App\Models\BoatAlias;
@@ -121,6 +122,7 @@ class ConsolidateBoatAlias
             ParserError::query()->whereKey($parserErrorIds)->update([
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $resolvedByUserId,
+                'resolution_type' => ParserErrorResolutionType::Alias->value,
             ]);
 
             $this->tripReportNormalizer->refreshPrimaryReportsForDates(

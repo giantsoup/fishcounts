@@ -75,6 +75,7 @@ Route::middleware('auth')->group(function (): void {
         Route::get('raw-payloads/{rawScrapePayload}', RawPayloadController::class)->name('raw-payloads.show');
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');
+        Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])->name('parser-errors.dismiss');
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');
         Route::post('species', [SpeciesAliasController::class, 'storeSpecies'])->name('species.store');
         Route::post('species/aliases', [SpeciesAliasController::class, 'store'])->name('species-aliases.store');

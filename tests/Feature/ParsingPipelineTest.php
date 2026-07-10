@@ -6,6 +6,7 @@ use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParsedTripReportData;
 use App\DTOs\RawPayloadData;
+use App\Enums\ParserErrorResolutionType;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Models\Boat;
@@ -69,6 +70,21 @@ class ParsingPipelineTest extends TestCase
         $this->assertFalse($counts->contains(fn (ParsedSpeciesCountData $count): bool => $count->speciesName === 'Bonito On Their Full Day Trip With'));
     }
 
+    public function test_parser_removes_compact_full_day_trip_context_after_a_species_count(): void
+    {
+        $compactTripCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            '1 Baracuda on their fullday trip.',
+        );
+        $spacedTripCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            '2 Bonito on their full day trip with 26 anglers.',
+        );
+
+        $this->assertSame(['Baracuda'], $compactTripCounts->pluck('speciesName')->all());
+        $this->assertSame(1, $compactTripCounts->first()->count);
+        $this->assertSame(['Bonito'], $spacedTripCounts->pluck('speciesName')->all());
+        $this->assertSame(2, $spacedTripCounts->first()->count);
+    }
+
     public function test_parser_does_not_treat_fractional_trip_or_tackle_numbers_as_fish_counts(): void
     {
         $tripCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
@@ -129,7 +145,7 @@ class ParsingPipelineTest extends TestCase
             'scrape_source_id' => $source->id,
             'target_date' => '2026-07-10',
             'url' => 'https://www.fishermanslanding.com/fishcounts.php',
-            'payload' => '<p>The Dolphin returned with 1 Baracuda, 2 Bontio, 3 Cabazon, 4 Yelowtail, and 6 White sea bass (released) for 22 anglers on their 4 Day trip.</p>',
+            'payload' => '<p>The Dolphin returned from a 4 Day trip with 2 Bontio, 3 Cabazon, 4 Yelowtail, 6 White sea bass (released), and 1 Baracuda on their fullday trip for 22 anglers.</p>',
             'payload_hash' => hash('sha256', 'corrected-parser-errors'),
             'fetched_at' => now(),
         ]);
@@ -175,6 +191,7 @@ class ParsingPipelineTest extends TestCase
         }
 
         $this->assertDatabaseMissing('parser_errors', ['raw_value' => 'Baracuda']);
+        $this->assertDatabaseMissing('parser_errors', ['raw_value' => 'Baracuda On Their Fullday Trip']);
         $this->assertDatabaseMissing('parser_errors', ['raw_value' => '4 Day']);
         $this->assertSame('Long Range', $report->tripType?->name);
     }
@@ -215,6 +232,13 @@ class ParsingPipelineTest extends TestCase
         ));
 
         $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+        $dismissedError = ParserError::query()->where('raw_value', 'Calico Bass')->firstOrFail();
+        $dismissedAt = now()->startOfSecond();
+        $dismissedError->update([
+            'resolved_at' => $dismissedAt,
+            'resolution_type' => ParserErrorResolutionType::Dismissed,
+        ]);
+
         app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
 
         $this->assertSame(1, $created);
@@ -224,8 +248,11 @@ class ParsingPipelineTest extends TestCase
             'count' => 40,
         ]);
         $this->assertDatabaseHas('parser_errors', [
+            'id' => $dismissedError->id,
             'error_type' => 'unknown_species_alias',
             'raw_value' => 'Calico Bass',
+            'resolved_at' => $dismissedAt,
+            'resolution_type' => ParserErrorResolutionType::Dismissed->value,
         ]);
     }
 
