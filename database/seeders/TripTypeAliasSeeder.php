@@ -16,14 +16,14 @@ class TripTypeAliasSeeder extends Seeder
             '1/2 Day AM' => ['AM Half Day', '1/2 Day AM'],
             '1/2 Day PM' => ['PM Half Day', '1/2 Day PM'],
             '1/2 Day Twilight' => ['Twilight'],
-            '3/4 Day' => ['Three Quarter Day', '3/4 Day', '3/4 Day Local'],
+            '3/4 Day' => ['Three Quarter Day', '3/4 Day', '3/4 Day Local', '6 Hour'],
             'Full Day' => ['Full Day', 'Full Day Trip', 'Full Day Offshore', 'Full Day Local'],
             'Overnight' => ['Overnight'],
             '1.5 Day' => ['1.5 Day'],
             '2 Day' => ['2 Day'],
             '2.5 Day' => ['2.5 Day'],
             '3 Day' => ['3 Day'],
-            '3.5 Day' => ['3.5 Day'],
+            'Long Range' => ['3.5 Day', '4 Day'],
         ];
 
         foreach ($aliases as $name => $values) {

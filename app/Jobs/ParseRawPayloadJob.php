@@ -20,8 +20,10 @@ class ParseRawPayloadJob implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 120;
 
-    public function __construct(public int $rawScrapePayloadId)
-    {
+    public function __construct(
+        public int $rawScrapePayloadId,
+        public bool $shouldDispatchDeduplication = true,
+    ) {
         $this->onQueue('parsing');
     }
 
@@ -51,7 +53,9 @@ class ParseRawPayloadJob implements ShouldBeUnique, ShouldQueue
 
         $normalizer->replaceForPayload($payload, $parsed);
 
-        DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
+        if ($this->shouldDispatchDeduplication) {
+            DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
+        }
     }
 
     public function failed(Throwable $throwable): void

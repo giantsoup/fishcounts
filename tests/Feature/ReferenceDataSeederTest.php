@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Enums\SourceType;
 use App\Models\AlertRule;
 use App\Models\ScrapeSource;
+use App\Models\Species;
 use App\Models\SpeciesAlias;
+use App\Models\TripType;
 use App\Models\TripTypeAlias;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -38,9 +40,14 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('Full Day', TripTypeAlias::query()->where('normalized_alias', 'full day offshore')->firstOrFail()->tripType->name);
         $this->assertSame('Full Day', TripTypeAlias::query()->where('normalized_alias', 'full day local')->firstOrFail()->tripType->name);
         $this->assertSame('3/4 Day', TripTypeAlias::query()->where('normalized_alias', '3/4 day local')->firstOrFail()->tripType->name);
+        $this->assertSame('3/4 Day', TripTypeAlias::query()->where('normalized_alias', '6 hour')->firstOrFail()->tripType->name);
+        $this->assertSame('Long Range', TripTypeAlias::query()->where('normalized_alias', '3.5 day')->firstOrFail()->tripType->name);
+        $this->assertSame('Long Range', TripTypeAlias::query()->where('normalized_alias', '4 day')->firstOrFail()->tripType->name);
+        $this->assertFalse(TripType::query()->where('name', '3.5 Day')->exists());
         $this->assertSame('Yellowtail', SpeciesAlias::query()->where('normalized_alias', 'yelowtail')->firstOrFail()->species->name);
         $this->assertSame('Bluefin Tuna', SpeciesAlias::query()->where('normalized_alias', 'bleufin tuna')->firstOrFail()->species->name);
         $this->assertSame('Bonito', SpeciesAlias::query()->where('normalized_alias', 'bontio')->firstOrFail()->species->name);
+        $this->assertSame('Bonito', SpeciesAlias::query()->where('normalized_alias', 'bonita')->firstOrFail()->species->name);
         $this->assertSame('Barracuda', SpeciesAlias::query()->where('normalized_alias', 'baracuda')->firstOrFail()->species->name);
         $this->assertSame('Cabezon', SpeciesAlias::query()->where('normalized_alias', 'cabazon')->firstOrFail()->species->name);
         $this->assertSame('Lingcod', SpeciesAlias::query()->where('normalized_alias', 'lings')->firstOrFail()->species->name);
@@ -50,6 +57,8 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion rockfish')->firstOrFail()->species->name);
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'mixed rockfish')->firstOrFail()->species->name);
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion red rockfish')->firstOrFail()->species->name);
+        $this->assertTrue(Species::query()->where('slug', 'pacific-mackerel')->where('is_active', true)->exists());
+        $this->assertTrue(Species::query()->where('slug', 'halfmoon')->where('is_active', true)->exists());
     }
 
     public function test_scrape_source_seeder_removes_retired_sources(): void

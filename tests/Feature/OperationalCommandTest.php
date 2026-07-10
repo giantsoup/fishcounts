@@ -6,6 +6,7 @@ use App\Enums\NotificationChannel;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Jobs\ComputeScoreForRuleJob;
+use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ParseRawPayloadJob;
 use App\Models\AlertRule;
 use App\Models\NotificationDestination;
@@ -15,6 +16,7 @@ use App\Models\Region;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Models\Species;
+use App\Models\TripReport;
 use App\Models\User;
 use App\Notifications\TestNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -77,11 +79,47 @@ class OperationalCommandTest extends TestCase
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $payload->id);
     }
 
+    public function test_reparse_date_command_selects_the_latest_payload_for_each_source(): void
+    {
+        Queue::fake();
+        $olderPayload = $this->payload();
+        $latestPayload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $olderPayload->scrape_run_id,
+            'scrape_source_id' => $olderPayload->scrape_source_id,
+            'target_date' => $olderPayload->target_date,
+            'url' => $olderPayload->url,
+            'payload' => '<p>Dolphin Full Day 20 anglers 41 Yellowtail</p>',
+            'payload_hash' => hash('sha256', 'newer-payload'),
+            'fetched_at' => $olderPayload->fetched_at,
+        ]);
+
+        $this->artisan('fish:reparse-date', ['date' => '2026-01-05'])->assertSuccessful();
+
+        Queue::assertPushed(ParseRawPayloadJob::class, 1);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $latestPayload->id);
+        Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $olderPayload->id);
+    }
+
+    public function test_synchronous_reparse_runs_deduplication_without_leaving_a_queued_follow_up(): void
+    {
+        Queue::fake();
+        $payload = $this->payload();
+
+        $this->artisan('fish:reparse-date', [
+            'date' => '2026-01-05',
+            '--sync' => true,
+        ])->assertSuccessful();
+
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $payload->id && ! $job->shouldDispatchDeduplication);
+        Queue::assertPushed(DeduplicateTripReportsJob::class, fn (DeduplicateTripReportsJob $job): bool => $job->date === '2026-01-05');
+    }
+
     public function test_corrected_parser_error_command_only_reparses_dates_with_known_corrections(): void
     {
         Queue::fake();
         $correctedPayload = $this->payload('2026-01-05');
         $ambiguousPayload = $this->payload('2026-01-06');
+        $correctedBoatPayload = $this->payload('2026-01-07');
 
         ParserError::query()->create([
             'raw_scrape_payload_id' => $correctedPayload->id,
@@ -98,13 +136,21 @@ class OperationalCommandTest extends TestCase
             'target_date' => $ambiguousPayload->target_date,
             'error_type' => 'unknown_trip_type_alias',
             'raw_field' => 'trip_type',
-            'raw_value' => '4 Day',
-            'message' => 'Unknown trip_type alias [4 Day].',
+            'raw_value' => '5 Day',
+            'message' => 'Unknown trip_type alias [5 Day].',
+        ]);
+        TripReport::query()->create([
+            'source_id' => $correctedBoatPayload->scrape_source_id,
+            'raw_scrape_payload_id' => $correctedBoatPayload->id,
+            'trip_date' => $correctedBoatPayload->target_date,
+            'raw_boat_name' => 'Lucky B caught 10 Yellowtail for',
+            'dedupe_key' => 'known-malformed-boat-name',
         ]);
 
         $this->artisan('fish:reparse-corrected-parser-errors')->assertSuccessful();
 
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedPayload->id);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedBoatPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $ambiguousPayload->id);
     }
 

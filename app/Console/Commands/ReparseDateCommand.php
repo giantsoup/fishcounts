@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ParseRawPayloadJob;
 use App\Models\RawScrapePayload;
 use Carbon\CarbonImmutable;
@@ -21,11 +22,18 @@ class ReparseDateCommand extends Command
             ->with('scrapeSource')
             ->whereDate('target_date', $date)
             ->when(is_string($sourceSlug) && $sourceSlug !== '', fn ($query) => $query->whereHas('scrapeSource', fn ($sourceQuery) => $sourceQuery->where('slug', $sourceSlug)))
-            ->get();
+            ->orderBy('scrape_source_id')
+            ->orderByDesc('fetched_at')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('scrape_source_id')
+            ->values();
 
-        $payloads->each(function (RawScrapePayload $payload): void {
-            if ($this->option('sync')) {
-                ParseRawPayloadJob::dispatchSync($payload->id);
+        $synchronous = (bool) $this->option('sync');
+
+        $payloads->each(function (RawScrapePayload $payload) use ($synchronous): void {
+            if ($synchronous) {
+                ParseRawPayloadJob::dispatchSync($payload->id, false);
 
                 return;
             }
@@ -33,7 +41,12 @@ class ReparseDateCommand extends Command
             ParseRawPayloadJob::dispatch($payload->id);
         });
 
-        $this->info("Queued {$payloads->count()} payload(s) for {$date}.");
+        if ($synchronous) {
+            DeduplicateTripReportsJob::dispatchSync($date);
+        }
+
+        $action = $synchronous ? 'Reparsed' : 'Queued';
+        $this->info("{$action} {$payloads->count()} payload(s) for {$date}.");
 
         return self::SUCCESS;
     }

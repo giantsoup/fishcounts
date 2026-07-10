@@ -69,7 +69,40 @@ class ParsingPipelineTest extends TestCase
         $this->assertFalse($counts->contains(fn (ParsedSpeciesCountData $count): bool => $count->speciesName === 'Bonito On Their Full Day Trip With'));
     }
 
-    public function test_reparse_replaces_stale_errors_and_persists_corrected_counts_while_retaining_ambiguous_errors(): void
+    public function test_parser_does_not_treat_fractional_trip_or_tackle_numbers_as_fish_counts(): void
+    {
+        $tripCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Sea Watch local 3/4 Day trip finished up with 12 Yellowtail, 85 Barracuda, 55 Bonito, and 25 Calico Bass. The Sea Watch is a definite run for their 3/4 day trips through Friday!',
+        );
+        $tackleCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The San Diego finished with 21 Yellowtail and 53 Barracuda. Bring an assortment of sinkers with #2 hooks.',
+        );
+
+        $this->assertSame(['Yellowtail', 'Barracuda', 'Bonito', 'Calico Bass'], $tripCounts->pluck('speciesName')->all());
+        $this->assertFalse($tripCounts->contains(fn (ParsedSpeciesCountData $count): bool => in_array($count->speciesName, ['Day Trip Finished Up With', 'Day Trips Through Friday'], true)));
+        $this->assertSame(['Yellowtail', 'Barracuda'], $tackleCounts->pluck('speciesName')->all());
+        $this->assertFalse($tackleCounts->contains(fn (ParsedSpeciesCountData $count): bool => $count->speciesName === 'Hooks'));
+    }
+
+    public function test_parser_does_not_treat_decimal_trip_durations_or_angler_counts_as_fish_counts(): void
+    {
+        $oneAndHalfDay = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Tribute 1.5 Day trip finished up with 2 Bluefin Tuna and 10 Yellowtail.',
+        );
+        $twoAndHalfDay = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Pacific Dawn returned from a 2.5 Day private charter where 18 anglers caught 25 Bluefin Tuna.',
+        );
+        $threeAndHalfDay = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Polaris Supreme returned from their 3.5 Day trip with 5 Bluefin Tuna.',
+        );
+
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], $oneAndHalfDay->pluck('speciesName')->all());
+        $this->assertSame(['Bluefin Tuna'], $twoAndHalfDay->pluck('speciesName')->all());
+        $this->assertSame(25, $twoAndHalfDay->first()->count);
+        $this->assertSame(['Bluefin Tuna'], $threeAndHalfDay->pluck('speciesName')->all());
+    }
+
+    public function test_reparse_replaces_stale_errors_and_persists_confirmed_counts_and_trip_types(): void
     {
         $this->seed([
             RegionSeeder::class,
@@ -142,11 +175,8 @@ class ParsingPipelineTest extends TestCase
         }
 
         $this->assertDatabaseMissing('parser_errors', ['raw_value' => 'Baracuda']);
-        $this->assertDatabaseHas('parser_errors', [
-            'raw_scrape_payload_id' => $payload->id,
-            'error_type' => 'unknown_trip_type_alias',
-            'raw_value' => '4 Day',
-        ]);
+        $this->assertDatabaseMissing('parser_errors', ['raw_value' => '4 Day']);
+        $this->assertSame('Long Range', $report->tripType?->name);
     }
 
     public function test_parser_normalizes_payload_and_replaces_existing_reports_idempotently(): void

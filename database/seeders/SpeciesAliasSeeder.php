@@ -15,7 +15,7 @@ class SpeciesAliasSeeder extends Seeder
             'yellowtail' => ['YT', 'Yellows', 'Yelowtail'],
             'bluefin-tuna' => ['Bluefin', 'BFT', 'Bleufin Tuna'],
             'yellowfin-tuna' => ['Yellowfin', 'YFT'],
-            'bonito' => ['Bontio'],
+            'bonito' => ['Bontio', 'Bonita'],
             'calico-bass' => ['Calicos'],
             'sand-bass' => ['Sandbass', 'Barred Sand Bass'],
             'rockfish' => ['Assorted Rockfish', 'Misc Rockfish', 'Misc. Rockfish', 'Mixed Rockfish', 'Reds', 'Vermilion Rockfish', 'Vermillion Rockfish', 'Vermillion Red Rockfish', 'Vermilliion Reds', 'Red Rockfish'],

@@ -29,17 +29,17 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v1");
+        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v2");
     }
 
     private function parseReportFeedPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v1");
+        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v2");
     }
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v1';
+        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v2';
         $panelHtml = $this->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
@@ -151,7 +151,7 @@ class SourceSpecificFishCountParser
                         anglers: $report->anglers,
                         rawFishCountText: $report->rawFishCountText,
                         speciesCounts: $report->speciesCounts,
-                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v1']),
+                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v2']),
                     );
                 }),
         );
@@ -256,7 +256,7 @@ class SourceSpecificFishCountParser
 
         return $lines
             ->map(function (string $line, int $index) use ($lines, $payload, $parserVersion): ?ParsedTripReportData {
-                if (! preg_match('/^(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,60}?)\s+(?<trip>(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*Day|Half\s+Day|Full\s+Day|Overnight|Twilight)\b/i', $line, $matches)) {
+                if (! preg_match('/^(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,60}?)\s+(?<trip>(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*Day|Half\s+Day|Full\s+Day|Overnight|Twilight)\s*$/i', $line, $matches)) {
                     return null;
                 }
 
@@ -295,34 +295,56 @@ class SourceSpecificFishCountParser
         preg_match_all('/<li\b[^>]*>(?<item>.*?)<\/li>/is', $payload->body, $matches);
 
         return collect($matches['item'] ?? [])
-            ->map(function (string $itemHtml) use ($payload, $parserVersion): ?ParsedTripReportData {
+            ->flatMap(function (string $itemHtml) use ($payload, $parserVersion): Collection {
                 $line = Str::of(html_entity_decode(strip_tags($itemHtml), ENT_QUOTES | ENT_HTML5))
                     ->replace("\u{00A0}", ' ')
                     ->squish()
                     ->toString();
 
-                if (! preg_match($this->seaforthListItemPattern(), $line, $matches)) {
-                    return null;
+                if (preg_match('/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+continues\b.*?\bThe\s+finished\s+up\s+their\b/i', $line, $contextMatches)) {
+                    $line = Str::of($line)
+                        ->replaceFirst('The finished up their', "The {$contextMatches['boat']} finished up their")
+                        ->toString();
                 }
 
-                $speciesCounts = $this->genericParser->parseSpeciesCounts($line);
+                preg_match_all($this->seaforthListItemPattern(), $line, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
 
-                if ($speciesCounts->isEmpty()) {
-                    return null;
+                if ($matches === []) {
+                    return collect();
                 }
 
-                return new ParsedTripReportData(
-                    sourceKey: $payload->sourceKey,
-                    tripDate: $payload->targetDate,
-                    regionName: 'San Diego',
-                    landingName: 'Seaforth Sportfishing',
-                    boatName: Str::of($matches['boat'])->squish()->toString(),
-                    tripTypeName: Str::of($matches['trip'])->squish()->title()->toString(),
-                    anglers: null,
-                    rawFishCountText: $line,
-                    speciesCounts: $speciesCounts->all(),
-                    metadata: ['parser' => $parserVersion, 'format' => 'narrative-list-item'],
-                );
+                return collect($matches)
+                    ->map(function (array $match, int $index) use ($matches, $line, $payload, $parserVersion): ?ParsedTripReportData {
+                        $startOffset = $match[0][1];
+                        $endOffset = $matches[$index + 1][0][1] ?? strlen($line);
+                        $reportText = Str::of($this->firstNarrativeSentence(substr($line, $startOffset, $endOffset - $startOffset)))
+                            ->replaceMatches('/\s+(?=The\s+[A-Z])/', ' ')
+                            ->squish()
+                            ->toString();
+                        $speciesCounts = $this->genericParser->parseSpeciesCounts($reportText);
+
+                        if ($speciesCounts->isEmpty()) {
+                            return null;
+                        }
+
+                        return new ParsedTripReportData(
+                            sourceKey: $payload->sourceKey,
+                            tripDate: $payload->targetDate,
+                            regionName: 'San Diego',
+                            landingName: 'Seaforth Sportfishing',
+                            boatName: Str::of($match['boat'][0])->squish()->toString(),
+                            tripTypeName: $this->normalizeSeaforthTripType(
+                                $match['trip'][0] ?? $match['trip_alt'][0],
+                                $match['period'][0] ?? null,
+                            ),
+                            anglers: null,
+                            rawFishCountText: $reportText,
+                            speciesCounts: $speciesCounts->all(),
+                            metadata: ['parser' => $parserVersion, 'format' => 'narrative-list-item'],
+                        );
+                    })
+                    ->filter()
+                    ->values();
             })
             ->filter()
             ->values();
@@ -330,9 +352,40 @@ class SourceSpecificFishCountParser
 
     private function seaforthListItemPattern(): string
     {
-        $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*Day|Half\s+Day|Full\s+Day|Overnight|Twilight';
+        $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half\s+Day|Full\s+Day\s+Coronado\s+Islands|Full\s+Day|Overnight|Twilight';
+        $returnPhrase = '(?:also\s+)?(?:returned|ended)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+from\s+(?:a|their)\s+';
+        $statusPhrase = '(?:(?:just\s+)?checked\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
+        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:local\s+|reverse\s+)?';
+        $afterTripAction = '(?:(?:\s+[A-Za-z]+){0,3}\s+(?:trip|charter))?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned)(?:\s+from\s+their)?\s+)?';
 
-        return '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,60}?)(?:\'s)?\s+(?:(?:checked in|just checked in|returned|finished up)\s+(?:from\s+)?their\s+)?(?<trip>'.$tripPattern.')(?:\s+trip)?(?:\s+today)?\s+(?:finished\s+)?(?:with|wth)\b/i';
+        return '/(?:^|(?<=[.!?])\s+)The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\'s)?\s+(?:'
+            .$statusPhrase.'(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
+            .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
+            .')(?:with|wth)\b/i';
+    }
+
+    private function normalizeSeaforthTripType(string $tripType, ?string $period): string
+    {
+        $normalized = Str::of($tripType)
+            ->replaceMatches('/^One\s+Day$/i', '1 Day')
+            ->replaceMatches('/^Two\s+Day$/i', '2 Day')
+            ->replaceMatches('/^Three\s+Day$/i', '3 Day')
+            ->replaceMatches('/^Four\s+Day$/i', '4 Day')
+            ->replaceMatches('/^Half\s+Day$/i', '1/2 Day')
+            ->squish()
+            ->title()
+            ->toString();
+
+        return $period !== null
+            ? $normalized.' '.Str::upper($period)
+            : $normalized;
+    }
+
+    private function firstNarrativeSentence(string $text): string
+    {
+        $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z])/', $text, 2);
+
+        return $sentences[0] ?? $text;
     }
 
     /** @param Collection<int, string> $cells */
