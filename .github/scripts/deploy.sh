@@ -169,6 +169,7 @@ cd "${release_dir}"
 "${PHP_BIN}" artisan optimize:clear --no-interaction
 "${PHP_BIN}" artisan migrate --force --no-interaction
 "${PHP_BIN}" artisan db:seed --class=EnvironmentalSourceSeeder --force --no-interaction
+"${PHP_BIN}" artisan fish:reparse-corrected-parser-errors --no-interaction
 "${PHP_BIN}" artisan optimize --no-interaction
 "${PHP_BIN}" artisan storage:link --force --no-interaction
 "${PHP_BIN}" artisan fish:production-check --no-interaction

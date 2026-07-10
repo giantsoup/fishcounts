@@ -11,6 +11,7 @@ use App\Enums\SourceType;
 use App\Models\Boat;
 use App\Models\BoatAlias;
 use App\Models\Landing;
+use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\ScrapeRun;
@@ -24,12 +25,129 @@ use App\Services\Parsing\GenericFishCountParser;
 use App\Services\Parsing\SourceSpecificFishCountParser;
 use App\Services\Parsing\TripReportNormalizer;
 use Carbon\CarbonImmutable;
+use Database\Seeders\LandingSeeder;
+use Database\Seeders\RegionSeeder;
+use Database\Seeders\SpeciesAliasSeeder;
+use Database\Seeders\SpeciesSeeder;
+use Database\Seeders\TripTypeAliasSeeder;
+use Database\Seeders\TripTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ParsingPipelineTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_parser_does_not_treat_an_angler_count_before_returned_with_as_a_species(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin AM 22 anglers returned with 43 Calico bass (100 released) 7 Sheephead 1 Cabazon 6 White sea bass (released)',
+        );
+
+        $this->assertFalse($counts->contains(fn (ParsedSpeciesCountData $count): bool => $count->speciesName === 'Returned With'));
+        $this->assertSame(
+            ['Calico Bass', 'Sheephead', 'Cabazon', 'White Sea Bass'],
+            $counts->pluck('speciesName')->all(),
+        );
+        $whiteSeaBass = $counts->firstWhere('speciesName', 'White Sea Bass');
+
+        $this->assertNotNull($whiteSeaBass);
+        $this->assertSame(0, $whiteSeaBass->count);
+        $this->assertSame(6, $whiteSeaBass->releasedCount);
+    }
+
+    public function test_parser_removes_trip_context_after_a_species_count(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Liberty caught 1 Yellowtail, 1 Lingcod, 12 Rockfish, and 2 Bonito on their full day trip with 26 anglers.',
+        );
+
+        $bonito = $counts->firstWhere('speciesName', 'Bonito');
+
+        $this->assertNotNull($bonito);
+        $this->assertSame(2, $bonito->count);
+        $this->assertFalse($counts->contains(fn (ParsedSpeciesCountData $count): bool => $count->speciesName === 'Bonito On Their Full Day Trip With'));
+    }
+
+    public function test_reparse_replaces_stale_errors_and_persists_corrected_counts_while_retaining_ambiguous_errors(): void
+    {
+        $this->seed([
+            RegionSeeder::class,
+            LandingSeeder::class,
+            SpeciesSeeder::class,
+            SpeciesAliasSeeder::class,
+            TripTypeSeeder::class,
+            TripTypeAliasSeeder::class,
+        ]);
+
+        $source = ScrapeSource::query()->create([
+            'name' => "Fisherman's Landing",
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => '2026-07-10',
+        ]);
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-07-10',
+            'url' => 'https://www.fishermanslanding.com/fishcounts.php',
+            'payload' => '<p>The Dolphin returned with 1 Baracuda, 2 Bontio, 3 Cabazon, 4 Yelowtail, and 6 White sea bass (released) for 22 anglers on their 4 Day trip.</p>',
+            'payload_hash' => hash('sha256', 'corrected-parser-errors'),
+            'fetched_at' => now(),
+        ]);
+        $landing = Landing::query()->where('slug', 'fishermans-landing')->firstOrFail();
+        Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Dolphin', 'slug' => 'dolphin']);
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => $payload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Baracuda',
+            'message' => 'Unknown species alias [Baracuda].',
+        ]);
+
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: $source->slug,
+            targetDate: CarbonImmutable::parse($payload->target_date),
+            url: $payload->url,
+            body: $payload->payload,
+        ));
+
+        app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
+
+        $report = TripReport::query()->where('raw_scrape_payload_id', $payload->id)->firstOrFail();
+        $expectedCounts = [
+            'barracuda' => [1, 0],
+            'bonito' => [2, 0],
+            'cabezon' => [3, 0],
+            'yellowtail' => [4, 0],
+            'white-seabass' => [0, 6],
+        ];
+
+        foreach ($expectedCounts as $speciesSlug => [$retainedCount, $releasedCount]) {
+            $species = Species::query()->where('slug', $speciesSlug)->firstOrFail();
+
+            $this->assertDatabaseHas('species_counts', [
+                'trip_report_id' => $report->id,
+                'species_id' => $species->id,
+                'count' => $retainedCount,
+                'released_count' => $releasedCount,
+            ]);
+        }
+
+        $this->assertDatabaseMissing('parser_errors', ['raw_value' => 'Baracuda']);
+        $this->assertDatabaseHas('parser_errors', [
+            'raw_scrape_payload_id' => $payload->id,
+            'error_type' => 'unknown_trip_type_alias',
+            'raw_value' => '4 Day',
+        ]);
+    }
 
     public function test_parser_normalizes_payload_and_replaces_existing_reports_idempotently(): void
     {

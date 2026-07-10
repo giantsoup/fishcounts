@@ -9,6 +9,7 @@ use App\Jobs\ComputeScoreForRuleJob;
 use App\Jobs\ParseRawPayloadJob;
 use App\Models\AlertRule;
 use App\Models\NotificationDestination;
+use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\ScrapeRun;
@@ -74,6 +75,37 @@ class OperationalCommandTest extends TestCase
         $this->artisan('fish:reparse-date', ['date' => '2026-01-05'])->assertSuccessful();
 
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $payload->id);
+    }
+
+    public function test_corrected_parser_error_command_only_reparses_dates_with_known_corrections(): void
+    {
+        Queue::fake();
+        $correctedPayload = $this->payload('2026-01-05');
+        $ambiguousPayload = $this->payload('2026-01-06');
+
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $correctedPayload->id,
+            'scrape_source_id' => $correctedPayload->scrape_source_id,
+            'target_date' => $correctedPayload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Baracuda',
+            'message' => 'Unknown species alias [Baracuda].',
+        ]);
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $ambiguousPayload->id,
+            'scrape_source_id' => $ambiguousPayload->scrape_source_id,
+            'target_date' => $ambiguousPayload->target_date,
+            'error_type' => 'unknown_trip_type_alias',
+            'raw_field' => 'trip_type',
+            'raw_value' => '4 Day',
+            'message' => 'Unknown trip_type alias [4 Day].',
+        ]);
+
+        $this->artisan('fish:reparse-corrected-parser-errors')->assertSuccessful();
+
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedPayload->id);
+        Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $ambiguousPayload->id);
     }
 
     public function test_score_backfill_command_queues_score_jobs_for_range(): void
@@ -203,27 +235,28 @@ class OperationalCommandTest extends TestCase
         $this->artisan('fish:production-check')->assertFailed();
     }
 
-    private function payload(): RawScrapePayload
+    private function payload(string $date = '2026-01-05'): RawScrapePayload
     {
+        $sourceSuffix = str_replace('-', '_', $date);
         $source = ScrapeSource::query()->create([
-            'name' => 'Fisherman\'s Landing',
-            'slug' => 'fishermans_landing',
+            'name' => "Fisherman's Landing {$date}",
+            'slug' => "fishermans_landing_{$sourceSuffix}",
             'source_type' => SourceType::Landing,
             'base_url' => 'https://www.fishermanslanding.com',
         ]);
         $run = ScrapeRun::query()->create([
             'scrape_source_id' => $source->id,
             'run_type' => ScrapeRunType::Manual,
-            'target_date' => '2026-01-05',
+            'target_date' => $date,
         ]);
 
         return RawScrapePayload::query()->create([
             'scrape_run_id' => $run->id,
             'scrape_source_id' => $source->id,
-            'target_date' => '2026-01-05',
+            'target_date' => $date,
             'url' => 'https://www.fishermanslanding.com/fishcounts.php',
             'payload' => '<p>Dolphin Full Day 20 anglers 40 Yellowtail</p>',
-            'payload_hash' => hash('sha256', 'payload'),
+            'payload_hash' => hash('sha256', "payload-{$date}"),
             'fetched_at' => now(),
         ]);
     }

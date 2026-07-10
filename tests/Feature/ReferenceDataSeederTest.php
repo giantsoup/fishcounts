@@ -36,6 +36,15 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('1/2 Day', TripTypeAlias::query()->where('normalized_alias', '4 hour')->firstOrFail()->tripType->name);
         $this->assertSame('1/2 Day Twilight', TripTypeAlias::query()->where('normalized_alias', 'twilight')->firstOrFail()->tripType->name);
         $this->assertSame('Full Day', TripTypeAlias::query()->where('normalized_alias', 'full day offshore')->firstOrFail()->tripType->name);
+        $this->assertSame('Full Day', TripTypeAlias::query()->where('normalized_alias', 'full day local')->firstOrFail()->tripType->name);
+        $this->assertSame('3/4 Day', TripTypeAlias::query()->where('normalized_alias', '3/4 day local')->firstOrFail()->tripType->name);
+        $this->assertSame('Yellowtail', SpeciesAlias::query()->where('normalized_alias', 'yelowtail')->firstOrFail()->species->name);
+        $this->assertSame('Bluefin Tuna', SpeciesAlias::query()->where('normalized_alias', 'bleufin tuna')->firstOrFail()->species->name);
+        $this->assertSame('Bonito', SpeciesAlias::query()->where('normalized_alias', 'bontio')->firstOrFail()->species->name);
+        $this->assertSame('Barracuda', SpeciesAlias::query()->where('normalized_alias', 'baracuda')->firstOrFail()->species->name);
+        $this->assertSame('Cabezon', SpeciesAlias::query()->where('normalized_alias', 'cabazon')->firstOrFail()->species->name);
+        $this->assertSame('Lingcod', SpeciesAlias::query()->where('normalized_alias', 'lings')->firstOrFail()->species->name);
+        $this->assertSame('White Seabass', SpeciesAlias::query()->where('normalized_alias', 'white sea bass')->firstOrFail()->species->name);
         $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'sandbass')->firstOrFail()->species->name);
         $this->assertSame('Sand Bass', SpeciesAlias::query()->where('normalized_alias', 'barred sand bass')->firstOrFail()->species->name);
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion rockfish')->firstOrFail()->species->name);
