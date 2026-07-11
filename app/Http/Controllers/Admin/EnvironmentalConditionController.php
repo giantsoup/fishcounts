@@ -9,6 +9,8 @@ use App\Models\EnvironmentalDailySummary;
 use App\Models\EnvironmentalObservation;
 use App\Models\EnvironmentalPayload;
 use App\Models\EnvironmentalSource;
+use App\Services\Environmental\EnvironmentalBackfillDispatcher;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -18,6 +20,14 @@ class EnvironmentalConditionController extends Controller
     public function __invoke(EnvironmentalConditionIndexRequest $request): View
     {
         $filters = $request->filters();
+        $historicalSources = EnvironmentalSource::query()
+            ->where('is_enabled', true)
+            ->where('supports_historical_dates', true)
+            ->orderBy('location_profile')
+            ->orderBy('priority')
+            ->get(['id', 'name', 'location_profile']);
+        $timezone = (string) config('fish.conditions.timezone', 'America/Los_Angeles');
+        $earliestBackfillDate = EnvironmentalBackfillDispatcher::earliestDate();
 
         return view('admin.environmental-conditions.index', [
             'filters' => $filters,
@@ -26,6 +36,10 @@ class EnvironmentalConditionController extends Controller
             'profileLabels' => $this->profileLabels(),
             'metrics' => EnvironmentalObservation::query()->distinct()->orderBy('metric')->pluck('metric'),
             'sources' => EnvironmentalSource::query()->orderBy('priority')->orderBy('name')->get(),
+            'historicalSourcesByProfile' => $historicalSources->groupBy('location_profile'),
+            'earliestBackfillDate' => $earliestBackfillDate->toDateString(),
+            'defaultBackfillDate' => CarbonImmutable::today($timezone)->subDay()->max($earliestBackfillDate)->toDateString(),
+            'latestBackfillDate' => EnvironmentalBackfillDispatcher::latestDate()->toDateString(),
             'summaries' => $this->summaryQuery($filters)->paginate(25, ['*'], 'summaries_page')->withQueryString(),
             'observations' => $this->observationQuery($filters)->paginate(50, ['*'], 'observations_page')->withQueryString(),
             'payloads' => $this->payloadQuery($filters)->paginate(10, ['*'], 'payloads_page')->withQueryString(),

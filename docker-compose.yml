@@ -28,7 +28,7 @@ services:
   queue:
     build:
       context: .
-    command: php artisan queue:work redis --queue=scraping,parsing,scoring,notifications,backfill,default --sleep=3 --tries=3 --timeout=180
+    command: php artisan queue:work redis --queue=scraping,parsing,scoring,notifications,environmental,backfill,default --sleep=3 --tries=3 --timeout=180
     env_file:
       - .env
     environment:

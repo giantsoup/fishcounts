@@ -8,6 +8,120 @@
 
     <div class="py-8">
         <div class="max-w-[1480px] mx-auto sm:px-6 lg:px-8 space-y-6">
+            @if (session('status'))
+                <div class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800" role="status">
+                    {{ session('status') }}
+                </div>
+            @endif
+
+            <section id="condition-backfill" class="overflow-hidden bg-white shadow sm:rounded-lg">
+                <div class="border-b border-gray-200 px-6 py-5">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Backfill historical conditions</h3>
+                            <p class="mt-1 max-w-3xl text-sm text-gray-600">
+                                Fill missing moon, tide, and water-temperature conditions from providers that support historical dates.
+                            </p>
+                        </div>
+                        <span class="inline-flex w-fit rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Admin action</span>
+                    </div>
+                </div>
+
+                <div class="space-y-5 px-6 py-5">
+                    <div class="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        <p class="font-semibold">Available range: January 1, 2026 through today.</p>
+                        <p class="mt-1">Providers run sequentially for each area and day, and the summary is finalized only after all providers succeed. Re-running safely serializes overlapping work and does not duplicate unchanged payloads.</p>
+                    </div>
+
+                    @if ($historicalSourcesByProfile->isNotEmpty())
+                        <form method="POST" action="{{ route('admin.conditions.backfills.store') }}" class="space-y-5">
+                            @csrf
+
+                            <div class="grid gap-4 md:grid-cols-3">
+                                <div>
+                                    <x-input-label for="backfill_from_date" value="Start date" />
+                                    <x-form.date
+                                        id="backfill_from_date"
+                                        name="from_date"
+                                        min="{{ $earliestBackfillDate }}"
+                                        max="{{ $latestBackfillDate }}"
+                                        value="{{ old('from_date', $defaultBackfillDate) }}"
+                                        aria-describedby="backfill_date_help"
+                                        required
+                                    />
+                                    <x-input-error :messages="$errors->get('from_date')" class="mt-2" />
+                                </div>
+
+                                <div>
+                                    <x-input-label for="backfill_to_date" value="End date" />
+                                    <x-form.date
+                                        id="backfill_to_date"
+                                        name="to_date"
+                                        min="{{ $earliestBackfillDate }}"
+                                        max="{{ $latestBackfillDate }}"
+                                        value="{{ old('to_date', $defaultBackfillDate) }}"
+                                        aria-describedby="backfill_date_help"
+                                        required
+                                    />
+                                    <x-input-error :messages="$errors->get('to_date')" class="mt-2" />
+                                </div>
+
+                                <div>
+                                    <x-input-label for="backfill_location_profile" value="Fishing area" />
+                                    <x-form.select id="backfill_location_profile" name="location_profile" required>
+                                        @foreach ($historicalSourcesByProfile as $profile => $profileSources)
+                                            <option value="{{ $profile }}" @selected(old('location_profile', $filters['location_profile']) === $profile)>
+                                                {{ $profileLabels[$profile] ?? str($profile)->replace('_', ' ')->headline() }} · {{ $profileSources->count() }} {{ str('provider')->plural($profileSources->count()) }}
+                                            </option>
+                                        @endforeach
+                                    </x-form.select>
+                                    <x-input-error :messages="$errors->get('location_profile')" class="mt-2" />
+                                </div>
+                            </div>
+
+                            <p id="backfill_date_help" class="text-xs text-gray-500">Choose a small range first if you want to confirm provider coverage before queueing more dates.</p>
+
+                            <div class="rounded-md bg-gray-50 p-4">
+                                <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Historical providers by fishing area</p>
+                                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                                    @foreach ($historicalSourcesByProfile as $profile => $profileSources)
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-700">{{ $profileLabels[$profile] ?? str($profile)->replace('_', ' ')->headline() }}</p>
+                                            <div class="mt-1 flex flex-wrap gap-2">
+                                                @foreach ($profileSources as $historicalSource)
+                                                    <span class="inline-flex rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-700">
+                                                        {{ $historicalSource->name }}
+                                                    </span>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <x-form.checkbox
+                                    name="confirmed"
+                                    value="1"
+                                    :checked="old('confirmed') === '1'"
+                                    label="I understand this will contact historical providers and queue background work."
+                                />
+                                <x-input-error :messages="$errors->get('confirmed')" />
+                            </div>
+
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <x-primary-button>Queue condition backfill</x-primary-button>
+                                <p class="text-xs text-gray-500">You can leave this page after queueing. Return here and refresh to see completed summaries.</p>
+                            </div>
+                        </form>
+                    @else
+                        <div class="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                            No enabled historical condition providers are configured. Run the environmental source seeder before starting a backfill.
+                        </div>
+                    @endif
+                </div>
+            </section>
+
             <div class="bg-white p-6 shadow sm:rounded-lg">
                 <form method="GET" action="{{ route('admin.conditions.index') }}" class="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
                     <div>

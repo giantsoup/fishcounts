@@ -4,12 +4,16 @@ namespace Tests\Feature;
 
 use App\Enums\EnvironmentalLocationType;
 use App\Enums\EnvironmentalSourceType;
+use App\Jobs\BackfillEnvironmentalSourceForDateJob;
+use App\Jobs\FinalizeEnvironmentalConditionsForDateJob;
 use App\Models\EnvironmentalDailySummary;
 use App\Models\EnvironmentalObservation;
 use App\Models\EnvironmentalPayload;
 use App\Models\EnvironmentalSource;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class EnvironmentalConditionAdminTest extends TestCase
@@ -196,12 +200,163 @@ class EnvironmentalConditionAdminTest extends TestCase
             ->assertSessionHasErrors('from');
     }
 
+    public function test_admin_conditions_page_explains_and_displays_the_backfill_workflow(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $historicalSource = $this->source(
+            'noaa_coops_la_jolla',
+            'NOAA CO-OPS La Jolla',
+            EnvironmentalSourceType::Tide,
+            supportsHistoricalDates: true,
+        );
+        $currentOnlySource = $this->source('ndbc_mission_bay_west', 'NDBC Mission Bay West', EnvironmentalSourceType::Wave);
+
+        $this->actingAs($admin)
+            ->get(route('admin.conditions.index'))
+            ->assertOk()
+            ->assertSee('Backfill historical conditions')
+            ->assertSee('Available range: January 1, 2026 through today.')
+            ->assertSee('summary is finalized only after all providers succeed')
+            ->assertSee('Queue condition backfill')
+            ->assertSee($historicalSource->name)
+            ->assertDontSee($currentOnlySource->name.' · San Diego', false)
+            ->assertSee('name="confirmed"', false)
+            ->assertSee('min="2026-01-01"', false)
+            ->assertSee(route('admin.conditions.backfills.store'), false);
+    }
+
+    public function test_admin_can_queue_a_condition_backfill_from_the_ui(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $moonSource = $this->source(
+            'usno_moon',
+            'USNO Moon Phase',
+            EnvironmentalSourceType::Moon,
+            supportsHistoricalDates: true,
+        );
+        $tideSource = $this->source(
+            'noaa_coops_la_jolla',
+            'NOAA CO-OPS La Jolla',
+            EnvironmentalSourceType::Tide,
+            supportsHistoricalDates: true,
+        );
+        $currentOnlySource = $this->source('ndbc_mission_bay_west', 'NDBC Mission Bay West', EnvironmentalSourceType::Wave);
+        Queue::fake();
+
+        $response = $this->actingAs($admin)->post(route('admin.conditions.backfills.store'), [
+            'from_date' => '01/01/2026',
+            'to_date' => '01/02/2026',
+            'location_profile' => 'san_diego_bight',
+            'confirmed' => '1',
+        ]);
+
+        $response
+            ->assertRedirect(route('admin.conditions.index', [
+                'from' => '2026-01-01',
+                'to' => '2026-01-02',
+                'location_profile' => 'san_diego_bight',
+            ]))
+            ->assertSessionHas('status', 'Submitted 4 planned historical provider collection(s). Overlapping work is serialized safely; refresh this page as summaries finish.');
+
+        Queue::assertPushed(BackfillEnvironmentalSourceForDateJob::class, 2);
+        Queue::assertPushed(BackfillEnvironmentalSourceForDateJob::class, function (BackfillEnvironmentalSourceForDateJob $job) use ($moonSource, $tideSource): bool {
+            if ($job->date !== '2026-01-01') {
+                return false;
+            }
+
+            $job->assertHasChain([
+                new BackfillEnvironmentalSourceForDateJob($tideSource->id, '2026-01-01'),
+                new FinalizeEnvironmentalConditionsForDateJob('san_diego_bight', '2026-01-01'),
+            ]);
+
+            return $job->environmentalSourceId === $moonSource->id;
+        });
+        Queue::assertPushed(BackfillEnvironmentalSourceForDateJob::class, function (BackfillEnvironmentalSourceForDateJob $job) use ($moonSource, $tideSource): bool {
+            if ($job->date !== '2026-01-02') {
+                return false;
+            }
+
+            $job->assertHasChain([
+                new BackfillEnvironmentalSourceForDateJob($tideSource->id, '2026-01-02'),
+                new FinalizeEnvironmentalConditionsForDateJob('san_diego_bight', '2026-01-02'),
+            ]);
+
+            return $job->environmentalSourceId === $moonSource->id;
+        });
+        Queue::assertNotPushed(BackfillEnvironmentalSourceForDateJob::class, fn (BackfillEnvironmentalSourceForDateJob $job): bool => $job->environmentalSourceId === $currentOnlySource->id);
+    }
+
+    public function test_condition_backfill_ui_rejects_unsafe_or_unconfirmed_requests(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $this->source(
+            'usno_moon',
+            'USNO Moon Phase',
+            EnvironmentalSourceType::Moon,
+            supportsHistoricalDates: true,
+        );
+        Queue::fake();
+
+        $this->actingAs($admin)
+            ->from(route('admin.conditions.index'))
+            ->post(route('admin.conditions.backfills.store'), [
+                'from_date' => '2025-12-31',
+                'to_date' => '2026-01-01',
+                'location_profile' => 'san_diego_bight',
+            ])
+            ->assertRedirect(route('admin.conditions.index'))
+            ->assertSessionHasErrors(['from_date', 'confirmed']);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_condition_backfill_ui_uses_the_conditions_timezone_for_today(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-07-10 17:30:00', 'America/Los_Angeles'));
+        $admin = User::factory()->admin()->create();
+        $this->source(
+            'usno_moon',
+            'USNO Moon Phase',
+            EnvironmentalSourceType::Moon,
+            supportsHistoricalDates: true,
+        );
+        Queue::fake();
+
+        $this->actingAs($admin)
+            ->from(route('admin.conditions.index'))
+            ->post(route('admin.conditions.backfills.store'), [
+                'from_date' => '2026-07-11',
+                'to_date' => '2026-07-11',
+                'location_profile' => 'san_diego_bight',
+                'confirmed' => '1',
+            ])
+            ->assertRedirect(route('admin.conditions.index'))
+            ->assertSessionHasErrors(['from_date', 'to_date']);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_non_admin_cannot_trigger_a_condition_backfill(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)
+            ->post(route('admin.conditions.backfills.store'), [
+                'from_date' => '2026-01-01',
+                'to_date' => '2026-01-01',
+                'location_profile' => 'san_diego_bight',
+                'confirmed' => '1',
+            ])
+            ->assertForbidden();
+    }
+
     private function source(
         string $slug,
         string $name,
         EnvironmentalSourceType $sourceType,
         string $locationProfile = 'san_diego_bight',
         EnvironmentalLocationType $locationType = EnvironmentalLocationType::Local,
+        bool $supportsHistoricalDates = false,
     ): EnvironmentalSource {
         return EnvironmentalSource::query()->create([
             'name' => $name,
@@ -212,6 +367,7 @@ class EnvironmentalConditionAdminTest extends TestCase
             'station_id' => str($slug)->afterLast('_')->toString(),
             'base_url' => 'https://example.test',
             'rate_limit_seconds' => 0,
+            'supports_historical_dates' => $supportsHistoricalDates,
         ]);
     }
 

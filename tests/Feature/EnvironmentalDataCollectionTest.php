@@ -93,6 +93,9 @@ class EnvironmentalDataCollectionTest extends TestCase
         $this->assertSame(EnvironmentalLocationType::Islands, EnvironmentalSource::query()->where('slug', 'usno_moon_coronado_islands')->firstOrFail()->location_type);
         $this->assertSame('coronado_islands', EnvironmentalSource::query()->where('slug', 'cdip_point_loma_south')->firstOrFail()->location_profile);
         $this->assertSame(32.52, EnvironmentalSource::query()->where('slug', 'usno_moon_coronado_islands')->firstOrFail()->metadata['latitude']);
+        $this->assertTrue(EnvironmentalSource::query()->where('slug', 'usno_moon')->firstOrFail()->supports_historical_dates);
+        $this->assertTrue(EnvironmentalSource::query()->where('slug', 'noaa_coops_la_jolla')->firstOrFail()->supports_historical_dates);
+        $this->assertFalse(EnvironmentalSource::query()->where('slug', 'ndbc_mission_bay_west')->firstOrFail()->supports_historical_dates);
     }
 
     public function test_usno_moon_collection_stores_raw_payload_observations_and_daily_summary(): void

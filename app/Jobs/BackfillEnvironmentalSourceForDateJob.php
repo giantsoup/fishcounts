@@ -4,15 +4,14 @@ namespace App\Jobs;
 
 use App\Models\EnvironmentalSource;
 use App\Services\Environmental\EnvironmentalSourceCollector;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Throwable;
 
-class CollectEnvironmentalSourceForDateJob implements ShouldBeUnique, ShouldQueue
+class BackfillEnvironmentalSourceForDateJob implements ShouldQueue
 {
-    use FoundationQueueable;
+    use Queueable;
 
     public int $tries = 5;
 
@@ -21,14 +20,8 @@ class CollectEnvironmentalSourceForDateJob implements ShouldBeUnique, ShouldQueu
     public function __construct(
         public int $environmentalSourceId,
         public string $date,
-        public bool $finalize = false,
     ) {
         $this->onQueue('environmental');
-    }
-
-    public function uniqueId(): string
-    {
-        return "{$this->environmentalSourceId}:{$this->date}:".($this->finalize ? 'final' : 'partial');
     }
 
     /** @return array<int, object> */
@@ -54,7 +47,7 @@ class CollectEnvironmentalSourceForDateJob implements ShouldBeUnique, ShouldQueu
 
     public function handle(EnvironmentalSourceCollector $collector): void
     {
-        $collector->collect($this->environmentalSourceId, $this->date, $this->finalize);
+        $collector->collect($this->environmentalSourceId, $this->date);
     }
 
     public function failed(Throwable $throwable): void
