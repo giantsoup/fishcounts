@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\AlertEventStatus;
 use App\Enums\AlertEventType;
+use App\Enums\BookingProvider;
 use App\Enums\ScoreLevel;
 use App\Enums\SourceType;
 use App\Models\AlertEvent;
@@ -23,15 +24,30 @@ use App\Models\TripReport;
 use App\Models\TripType;
 use App\Models\User;
 use App\Notifications\HotBiteAlertNotification;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class HotBiteAlertNotificationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        CarbonImmutable::setTestNow();
+
+        parent::tearDown();
+    }
+
     public function test_hot_bite_alert_email_renders_structured_score_summary(): void
     {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-06-21 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'fishermanslanding.fishingreservations.net/*' => Http::response($this->bookingFixture(), 200),
+        ]);
+
         $user = User::factory()->create();
         $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
         $landing = Landing::query()->create([
@@ -39,14 +55,20 @@ class HotBiteAlertNotificationTest extends TestCase
             'name' => 'Fisherman\'s Landing',
             'slug' => 'fishermans-landing',
             'website_url' => 'https://landing.example.test',
+            'booking_provider' => BookingProvider::FishingReservations,
+            'booking_base_url' => 'https://fishermanslanding.fishingreservations.net/resos/',
         ]);
         $boat = Boat::query()->create([
             'landing_id' => $landing->id,
             'name' => 'Pacific Queen',
             'slug' => 'pacific-queen',
-            'booking_url' => 'https://booking.example.test/pacific-queen',
+            'booking_provider_identifier' => '201',
         ]);
-        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $species = Species::query()->create([
+            'name' => 'Yellowtail',
+            'slug' => 'yellowtail',
+            'environmental_location_profile' => 'coronado_islands',
+        ]);
         $otherSpecies = Species::query()->create(['name' => 'Bluefin Tuna', 'slug' => 'bluefin-tuna']);
         $tripType = TripType::query()->create(['name' => 'Overnight', 'slug' => 'overnight']);
         $source = ScrapeSource::query()->create([
@@ -104,9 +126,19 @@ class HotBiteAlertNotificationTest extends TestCase
         EnvironmentalDailySummary::query()->create([
             'location_profile' => 'san_diego_bight',
             'observed_date' => '2026-06-20',
+            'water_temp_f_avg' => 58.4,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'coronado_islands',
+            'location_type' => 'islands',
+            'observed_date' => '2026-06-20',
             'moon_phase' => 'Waxing Crescent',
             'moon_illumination_percent' => 21,
             'water_temp_f_avg' => 68.4,
+            'water_temp_f_min' => 67.9,
+            'water_temp_f_max' => 69.0,
             'swell_height_ft_avg' => 2.5,
             'swell_period_seconds_avg' => 12,
             'swell_direction_degrees_dominant' => 210,
@@ -160,19 +192,33 @@ class HotBiteAlertNotificationTest extends TestCase
         $this->assertStringContainsString('Threshold', $html);
         $this->assertStringContainsString('Target fish', $html);
         $this->assertStringContainsString('Boats reporting', $html);
-        $this->assertStringContainsString('Official conditions', $html);
-        $this->assertStringContainsString('moon Waxing Crescent 21%', $html);
-        $this->assertStringContainsString('Best trip options for Yellowtail', $html);
+        $this->assertStringContainsString('Offshore conditions', $html);
+        $this->assertStringContainsString('Coronado Islands (Mexico)', $html);
+        $this->assertStringContainsString('Threshold day · Coronado Islands (Mexico) · Jun 20, 2026', $html);
+        $this->assertStringContainsString('Water temperature', $html);
+        $this->assertStringContainsString('68.4°F average (67.9–69.0°F)', $html);
+        $this->assertStringContainsString('2.5 ft at 12 sec · SSW', $html);
+        $this->assertStringContainsString('Waxing Crescent · 21% illuminated', $html);
+        $this->assertStringContainsString('Point Loma South offshore stations', $html);
+        $this->assertStringNotContainsString('58.4°F', $html);
+        $this->assertStringContainsString('Best previous trips for Yellowtail', $html);
+        $this->assertStringContainsString('Catch date', $html);
+        $this->assertStringNotContainsString('Top recent trips', $html);
+        $this->assertStringNotContainsString('Best trip options', $html);
         $this->assertStringContainsString('Recommended boats', $html);
-        $this->assertStringContainsString('Book', $html);
+        $this->assertStringContainsString('Book next matching trip', $html);
         $this->assertStringContainsString('Pacific Queen', $html);
         $this->assertStringContainsString('Overnight', $html);
         $this->assertStringContainsString('6/20/26', $html);
+        $this->assertStringContainsString('68 Yellowtail caught 6/20/26', $html);
+        $this->assertStringContainsString('Next matching departure:', $html);
+        $this->assertStringContainsString('Mon, Jun 22, 2026 at 9:00 PM PDT', $html);
+        $this->assertStringContainsString('12 spots open.', $html);
         $this->assertStringContainsString('68', $html);
         $this->assertStringContainsString('↗', $html);
         $this->assertStringContainsString('https://www.fishermanslanding.com/fishcounts.php', $html);
         $this->assertStringContainsString('#:~:text=Pacific%20Queen', $html);
-        $this->assertStringContainsString('https://booking.example.test/pacific-queen', $html);
+        $this->assertStringContainsString('https://fishermanslanding.fishingreservations.net/resos/user.php?trip_id=1048920', $html);
         $this->assertStringNotContainsString('6/20/2026', $html);
         $this->assertStringNotContainsString('Count Source', $html);
         $this->assertStringNotContainsString('Fish / angler', $html);
@@ -183,5 +229,85 @@ class HotBiteAlertNotificationTest extends TestCase
         $this->assertStringNotContainsString('wide_open', $html);
         $this->assertStringNotContainsString('Thanks,', $html);
         $this->assertStringNotContainsString('<table class="inner-body" align="center" width="570"', $html);
+    }
+
+    public function test_hot_bite_conditions_use_the_triggering_score_date(): void
+    {
+        $user = User::factory()->create();
+        $species = Species::query()->create([
+            'name' => 'Yellowtail',
+            'slug' => 'yellowtail',
+            'environmental_location_profile' => 'coronado_islands',
+        ]);
+        $rule = AlertRule::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Yellowtail',
+            'species_id' => $species->id,
+            'minimum_score' => 70,
+        ]);
+        $scoreRun = ScoreRun::query()->create(['run_date' => '2026-06-20']);
+        $scoreResult = ScoreResult::query()->create([
+            'score_run_id' => $scoreRun->id,
+            'alert_rule_id' => $rule->id,
+            'score_date' => '2026-06-20',
+            'score' => 82,
+            'level' => ScoreLevel::Hot,
+            'total_count' => 80,
+            'boat_count' => 2,
+            'landing_count' => 1,
+            'explanation' => [],
+        ]);
+        $alertEvent = AlertEvent::query()->create([
+            'user_id' => $user->id,
+            'alert_rule_id' => $rule->id,
+            'score_result_id' => $scoreResult->id,
+            'event_type' => AlertEventType::ThresholdCrossed,
+            'event_date' => '2026-06-21',
+            'level' => ScoreLevel::Hot,
+            'score' => 82,
+            'status' => AlertEventStatus::Pending,
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'coronado_islands',
+            'location_type' => 'islands',
+            'observed_date' => '2026-06-20',
+            'water_temp_f_avg' => 68.4,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'coronado_islands',
+            'location_type' => 'islands',
+            'observed_date' => '2026-06-21',
+            'water_temp_f_avg' => 99.9,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
+
+        $html = (string) (new HotBiteAlertNotification($alertEvent, collect(), collect()))
+            ->toMail($user)
+            ->render();
+
+        $this->assertStringContainsString('Threshold day · Coronado Islands (Mexico) · Jun 20, 2026', $html);
+        $this->assertStringContainsString('68.4°F average', $html);
+        $this->assertStringNotContainsString('99.9°F', $html);
+        $this->assertStringNotContainsString('Jun 21, 2026', $html);
+    }
+
+    private function bookingFixture(): string
+    {
+        return <<<'HTML'
+            <table>
+                <tr>
+                    <td class="trip-cell" data-trip-id="1048920"><strong>Pacific Queen</strong><br>Overnight</td>
+                    <td>Mon. 6-22-2026 9:00 PM</td>
+                    <td>Tue. 6-23-2026 7:00 PM</td>
+                    <td>30</td>
+                    <td>$450</td>
+                    <td><span class="font_green13">12</span></td>
+                    <td><a href="/resos/user.php?trip_id=1048920" class="green_butn">Book</a></td>
+                </tr>
+            </table>
+        HTML;
     }
 }

@@ -259,6 +259,8 @@ class AliasManagementTest extends TestCase
             ->assertSee('Save species')
             ->assertSeeText('Select a species to edit it.')
             ->assertSeeText('Yellowtail')
+            ->assertSeeText('Condition profile')
+            ->assertSeeText('San Diego — Local')
             ->assertDontSeeText('Species aliases')
             ->assertDontSeeText('Add species alias')
             ->assertDontSee('yellowtail');
@@ -302,6 +304,7 @@ class AliasManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.species.store'), [
                 'name' => 'Soupfin Shark',
+                'environmental_location_profile' => 'coronado_islands',
             ])
             ->assertRedirect(route('admin.species-aliases.index'))
             ->assertSessionHas('status', 'Species saved.');
@@ -309,8 +312,44 @@ class AliasManagementTest extends TestCase
         $this->assertDatabaseHas('species', [
             'name' => 'Soupfin Shark',
             'slug' => 'soupfin-shark',
+            'environmental_location_profile' => 'coronado_islands',
             'is_active' => true,
         ]);
+    }
+
+    public function test_admin_can_update_a_species_condition_profile(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.species.update', $species), [
+                'species_id' => $species->id,
+                'species_environmental_location_profile' => 'coronado_islands',
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('status', 'Species condition profile updated.')
+            ->assertSessionHas('selected_species_id', $species->id);
+
+        $this->assertSame('coronado_islands', $species->fresh()->environmental_location_profile);
+    }
+
+    public function test_species_condition_profile_must_be_configured(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->patch(route('admin.species.update', $species), [
+                'species_id' => $species->id,
+                'species_environmental_location_profile' => 'unknown',
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('species_environmental_location_profile');
+
+        $this->assertSame('san_diego_bight', $species->fresh()->environmental_location_profile);
     }
 
     public function test_duplicate_species_slug_is_rejected(): void

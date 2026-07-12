@@ -48,8 +48,8 @@ class ScoreHotBiteEmailController extends Controller
         $tripDecisionBuilder = app(TripDecisionBuilder::class);
         $tripOptions = $tripDecisionBuilder->rankedTrips(
             $rule,
-            $event->event_date->toImmutable(),
-            $event->event_date->toImmutable(),
+            $scoreResult->score_date->toImmutable(),
+            $scoreResult->score_date->toImmutable(),
         );
         $tripRecommendations = $tripDecisionBuilder->recommendedBoats($tripOptions);
 

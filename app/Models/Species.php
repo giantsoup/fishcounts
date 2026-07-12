@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Species extends Model
 {
     protected $attributes = [
+        'environmental_location_profile' => 'san_diego_bight',
         'is_active' => true,
     ];
 

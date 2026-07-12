@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\AlertEvent;
 use App\Services\Environmental\EnvironmentalConditionFormatter;
+use App\Services\Environmental\EnvironmentalConditionProfileResolver;
 use App\Services\Notifications\TripDecisionBuilder;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -32,12 +33,18 @@ class HotBiteAlertNotification extends Notification
         $this->alertEvent->loadMissing(['alertRule.species', 'scoreResult']);
         $rule = $this->alertEvent->alertRule;
         $scoreResult = $this->alertEvent->scoreResult;
+        $conditionDate = $scoreResult?->score_date?->toImmutable()
+            ?? $this->alertEvent->event_date->toImmutable();
         $tripDecisionBuilder = app(TripDecisionBuilder::class);
-        $environmentalCondition = app(EnvironmentalConditionFormatter::class)->forDate($this->alertEvent->event_date->toImmutable());
+        $locationProfile = app(EnvironmentalConditionProfileResolver::class)->resolve($rule);
+        $environmentalCondition = app(EnvironmentalConditionFormatter::class)->detailsForDate(
+            $conditionDate,
+            $locationProfile,
+        );
         $tripOptions = $this->tripOptions ?? $tripDecisionBuilder->rankedTrips(
             $rule,
-            $this->alertEvent->event_date->toImmutable(),
-            $this->alertEvent->event_date->toImmutable(),
+            $conditionDate,
+            $conditionDate,
         );
         $tripRecommendations = $this->tripRecommendations ?? $tripDecisionBuilder->recommendedBoats($tripOptions);
 

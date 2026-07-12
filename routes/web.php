@@ -82,6 +82,7 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])->name('parser-errors.dismiss');
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');
         Route::post('species', [SpeciesAliasController::class, 'storeSpecies'])->name('species.store');
+        Route::patch('species/{species}', [SpeciesAliasController::class, 'updateSpecies'])->name('species.update');
         Route::post('species/aliases', [SpeciesAliasController::class, 'store'])->name('species-aliases.store');
         Route::get('trip-types', [TripTypeAliasController::class, 'index'])->name('trip-type-aliases.index');
         Route::post('trip-types', [TripTypeAliasController::class, 'storeTripType'])->name('trip-types.store');

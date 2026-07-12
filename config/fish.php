@@ -81,8 +81,9 @@ return [
                 ],
             ],
             'coronado_islands' => [
-                'label' => 'Coronado Islands',
+                'label' => 'Coronado Islands (Mexico)',
                 'location_type' => 'islands',
+                'source_note' => 'Marine readings use the Point Loma South offshore stations as the nearest official proxy.',
                 'latitude' => (float) env('FISH_CONDITIONS_CORONADO_LATITUDE', 32.52),
                 'longitude' => (float) env('FISH_CONDITIONS_CORONADO_LONGITUDE', -117.43),
                 'sources' => [

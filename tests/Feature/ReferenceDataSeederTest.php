@@ -12,6 +12,7 @@ use App\Models\TripTypeAlias;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\ScrapeSourceSeeder;
+use Database\Seeders\SpeciesSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,6 +60,21 @@ class ReferenceDataSeederTest extends TestCase
         $this->assertSame('Rockfish', SpeciesAlias::query()->where('normalized_alias', 'vermillion red rockfish')->firstOrFail()->species->name);
         $this->assertTrue(Species::query()->where('slug', 'pacific-mackerel')->where('is_active', true)->exists());
         $this->assertTrue(Species::query()->where('slug', 'halfmoon')->where('is_active', true)->exists());
+        $this->assertSame('coronado_islands', Species::query()->where('slug', 'yellowtail')->value('environmental_location_profile'));
+        $this->assertSame('san_diego_bight', Species::query()->where('slug', 'calico-bass')->value('environmental_location_profile'));
+    }
+
+    public function test_species_seeder_preserves_admin_condition_profile_changes(): void
+    {
+        $species = Species::query()->create([
+            'name' => 'Yellowtail',
+            'slug' => 'yellowtail',
+            'environmental_location_profile' => 'san_diego_bight',
+        ]);
+
+        $this->seed(SpeciesSeeder::class);
+
+        $this->assertSame('san_diego_bight', $species->fresh()->environmental_location_profile);
     }
 
     public function test_scrape_source_seeder_removes_retired_sources(): void

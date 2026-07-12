@@ -40,11 +40,12 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_weekly_digest_delivery_metadata_stores_exact_booking_snapshot(): void
+    public function test_weekly_digest_uses_the_next_bookable_trip_for_a_historical_report(): void
     {
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
         Http::preventStrayRequests();
         Http::fake([
+            'https://seaforth.fishingreservations.net/sales/' => Http::response($this->seaforthBoatFilterFixture(), 200),
             'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
         ]);
         Notification::fake();
@@ -63,7 +64,7 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
             'landing_id' => $landing->id,
             'name' => 'San Diego',
             'slug' => 'san-diego',
-            'booking_provider_identifier' => '248',
+            'booking_provider_identifier' => 'stale-identifier',
         ]);
         $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
         $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
@@ -114,13 +115,13 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
             'landing_id' => $landing->id,
             'boat_id' => $boat->id,
             'trip_type_id' => $tripType->id,
-            'trip_date' => '2026-07-07',
-            'source_trip_identifier' => 'san-diego-2026-07-07',
+            'trip_date' => '2026-07-06',
+            'source_trip_identifier' => 'san-diego-2026-07-06',
             'anglers' => 36,
             'raw_boat_name' => 'San Diego',
             'raw_landing_name' => 'Seaforth Landing',
             'raw_trip_type' => 'Full Day',
-            'dedupe_key' => 'san-diego-2026-07-07',
+            'dedupe_key' => 'san-diego-2026-07-06',
         ]);
         SpeciesCount::query()->create([
             'trip_report_id' => $tripReport->id,
@@ -136,17 +137,23 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
 
         $this->assertSame('https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920', $snapshot['booking_url']);
         $this->assertSame('1048920', $snapshot['provider_trip_id']);
+        $this->assertSame('Tue, Jul 7, 2026 at 5:30 AM PDT', $snapshot['departure_at_display']);
         $this->assertTrue($snapshot['is_direct_booking']);
         $this->assertSame(19, $snapshot['open_spots']);
         $this->assertSame('Jul 6, 2026 at 10:42 AM PDT', $snapshot['availability_pulled_at_display']);
+        $this->assertSame('248', $boat->fresh()->booking_provider_identifier);
 
         Notification::assertSentTo($user, WeeklyFishingDigestNotification::class, function (WeeklyFishingDigestNotification $notification) use ($user): bool {
             $html = (string) $notification->toMail($user)->render();
 
             return str_contains($html, 'https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920')
-                && str_contains($html, '19 spots open, checked Jul 6, 2026 at 10:42 AM PDT.');
+                && str_contains($html, '40 Yellowtail caught 7/6/26')
+                && str_contains($html, 'Next matching departure:')
+                && str_contains($html, 'Tue, Jul 7, 2026 at 5:30 AM PDT')
+                && str_contains($html, '19 spots open.')
+                && str_contains($html, 'Availability checked Jul 6, 2026 at 10:42 AM PDT.');
         });
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
     }
 
     public function test_weekly_digest_delivery_metadata_stores_hm_landing_booking_snapshot(): void
@@ -222,13 +229,13 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
             'landing_id' => $landing->id,
             'boat_id' => $boat->id,
             'trip_type_id' => $tripType->id,
-            'trip_date' => '2026-07-07',
-            'source_trip_identifier' => 'grande-2026-07-07',
+            'trip_date' => '2026-07-06',
+            'source_trip_identifier' => 'grande-2026-07-06',
             'anglers' => 40,
             'raw_boat_name' => 'Grande',
             'raw_landing_name' => 'H&M Landing',
             'raw_trip_type' => 'Full Day',
-            'dedupe_key' => 'grande-2026-07-07',
+            'dedupe_key' => 'grande-2026-07-06',
         ]);
         SpeciesCount::query()->create([
             'trip_report_id' => $tripReport->id,
@@ -246,6 +253,7 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
         $this->assertNull($snapshot['provider_trip_id']);
         $this->assertFalse($snapshot['is_direct_booking']);
         $this->assertSame('provider_page_only', $snapshot['fallback_reason']);
+        $this->assertSame('Tue, Jul 7, 2026 at 5:30 AM PDT', $snapshot['departure_at_display']);
         $this->assertSame(40, $snapshot['open_spots']);
         $this->assertSame('Jul 6, 2026 at 10:42 AM PDT', $snapshot['availability_pulled_at_display']);
         $this->assertSame('5a9062efe0179894348b45ca', $snapshot['provider_metadata']['xola_experience_id']);
@@ -256,7 +264,11 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
             $html = (string) $notification->toMail($user)->render();
 
             return str_contains($html, 'https://www.hmlanding.com/boat/grande#tab-open-trips')
-                && str_contains($html, '40 spots open, checked Jul 6, 2026 at 10:42 AM PDT.');
+                && str_contains($html, '32 Yellowtail caught 7/6/26')
+                && str_contains($html, 'Next matching departure:')
+                && str_contains($html, 'Tue, Jul 7, 2026 at 5:30 AM PDT')
+                && str_contains($html, '40 spots open.')
+                && str_contains($html, 'Availability checked Jul 6, 2026 at 10:42 AM PDT.');
         });
         Http::assertSentCount(1);
     }
@@ -275,6 +287,18 @@ class BookingAvailabilityNotificationMetadataTest extends TestCase
                     <td><a href="/sales/user.php?trip_id=1048920" class="green_butn">Book</a></td>
                 </tr>
             </table>
+        HTML;
+    }
+
+    private function seaforthBoatFilterFixture(): string
+    {
+        return <<<'HTML'
+            <form>
+                <select name="boat_filter[]" multiple="multiple">
+                    <option value="248">San Diego</option>
+                    <option value="249">Sea Watch</option>
+                </select>
+            </form>
         HTML;
     }
 

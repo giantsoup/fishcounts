@@ -19,6 +19,7 @@ use App\Models\Species;
 use App\Models\TripReport;
 use App\Models\User;
 use App\Notifications\TestNotification;
+use Database\Seeders\EnvironmentalSourceSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
@@ -302,6 +303,28 @@ class OperationalCommandTest extends TestCase
         ]);
 
         $this->artisan('fish:production-check')->assertFailed();
+    }
+
+    public function test_production_check_fails_when_booking_reference_data_is_missing(): void
+    {
+        $this->seed(EnvironmentalSourceSeeder::class);
+        config([
+            'app.env' => 'production',
+            'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+            'app.debug' => false,
+            'queue.default' => 'database',
+            'cache.default' => 'database',
+            'session.secure' => true,
+            'session.http_only' => true,
+            'mail.default' => 'smtp',
+            'mail.from.address' => 'alerts@example.test',
+            'fish.admin.password' => 'not-the-default-password',
+            'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)',
+        ]);
+
+        $this->artisan('fish:production-check')
+            ->expectsOutputToContain('Booking provider metadata is missing or invalid for [seaforth-sportfishing]. Run pending migrations.')
+            ->assertFailed();
     }
 
     private function payload(string $date = '2026-01-05'): RawScrapePayload

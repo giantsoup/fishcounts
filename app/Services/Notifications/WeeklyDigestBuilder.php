@@ -3,8 +3,10 @@
 namespace App\Services\Notifications;
 
 use App\Models\AlertRule;
+use App\Models\ScoreResult;
 use App\Models\User;
 use App\Services\Environmental\EnvironmentalConditionFormatter;
+use App\Services\Environmental\EnvironmentalConditionProfileResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -13,6 +15,7 @@ class WeeklyDigestBuilder
     public function __construct(
         private readonly TripDecisionBuilder $tripDecisionBuilder,
         private readonly EnvironmentalConditionFormatter $environmentalConditionFormatter,
+        private readonly EnvironmentalConditionProfileResolver $environmentalConditionProfileResolver,
     ) {}
 
     /**
@@ -32,11 +35,14 @@ class WeeklyDigestBuilder
 
                 $recommendedBoats = $summary['trip_recommendations']->isEmpty()
                     ? 'no booking links available'
-                    : $summary['trip_recommendations']->map(fn (array $trip): string => "{$trip['boat_name']} {$trip['trip_type']} {$trip['trip_date']} {$trip['booking_url']}")->implode(', ');
+                    : $summary['trip_recommendations']->map(function (array $trip): string {
+                        $departure = $trip['booking_departure_at_display'] ?? null;
+                        $bookingTiming = filled($departure) ? "next departure {$departure}" : 'booking options';
 
-                $conditions = $summary['environmental_condition'] === null
-                    ? 'conditions unavailable'
-                    : "conditions {$summary['environmental_condition']}";
+                        return "{$trip['boat_name']} {$trip['trip_type']} catch {$trip['trip_date']}, {$bookingTiming} {$trip['booking_url']}";
+                    })->implode(', ');
+
+                $conditions = $this->environmentalConditionLine($summary['environmental_condition']);
 
                 return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week · best {$summary['best_day']} · {$conditions} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
             })
@@ -56,7 +62,7 @@ class WeeklyDigestBuilder
      *     best_day: string,
      *     trend: string,
      *     boat_count: int|null,
-     *     environmental_condition: string|null,
+     *     environmental_condition: array<string, mixed>|null,
      *     trip_options: Collection<int, array<string, mixed>>,
      *     trip_recommendations: Collection<int, array<string, mixed>>
      * }>
@@ -124,16 +130,12 @@ class WeeklyDigestBuilder
             return "Weekly fishing digest for week ending {$formattedWeekEnding}: no digest-enabled alert rules.";
         }
 
-        $weekStart = $weekEnding->subDays(6);
-        $weeklyConditions = $this->environmentalConditionFormatter->weeklyLine($weekStart, $weekEnding);
-
         return "Weekly fishing digest for week ending {$formattedWeekEnding}:"
-            .($weeklyConditions === null ? '' : "\n{$weeklyConditions}")
             ."\n".$lines->implode("\n");
     }
 
     /**
-     * @return array{weekly_total: int, best_day: string, trend: string, environmental_condition: string|null, trip_options: Collection<int, array<string, mixed>>, trip_recommendations: Collection<int, array<string, mixed>>}
+     * @return array{weekly_total: int, best_day: string, trend: string, environmental_condition: array<string, mixed>|null, trip_options: Collection<int, array<string, mixed>>, trip_recommendations: Collection<int, array<string, mixed>>}
      */
     private function summaryForRule(AlertRule $rule, CarbonImmutable $weekEnding): array
     {
@@ -142,15 +144,18 @@ class WeeklyDigestBuilder
         $scores = $rule->scoreResults->sortBy('score_date')->values();
         $firstScore = $scores->first();
         $lastScore = $scores->last();
-        $bestScore = $scores->sortByDesc('score')->first();
+        $bestScore = $this->bestRelevantScore($scores, (int) $rule->minimum_score);
         $weeklyTotal = (int) $scores->sum('total_count');
         $tripOptions = $this->tripDecisionBuilder->rankedTrips($rule, CarbonImmutable::parse($weekStart), CarbonImmutable::parse($weekEnd));
+        $locationProfile = $this->environmentalConditionProfileResolver->resolve($rule);
 
         return [
             'weekly_total' => $weeklyTotal,
             'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->format('n/j/Y')} ({$bestScore->score})",
             'trend' => $this->trendLabel($firstScore?->score, $lastScore?->score),
-            'environmental_condition' => $bestScore === null ? null : $this->environmentalConditionFormatter->forDate($bestScore->score_date->toImmutable()),
+            'environmental_condition' => $bestScore === null
+                ? null
+                : $this->environmentalConditionFormatter->detailsForDate($bestScore->score_date->toImmutable(), $locationProfile),
             'trip_options' => $tripOptions,
             'trip_recommendations' => $this->tripDecisionBuilder->recommendedBoats($tripOptions),
         ];
@@ -169,5 +174,48 @@ class WeeklyDigestBuilder
             $delta < 0 => (string) $delta,
             default => 'flat',
         };
+    }
+
+    /**
+     * @param  Collection<int, ScoreResult>  $scores
+     */
+    private function bestRelevantScore(Collection $scores, int $minimumScore): ?ScoreResult
+    {
+        $thresholdScores = $scores->filter(
+            fn (ScoreResult $scoreResult): bool => $scoreResult->score >= $minimumScore,
+        );
+        $candidates = $thresholdScores->isNotEmpty() ? $thresholdScores : $scores;
+
+        return $candidates
+            ->sort(function (ScoreResult $left, ScoreResult $right): int {
+                $scoreComparison = $right->score <=> $left->score;
+
+                return $scoreComparison !== 0
+                    ? $scoreComparison
+                    : $right->score_date->getTimestamp() <=> $left->score_date->getTimestamp();
+            })
+            ->first();
+    }
+
+    /** @param  array<string, mixed>|null  $conditions */
+    private function environmentalConditionLine(?array $conditions): string
+    {
+        if ($conditions === null) {
+            return 'conditions unavailable';
+        }
+
+        if (! $conditions['available']) {
+            return "{$conditions['location_label']} conditions unavailable";
+        }
+
+        $readings = collect([
+            $conditions['water_temperature'] === null ? null : 'water '.$conditions['water_temperature'],
+            $conditions['swell'] === null ? null : 'swell '.$conditions['swell'],
+            $conditions['moon'] === null ? null : 'moon '.$conditions['moon'],
+        ])->filter()->implode('; ');
+
+        return $readings === ''
+            ? "{$conditions['location_label']} conditions collected"
+            : "{$conditions['location_label']} conditions: {$readings}";
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Species;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreSpeciesRequest extends FormRequest
@@ -23,6 +24,7 @@ class StoreSpeciesRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'environmental_location_profile' => ['nullable', 'string', Rule::in(array_keys(config('fish.conditions.profiles', [])))],
             'name' => ['required', 'string', 'max:255'],
         ];
     }

@@ -2,8 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\BookingProvider;
 use App\Enums\EnvironmentalLocationType;
+use App\Models\Boat;
 use App\Models\EnvironmentalSource;
+use App\Models\Landing;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -44,6 +47,7 @@ class ProductionCheckCommand extends Command
         } else {
             $this->checkDatabase($failures);
             $this->checkEnvironmentalSources($failures);
+            $this->checkBookingReferenceData($failures);
         }
 
         if ((string) config('app.env') !== 'production') {
@@ -175,6 +179,54 @@ class ProductionCheckCommand extends Command
             $this->assert($missingSources === [], 'Enabled environmental source reference data is seeded.', 'Missing enabled environmental source rows: '.implode(', ', $missingSources).'. Run php artisan db:seed --class=EnvironmentalSourceSeeder --force.', $failures);
         } catch (\Throwable $throwable) {
             $message = 'Environmental source reference data check failed: '.$throwable->getMessage();
+            $this->components->error($message);
+            $failures[] = $message;
+        }
+    }
+
+    /**
+     * @param  array<int, string>  $failures
+     */
+    private function checkBookingReferenceData(array &$failures): void
+    {
+        try {
+            $expectedLandings = [
+                'fishermans-landing' => [BookingProvider::FishingReservations, 'https://fishermanslanding.fishingreservations.net/resos/'],
+                'seaforth-sportfishing' => [BookingProvider::FishingReservations, 'https://seaforth.fishingreservations.net/sales/'],
+                'hm-landing' => [BookingProvider::HmLanding, 'https://www.hmlanding.com'],
+                'point-loma-sportfishing' => [BookingProvider::FishingReservations, 'https://pointloma.fishingreservations.net/sales/'],
+            ];
+            $landings = Landing::query()
+                ->whereIn('slug', array_keys($expectedLandings))
+                ->get()
+                ->keyBy('slug');
+
+            foreach ($expectedLandings as $slug => [$provider, $baseUrl]) {
+                $landing = $landings->get($slug);
+
+                $this->assert(
+                    $landing !== null
+                        && $landing->booking_provider === $provider
+                        && $landing->booking_base_url === $baseUrl,
+                    "Booking provider metadata is configured for [{$slug}].",
+                    "Booking provider metadata is missing or invalid for [{$slug}]. Run pending migrations.",
+                    $failures,
+                );
+            }
+
+            $sanDiego = Boat::query()
+                ->where('slug', 'san-diego')
+                ->whereHas('landing', fn ($query) => $query->where('slug', 'seaforth-sportfishing'))
+                ->first();
+
+            $this->assert(
+                filled($sanDiego?->booking_provider_identifier),
+                'San Diego has a provider-specific booking identifier.',
+                'San Diego is missing its provider booking identifier. Run php artisan booking:sync-provider-identifiers.',
+                $failures,
+            );
+        } catch (\Throwable $throwable) {
+            $message = 'Booking reference data check failed: '.$throwable->getMessage();
             $this->components->error($message);
             $failures[] = $message;
         }

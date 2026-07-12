@@ -24,11 +24,12 @@ class BookingAvailabilityServiceTest extends TestCase
         CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
         Http::preventStrayRequests();
         Http::fake([
+            'https://seaforth.fishingreservations.net/sales/' => Http::response($this->boatIdentifierFixture('San Diego', '248'), 200),
             'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
         ]);
 
         $availability = app(FishingReservationsAvailabilityService::class)->resolve(
-            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => 'stale-identifier']),
             new Landing([
                 'booking_provider' => BookingProvider::FishingReservations,
                 'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
@@ -40,12 +41,130 @@ class BookingAvailabilityServiceTest extends TestCase
 
         $this->assertSame('https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920', $availability->bookingUrl);
         $this->assertSame('1048920', $availability->providerTripId);
+        $this->assertSame('Tue, Jul 7, 2026 at 5:30 AM PDT', $availability->departureAtDisplay());
         $this->assertTrue($availability->isDirectBooking);
         $this->assertSame(19, $availability->openSpots);
         $this->assertSame('Jul 6, 2026 at 10:42 AM PDT', $availability->availabilityPulledAtDisplay());
 
-        Http::assertSentCount(1);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://seaforth.fishingreservations.net/sales/');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://seaforth.fishingreservations.net/sales/?boat_filter%5B0%5D=248&mode=table');
+    }
+
+    public function test_it_does_not_use_a_saved_identifier_when_live_parsing_succeeds_without_the_boat(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://seaforth.fishingreservations.net/sales/' => Http::response($this->boatIdentifierFixture('Sea Watch', '249'), 200),
+        ]);
+
+        $availability = app(FishingReservationsAvailabilityService::class)->resolve(
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Landing([
+                'booking_provider' => BookingProvider::FishingReservations,
+                'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
+            ]),
+            CarbonImmutable::parse('2026-07-07'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://seaforth.fishingreservations.net/sales/', $availability->bookingUrl);
+        $this->assertSame('provider_boat_not_found', $availability->fallbackReason);
+        $this->assertFalse($availability->isDirectBooking);
+        Http::assertSentCount(1);
+    }
+
+    public function test_it_uses_the_saved_identifier_only_when_live_identifier_parsing_fails(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'https://seaforth.fishingreservations.net/sales/' => Http::response('<html><body>Unexpected provider markup</body></html>', 200),
+            'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
+        ]);
+
+        $availability = app(FishingReservationsAvailabilityService::class)->resolve(
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Landing([
+                'booking_provider' => BookingProvider::FishingReservations,
+                'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
+            ]),
+            CarbonImmutable::parse('2026-07-07'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920', $availability->bookingUrl);
+        $this->assertSame('1048920', $availability->providerTripId);
+        $this->assertTrue($availability->isDirectBooking);
+    }
+
+    public function test_it_resolves_the_next_matching_bookable_trip_for_a_past_report_date(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
+        ]);
+
+        $availability = app(FishingReservationsAvailabilityService::class)->resolve(
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Landing([
+                'booking_provider' => BookingProvider::FishingReservations,
+                'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
+            ]),
+            CarbonImmutable::parse('2026-07-05'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920', $availability->bookingUrl);
+        $this->assertSame('1048920', $availability->providerTripId);
+        $this->assertTrue($availability->isDirectBooking);
+    }
+
+    public function test_it_matches_a_canonical_trip_type_with_a_provider_specific_label(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
+        ]);
+
+        $availability = app(FishingReservationsAvailabilityService::class)->resolve(
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Landing([
+                'booking_provider' => BookingProvider::FishingReservations,
+                'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
+            ]),
+            CarbonImmutable::parse('2026-07-07'),
+            'Full Day Coronado Islands',
+        );
+
+        $this->assertSame('https://seaforth.fishingreservations.net/sales/user.php?trip_id=1048920', $availability->bookingUrl);
+        $this->assertSame('1048920', $availability->providerTripId);
+        $this->assertTrue($availability->isDirectBooking);
+    }
+
+    public function test_it_does_not_shift_a_future_target_date_when_comparing_pacific_departures(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'seaforth.fishingreservations.net/*' => Http::response($this->seaforthFixture(), 200),
+        ]);
+
+        $availability = app(FishingReservationsAvailabilityService::class)->resolve(
+            new Boat(['name' => 'San Diego', 'slug' => 'san-diego', 'booking_provider_identifier' => '248']),
+            new Landing([
+                'booking_provider' => BookingProvider::FishingReservations,
+                'booking_base_url' => 'https://seaforth.fishingreservations.net/sales/',
+            ]),
+            CarbonImmutable::parse('2026-07-08'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://seaforth.fishingreservations.net/sales/?boat_filter%5B0%5D=248', $availability->bookingUrl);
+        $this->assertNull($availability->providerTripId);
+        $this->assertFalse($availability->isDirectBooking);
     }
 
     public function test_it_falls_back_when_matching_date_is_not_directly_bookable(): void
@@ -191,6 +310,17 @@ class BookingAvailabilityServiceTest extends TestCase
                 </tr>
                 <tr class="scale-group"><td colspan="7">Bring passport.</td></tr>
             </table>
+        HTML;
+    }
+
+    private function boatIdentifierFixture(string $boatName, string $providerIdentifier): string
+    {
+        return <<<HTML
+            <form>
+                <select name="boat_filter[]" multiple="multiple">
+                    <option value="{$providerIdentifier}">{$boatName}</option>
+                </select>
+            </form>
         HTML;
     }
 

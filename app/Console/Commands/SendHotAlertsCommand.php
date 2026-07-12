@@ -9,12 +9,16 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('fish:send-hot-alerts {date?}')]
-#[Description('Dispatch hot bite alert notifications for threshold-crossing score results.')]
+#[Description('Dispatch threshold-crossing alerts, defaulting to the previous completed day.')]
 class SendHotAlertsCommand extends Command
 {
     public function handle(AlertNotificationService $notificationService): int
     {
-        $date = CarbonImmutable::parse($this->argument('date') ?: today());
+        $timezone = (string) config('fish.conditions.timezone', 'America/Los_Angeles');
+        $date = CarbonImmutable::parse(
+            $this->argument('date') ?: CarbonImmutable::now($timezone)->subDay(),
+            $timezone,
+        );
         $count = $notificationService->dispatchThresholdCrossings($date);
 
         $this->info("Queued {$count} hot alert delivery jobs for {$date->toDateString()}.");

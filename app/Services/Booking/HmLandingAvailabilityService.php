@@ -69,6 +69,7 @@ class HmLandingAvailabilityService
                 return $this->availabilityByRequest[$cacheKey] = new BookingAvailability(
                     bookingUrl: $fallbackUrl,
                     providerTripId: null,
+                    departureAt: $matched->departAt,
                     isDirectBooking: false,
                     openSpots: $matched->openSpots,
                     availabilityPulledAt: $matched->pulledAt,
@@ -212,7 +213,7 @@ class HmLandingAvailabilityService
      */
     private function matchingOption(Collection $options, Boat $boat, CarbonImmutable $targetDate, ?string $preferredTripType): ?HmLandingTripOption
     {
-        $bookableOptions = $this->optionsForBoatAndDate($options, $boat, $targetDate)
+        $bookableOptions = $this->upcomingOptionsForBoat($options, $boat, $targetDate)
             ->filter(fn (HmLandingTripOption $option): bool => $option->isBookable)
             ->sortBy(fn (HmLandingTripOption $option): string => $option->departAt?->toDateTimeString() ?? '')
             ->values();
@@ -235,6 +236,23 @@ class HmLandingAvailabilityService
         }
 
         return $bookableOptions->first();
+    }
+
+    /**
+     * @param  Collection<int, HmLandingTripOption>  $options
+     * @return Collection<int, HmLandingTripOption>
+     */
+    private function upcomingOptionsForBoat(Collection $options, Boat $boat, CarbonImmutable $targetDate): Collection
+    {
+        $normalizedBoatName = $this->normalizedText($boat->name);
+        $now = CarbonImmutable::now('America/Los_Angeles');
+        $targetDate = CarbonImmutable::parse($targetDate->toDateString(), 'America/Los_Angeles')->startOfDay();
+        $earliestDeparture = $targetDate->greaterThan($now) ? $targetDate : $now;
+
+        return $options
+            ->filter(fn (HmLandingTripOption $option): bool => $this->normalizedText($option->boatName) === $normalizedBoatName
+                && $option->departAt?->greaterThanOrEqualTo($earliestDeparture))
+            ->values();
     }
 
     /**

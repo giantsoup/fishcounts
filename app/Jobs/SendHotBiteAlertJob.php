@@ -11,7 +11,6 @@ use App\Models\NotificationDestination;
 use App\Notifications\HotBiteAlertNotification;
 use App\Services\Notifications\DiscordWebhookSender;
 use App\Services\Notifications\TripDecisionBuilder;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -65,8 +64,8 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
 
         $tripOptions = $tripDecisionBuilder->rankedTrips(
             $event->alertRule,
-            CarbonImmutable::parse($event->event_date),
-            CarbonImmutable::parse($event->event_date),
+            $event->scoreResult->score_date->toImmutable(),
+            $event->scoreResult->score_date->toImmutable(),
         );
         $tripRecommendations = $tripDecisionBuilder->recommendedBoats($tripOptions);
 
@@ -89,7 +88,7 @@ class SendHotBiteAlertJob implements ShouldBeUnique, ShouldQueue
                 $event->update(['email_sent_at' => now()]);
             } else {
                 $discord->send($destination->destination, [
-                    'content' => "**Hot bite alert: {$event->alertRule->name}**\n{$event->alertRule->species->name} scored {$event->score} for {$event->event_date->toDateString()}.",
+                    'content' => "**Hot bite alert: {$event->alertRule->name}**\n{$event->alertRule->species->name} scored {$event->score} for {$event->scoreResult->score_date->toDateString()}.",
                 ]);
                 $event->update(['discord_sent_at' => now()]);
             }

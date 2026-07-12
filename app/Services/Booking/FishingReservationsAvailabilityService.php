@@ -30,6 +30,7 @@ class FishingReservationsAvailabilityService
 
     public function __construct(
         private readonly BookingUrlResolver $bookingUrlResolver,
+        private readonly FishingReservationsBoatIdentifierResolver $boatIdentifierResolver,
     ) {}
 
     public function resolve(
@@ -46,12 +47,23 @@ class FishingReservationsAvailabilityService
             return BookingAvailability::fallback($fallbackUrl, fallbackReason: 'provider_not_configured');
         }
 
-        $scheduleUrl = $this->scheduleUrl($landing, $boat);
+        $providerBoatIdentifier = $this->boatIdentifierResolver->resolve($boat, $landing);
+
+        if ($providerBoatIdentifier === null) {
+            return BookingAvailability::fallback(
+                $this->genericProviderUrl($boat, $landing, $sourceUrl),
+                fallbackReason: 'provider_boat_not_found',
+            );
+        }
+
+        $filteredBookingUrl = $this->filteredBookingUrl($landing, $providerBoatIdentifier);
+        $scheduleUrl = $this->scheduleUrl($filteredBookingUrl);
         $cacheKey = implode('|', [
             $boat?->getKey() ?? spl_object_id($boat),
             $landing?->getKey() ?? spl_object_id($landing),
             $targetDate->toDateString(),
             $this->normalizedText($preferredTripType),
+            $providerBoatIdentifier,
             $scheduleUrl,
         ]);
 
@@ -67,11 +79,13 @@ class FishingReservationsAvailabilityService
                 return $this->availabilityByRequest[$cacheKey] = BookingAvailability::direct(
                     bookingUrl: $matched->bookingUrl,
                     providerTripId: $matched->providerTripId,
+                    departureAt: $matched->departAt,
                     openSpots: $matched->openSpots,
                     availabilityPulledAt: $matched->pulledAt,
                     statusText: $matched->statusText,
                     providerMetadata: [
                         'provider' => BookingProvider::FishingReservations->value,
+                        'provider_boat_identifier' => $providerBoatIdentifier,
                         'load' => $matched->load,
                         'price_text' => $matched->priceText,
                         'departure_at' => $matched->departAt?->toIso8601String(),
@@ -85,7 +99,7 @@ class FishingReservationsAvailabilityService
             $pulledAt = $this->pulledAtByUrl[$scheduleUrl] ?? $options->first()?->pulledAt;
 
             return $this->availabilityByRequest[$cacheKey] = BookingAvailability::fallback(
-                bookingUrl: $fallbackUrl,
+                bookingUrl: $filteredBookingUrl,
                 pulledAt: $pulledAt,
                 fallbackReason: 'exact_trip_not_available',
                 statusText: $this->statusForDate($options, $targetDate),
@@ -99,7 +113,7 @@ class FishingReservationsAvailabilityService
             ]);
 
             return $this->availabilityByRequest[$cacheKey] = BookingAvailability::fallback(
-                bookingUrl: $fallbackUrl,
+                bookingUrl: $filteredBookingUrl,
                 fallbackReason: 'provider_request_failed',
             );
         }
@@ -157,15 +171,26 @@ class FishingReservationsAvailabilityService
     {
         return $boat !== null
             && $landing?->booking_provider === BookingProvider::FishingReservations
-            && filled($landing->booking_base_url)
-            && filled($boat->booking_provider_identifier);
+            && filled($landing->booking_base_url);
     }
 
-    private function scheduleUrl(Landing $landing, Boat $boat): string
+    private function filteredBookingUrl(Landing $landing, string $providerBoatIdentifier): string
     {
         return (string) Uri::of($landing->booking_base_url)
-            ->pushOntoQuery('boat_filter', $boat->booking_provider_identifier)
-            ->withQueryIfMissing(['mode' => 'table']);
+            ->pushOntoQuery('boat_filter', $providerBoatIdentifier);
+    }
+
+    private function scheduleUrl(string $filteredBookingUrl): string
+    {
+        return (string) Uri::of($filteredBookingUrl)->withQueryIfMissing(['mode' => 'table']);
+    }
+
+    private function genericProviderUrl(Boat $boat, Landing $landing, ?string $sourceUrl): ?string
+    {
+        return $boat->booking_url
+            ?? $landing->booking_base_url
+            ?? $landing->website_url
+            ?? $sourceUrl;
     }
 
     /**
@@ -198,9 +223,10 @@ class FishingReservationsAvailabilityService
      */
     private function matchingOption(Collection $options, CarbonImmutable $targetDate, ?string $preferredTripType): ?FishingReservationsTripOption
     {
+        $earliestDeparture = $this->earliestDeparture($targetDate);
         $bookableOptions = $options
             ->filter(fn (FishingReservationsTripOption $option): bool => $option->isBookable
-                && $option->departAt?->toDateString() === $targetDate->toDateString())
+                && $option->departAt?->greaterThanOrEqualTo($earliestDeparture))
             ->sortBy(fn (FishingReservationsTripOption $option): string => $option->departAt?->toDateTimeString() ?? '')
             ->values();
 
@@ -216,12 +242,29 @@ class FishingReservationsAvailabilityService
                 $normalizedPreferredTripType,
             ));
 
+            $normalizedBaseTripType = $this->normalizedBaseTripType($preferredTripType);
+
+            $tripTypeMatch ??= $normalizedBaseTripType === ''
+                ? null
+                : $bookableOptions->first(fn (FishingReservationsTripOption $option): bool => str_contains(
+                    $this->normalizedBaseTripType($option->tripTypeText),
+                    $normalizedBaseTripType,
+                ));
+
             if ($tripTypeMatch !== null) {
                 return $tripTypeMatch;
             }
         }
 
         return $bookableOptions->first();
+    }
+
+    private function earliestDeparture(CarbonImmutable $targetDate): CarbonImmutable
+    {
+        $now = CarbonImmutable::now('America/Los_Angeles');
+        $targetDate = CarbonImmutable::parse($targetDate->toDateString(), 'America/Los_Angeles')->startOfDay();
+
+        return $targetDate->greaterThan($now) ? $targetDate : $now;
     }
 
     /**
@@ -400,6 +443,19 @@ class FishingReservationsAvailabilityService
         return Str::of($text ?? '')
             ->lower()
             ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->squish()
+            ->toString();
+    }
+
+    private function normalizedBaseTripType(?string $text): string
+    {
+        return Str::of($this->normalizedText($text))
+            ->replace([
+                'coronado islands',
+                'offshore',
+                'local',
+                'passport required',
+            ], ' ')
             ->squish()
             ->toString();
     }

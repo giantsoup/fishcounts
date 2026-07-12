@@ -38,6 +38,7 @@ class HmLandingAvailabilityServiceTest extends TestCase
         $this->assertNull($availability->providerTripId);
         $this->assertFalse($availability->isDirectBooking);
         $this->assertSame('provider_page_only', $availability->fallbackReason);
+        $this->assertSame('Tue, Jul 7, 2026 at 5:30 AM PDT', $availability->departureAtDisplay());
         $this->assertSame(40, $availability->openSpots);
         $this->assertSame('Bookable', $availability->statusText);
         $this->assertSame('Jul 6, 2026 at 10:42 AM PDT', $availability->availabilityPulledAtDisplay());
@@ -46,6 +47,47 @@ class HmLandingAvailabilityServiceTest extends TestCase
         $this->assertSame('530', $availability->providerMetadata['arrival_time']);
 
         Http::assertSentCount(1);
+    }
+
+    public function test_it_resolves_the_next_matching_availability_for_a_past_report_date(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'www.hmlanding.com/xolacache*' => Http::response($this->jsonpFixture(), 200),
+        ]);
+
+        $availability = app(HmLandingAvailabilityService::class)->resolve(
+            new Boat(['name' => 'Grande', 'slug' => 'grande']),
+            $this->hmLanding(),
+            CarbonImmutable::parse('2026-07-05'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://www.hmlanding.com/boat/grande#tab-open-trips', $availability->bookingUrl);
+        $this->assertSame('provider_page_only', $availability->fallbackReason);
+        $this->assertSame(40, $availability->openSpots);
+        $this->assertSame('2026-07-07', $availability->providerMetadata['arrival']);
+    }
+
+    public function test_it_does_not_shift_a_future_target_date_when_comparing_pacific_departures(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-07-06 10:42:00', 'America/Los_Angeles'));
+        Http::preventStrayRequests();
+        Http::fake([
+            'www.hmlanding.com/xolacache*' => Http::response($this->jsonpFixture(), 200),
+        ]);
+
+        $availability = app(HmLandingAvailabilityService::class)->resolve(
+            new Boat(['name' => 'Grande', 'slug' => 'grande']),
+            $this->hmLanding(),
+            CarbonImmutable::parse('2026-07-08'),
+            'Full Day',
+        );
+
+        $this->assertSame('https://www.hmlanding.com/boat/grande#tab-open-trips', $availability->bookingUrl);
+        $this->assertSame('exact_trip_not_available', $availability->fallbackReason);
+        $this->assertNull($availability->openSpots);
     }
 
     public function test_parser_marks_sold_departed_and_call_only_rows_as_not_directly_bookable(): void

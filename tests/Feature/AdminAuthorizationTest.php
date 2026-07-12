@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Boat;
+use App\Models\Species;
 use App\Models\TripType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,6 +59,19 @@ class AdminAuthorizationTest extends TestCase
 
         $this->actingAs($user)
             ->patch(route('admin.trip-types.update', $tripType), ['order_sort_order' => 1])
+            ->assertForbidden();
+    }
+
+    public function test_normal_user_cannot_update_a_species_condition_profile(): void
+    {
+        $user = User::factory()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+
+        $this->actingAs($user)
+            ->patch(route('admin.species.update', $species), [
+                'species_id' => $species->id,
+                'species_environmental_location_profile' => 'coronado_islands',
+            ])
             ->assertForbidden();
     }
 }

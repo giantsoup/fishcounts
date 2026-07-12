@@ -3,12 +3,6 @@
 
 Week ending {{ $weekEnding->toFormattedDateString() }}
 
-@if ($weeklyEnvironmentalLine)
-{{ $weeklyEnvironmentalLine }}
-@else
-Official environmental conditions are not available for this week yet.
-@endif
-
 @forelse ($summaries as $summary)
 ## {{ $summary['rule_name'] }}
 
@@ -29,19 +23,15 @@ No scores were recorded for {{ $summary['species_name'] }} this week.
 | Boats reporting | {{ $summary['boat_count'] }} |
 </x-mail::table>
 
-@if ($summary['environmental_condition'])
-**Best-day official conditions:** {{ $summary['environmental_condition'] }}
-@else
-Best-day official conditions are not available yet.
-@endif
+<x-mail.condition-summary :conditions="$summary['environmental_condition']" context="Best day" />
 
-**Best trip options**
+**Best previous trips for {{ $summary['species_name'] }}**
 
 @if ($summary['trip_options']->isEmpty())
-No matching boat-level trip counts this week.
+No matching completed trips with {{ $summary['species_name'] }} catches were found this week.
 @else
 <x-mail::table>
-| Date | Boat | Landing | Trip | Count |
+| Catch date | Boat | Landing | Trip | Count |
 | :-- | :-- | :-- | :-- | --: |
 @foreach ($summary['trip_options'] as $trip)
 | {{ $trip['trip_date'] }} | {{ $trip['boat_name'] }} | {{ $trip['landing_name'] }} | {{ $trip['trip_type'] }} | @if ($trip['source_url']) [{{ $trip['target_count'] }} ↗]({{ $trip['source_highlight_url'] ?? $trip['source_url'] }}) @else {{ $trip['target_count'] }} @endif |
@@ -54,9 +44,15 @@ No matching boat-level trip counts this week.
 No booking links are available for the ranked boats.
 @else
 @foreach ($summary['trip_recommendations'] as $trip)
-- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} on {{ $trip['trip_date'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $summary['species_name'] }}) - [Book]({{ $trip['booking_url'] }})
-@if (isset($trip['booking_open_spots'], $trip['booking_availability_pulled_at_display']) && $trip['booking_open_spots'] !== null)
-  {{ $trip['booking_open_spots'] }} spots open, checked {{ $trip['booking_availability_pulled_at_display'] }}.
+- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $summary['species_name'] }} caught {{ $trip['trip_date'] }}) - [{{ $trip['booking_is_direct'] ? 'Book next matching trip' : 'View booking options' }}]({{ $trip['booking_url'] }})
+@if ($trip['booking_departure_at_display'])
+  Next matching departure: **{{ $trip['booking_departure_at_display'] }}**.
+@if ($trip['booking_open_spots'] !== null)
+  {{ $trip['booking_open_spots'] }} spots open.
+@endif
+@if ($trip['booking_availability_pulled_at_display'])
+  Availability checked {{ $trip['booking_availability_pulled_at_display'] }}.
+@endif
 @endif
 @endforeach
 @endif

@@ -5,17 +5,22 @@ namespace App\Console\Commands;
 use App\Enums\ScrapeRunType;
 use App\Jobs\ScrapeSourceForDateJob;
 use App\Models\ScrapeSource;
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
-#[Signature('fish:scrape-daily')]
-#[Description('Create the daily scrape run envelope for enabled sources.')]
+#[Signature('fish:scrape-daily {date?}')]
+#[Description('Create scrape runs for enabled sources, defaulting to the previous completed day.')]
 class ScrapeDailyCommand extends Command
 {
     public function handle(): int
     {
-        $date = today()->toDateString();
+        $timezone = (string) config('fish.conditions.timezone', 'America/Los_Angeles');
+        $date = CarbonImmutable::parse(
+            $this->argument('date') ?: CarbonImmutable::now($timezone)->subDay(),
+            $timezone,
+        )->toDateString();
 
         ScrapeSource::query()
             ->where('is_enabled', true)

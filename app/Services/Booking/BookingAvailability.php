@@ -12,6 +12,7 @@ class BookingAvailability
     public function __construct(
         public readonly ?string $bookingUrl,
         public readonly ?string $providerTripId = null,
+        public readonly ?CarbonImmutable $departureAt = null,
         public readonly bool $isDirectBooking = false,
         public readonly ?int $openSpots = null,
         public readonly ?CarbonImmutable $availabilityPulledAt = null,
@@ -26,6 +27,7 @@ class BookingAvailability
     public static function direct(
         ?string $bookingUrl,
         ?string $providerTripId = null,
+        ?CarbonImmutable $departureAt = null,
         ?int $openSpots = null,
         ?CarbonImmutable $availabilityPulledAt = null,
         ?string $statusText = null,
@@ -34,6 +36,7 @@ class BookingAvailability
         return new self(
             bookingUrl: $bookingUrl,
             providerTripId: $providerTripId,
+            departureAt: $departureAt,
             isDirectBooking: true,
             openSpots: $openSpots,
             availabilityPulledAt: $availabilityPulledAt,
@@ -66,12 +69,19 @@ class BookingAvailability
         return $this->availabilityPulledAt?->timezone('America/Los_Angeles')->format('M j, Y \a\t g:i A T');
     }
 
+    public function departureAtDisplay(): ?string
+    {
+        return $this->departureAt?->timezone('America/Los_Angeles')->format('D, M j, Y \a\t g:i A T');
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {
         return [
             'booking_url' => $this->bookingUrl,
             'provider_trip_id' => $this->providerTripId,
+            'departure_at' => $this->departureAt?->toIso8601String(),
+            'departure_at_display' => $this->departureAtDisplay(),
             'is_direct_booking' => $this->isDirectBooking,
             'open_spots' => $this->openSpots,
             'availability_pulled_at' => $this->availabilityPulledAt?->toIso8601String(),

@@ -70,7 +70,11 @@ class WeeklyDigestBuilderTest extends TestCase
             'slug' => 'searcher',
         ]);
         $filteredBoat = Boat::query()->create(['landing_id' => $landing->id, 'name' => 'Daily Double', 'slug' => 'daily-double']);
-        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $species = Species::query()->create([
+            'name' => 'Yellowtail',
+            'slug' => 'yellowtail',
+            'environmental_location_profile' => 'coronado_islands',
+        ]);
         $otherSpecies = Species::query()->create(['name' => 'Calico Bass', 'slug' => 'calico-bass']);
         $tripType = TripType::query()->create(['name' => '3/4 Day', 'slug' => '3-4-day']);
         $filteredTripType = TripType::query()->create(['name' => '1/2 Day', 'slug' => '1-2-day']);
@@ -142,8 +146,20 @@ class WeeklyDigestBuilderTest extends TestCase
         EnvironmentalDailySummary::query()->create([
             'location_profile' => 'san_diego_bight',
             'observed_date' => '2026-06-17',
+            'water_temp_f_avg' => 57.8,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'coronado_islands',
+            'location_type' => 'islands',
+            'observed_date' => '2026-06-17',
             'moon_phase' => 'New Moon',
             'water_temp_f_avg' => 67.8,
+            'water_temp_f_min' => 67.2,
+            'water_temp_f_max' => 68.4,
+            'swell_height_ft_avg' => 2.1,
+            'swell_period_seconds_avg' => 11,
             'swell_direction_degrees_dominant' => 210,
             'condition_summary' => 'moon New Moon; water 67.8 F; swell 2.1 ft @ 11s SSW.',
             'coverage' => [],
@@ -232,12 +248,114 @@ class WeeklyDigestBuilderTest extends TestCase
         $this->assertFalse($tripOptions->contains(fn (array $trip): bool => $trip['boat_name'] === 'Daily Double'));
         $this->assertStringContainsString('Local Yellowtail', $content);
         $this->assertStringContainsString('best 6/17/2026 (82)', $content);
-        $this->assertStringContainsString('Weekly conditions: moon New Moon; avg water 67.8 F; dominant swell SSW.', $content);
-        $this->assertStringContainsString('conditions moon New Moon; water 67.8 F; swell 2.1 ft @ 11s SSW.', $content);
+        $this->assertStringContainsString('Coronado Islands (Mexico) conditions: water 67.8°F average (67.2–68.4°F); swell 2.1 ft at 11 sec · SSW; moon New Moon', $content);
+        $this->assertStringNotContainsString('57.8°F', $content);
         $this->assertStringContainsString('trend +27', $content);
         $this->assertStringContainsString('ranked trips: New Lo-An 3/4 Day 6/17/26 60 target, Mission Belle 3/4 Day 6/17/26 40 target, Searcher 3/4 Day 6/16/26 25 target', $content);
-        $this->assertStringContainsString('recommended: New Lo-An 3/4 Day 6/17/26 https://booking.example.test/new-lo-an, Mission Belle 3/4 Day 6/17/26 https://pointloma.fishingreservations.net/sales/?boat_filter%5B0%5D=214, Searcher 3/4 Day 6/16/26 https://www.pointlomasportfishing.com/fishcounts.php', $content);
+        $this->assertStringContainsString('recommended: New Lo-An 3/4 Day catch 6/17/26, booking options https://booking.example.test/new-lo-an, Mission Belle 3/4 Day catch 6/17/26, booking options https://pointloma.fishingreservations.net/sales/?boat_filter%5B0%5D=214, Searcher 3/4 Day catch 6/16/26, booking options https://www.pointlomasportfishing.com/fishcounts.php', $content);
         $this->assertStringNotContainsString('/angler', $content);
+    }
+
+    public function test_weekly_conditions_use_the_best_threshold_qualified_day(): void
+    {
+        [$user, $rule, $scoreRun] = $this->weeklyConditionRule();
+        $this->weeklyScore($rule, $scoreRun, '2026-06-15', 80);
+        $this->weeklyScore($rule, $scoreRun, '2026-06-16', 60);
+        $this->weeklyScore($rule, $scoreRun, '2026-06-17', 75);
+        $this->dailyConditions('2026-06-15', 68.1);
+        $this->dailyConditions('2026-06-16', 69.2);
+        $this->dailyConditions('2026-06-17', 70.3);
+
+        $summary = app(WeeklyDigestBuilder::class)
+            ->summaries($user, CarbonImmutable::parse('2026-06-17'))
+            ->first();
+
+        $this->assertSame('6/15/2026 (80)', $summary['best_day']);
+        $this->assertSame('Jun 15, 2026', $summary['environmental_condition']['date_display']);
+        $this->assertSame('68.1°F average', $summary['environmental_condition']['water_temperature']);
+    }
+
+    public function test_weekly_conditions_use_the_best_day_when_no_score_reaches_threshold(): void
+    {
+        [$user, $rule, $scoreRun] = $this->weeklyConditionRule();
+        $this->weeklyScore($rule, $scoreRun, '2026-06-15', 40);
+        $this->weeklyScore($rule, $scoreRun, '2026-06-16', 65);
+        $this->weeklyScore($rule, $scoreRun, '2026-06-17', 55);
+        $this->dailyConditions('2026-06-15', 66.1);
+        $this->dailyConditions('2026-06-16', 67.2);
+        $this->dailyConditions('2026-06-17', 68.3);
+
+        $summary = app(WeeklyDigestBuilder::class)
+            ->summaries($user, CarbonImmutable::parse('2026-06-17'))
+            ->first();
+
+        $this->assertSame('6/16/2026 (65)', $summary['best_day']);
+        $this->assertSame('Jun 16, 2026', $summary['environmental_condition']['date_display']);
+        $this->assertSame('67.2°F average', $summary['environmental_condition']['water_temperature']);
+    }
+
+    public function test_weekly_best_day_ties_prefer_the_freshest_day(): void
+    {
+        [$user, $rule, $scoreRun] = $this->weeklyConditionRule();
+        $this->weeklyScore($rule, $scoreRun, '2026-06-15', 80);
+        $this->weeklyScore($rule, $scoreRun, '2026-06-17', 80);
+        $this->dailyConditions('2026-06-15', 66.1);
+        $this->dailyConditions('2026-06-17', 68.3);
+
+        $summary = app(WeeklyDigestBuilder::class)
+            ->summaries($user, CarbonImmutable::parse('2026-06-17'))
+            ->first();
+
+        $this->assertSame('6/17/2026 (80)', $summary['best_day']);
+        $this->assertSame('Jun 17, 2026', $summary['environmental_condition']['date_display']);
+        $this->assertSame('68.3°F average', $summary['environmental_condition']['water_temperature']);
+    }
+
+    /** @return array{User, AlertRule, ScoreRun} */
+    private function weeklyConditionRule(): array
+    {
+        $user = User::factory()->create();
+        $species = Species::query()->create([
+            'name' => 'Calico Bass',
+            'slug' => 'calico-bass',
+            'environmental_location_profile' => 'san_diego_bight',
+        ]);
+        $rule = AlertRule::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Calico Bass',
+            'species_id' => $species->id,
+            'minimum_score' => 70,
+            'include_in_weekly_digest' => true,
+        ]);
+        $scoreRun = ScoreRun::query()->create(['run_date' => '2026-06-17']);
+
+        return [$user, $rule, $scoreRun];
+    }
+
+    private function weeklyScore(AlertRule $rule, ScoreRun $scoreRun, string $date, int $score): void
+    {
+        ScoreResult::query()->create([
+            'score_run_id' => $scoreRun->id,
+            'alert_rule_id' => $rule->id,
+            'score_date' => $date,
+            'score' => $score,
+            'level' => ScoreLevel::fromScore($score),
+            'total_count' => $score,
+            'boat_count' => 1,
+            'landing_count' => 1,
+            'explanation' => [],
+        ]);
+    }
+
+    private function dailyConditions(string $date, float $waterTemperature): void
+    {
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'san_diego_bight',
+            'observed_date' => $date,
+            'water_temp_f_avg' => $waterTemperature,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
     }
 
     private function tripReport(

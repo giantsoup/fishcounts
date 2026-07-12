@@ -6,6 +6,7 @@ use App\Enums\ScoreLevel;
 use App\Enums\SourceType;
 use App\Models\AlertRule;
 use App\Models\Boat;
+use App\Models\EnvironmentalDailySummary;
 use App\Models\Landing;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
@@ -43,7 +44,11 @@ class WeeklyFishingDigestNotificationTest extends TestCase
             'slug' => 'pacific-queen',
             'booking_url' => 'https://booking.example.test/pacific-queen',
         ]);
-        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $species = Species::query()->create([
+            'name' => 'Yellowtail',
+            'slug' => 'yellowtail',
+            'environmental_location_profile' => 'coronado_islands',
+        ]);
         $tripType = TripType::query()->create(['name' => 'Overnight', 'slug' => 'overnight']);
         $source = ScrapeSource::query()->create([
             'name' => 'Fisherman\'s Landing',
@@ -85,6 +90,28 @@ class WeeklyFishingDigestNotificationTest extends TestCase
             'boat_count' => 2,
             'landing_count' => 1,
             'explanation' => [],
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'san_diego_bight',
+            'observed_date' => '2026-06-20',
+            'water_temp_f_avg' => 58.2,
+            'coverage' => [],
+            'is_partial' => false,
+        ]);
+        EnvironmentalDailySummary::query()->create([
+            'location_profile' => 'coronado_islands',
+            'location_type' => 'islands',
+            'observed_date' => '2026-06-20',
+            'moon_phase' => 'Waxing Crescent',
+            'moon_illumination_percent' => 21,
+            'water_temp_f_avg' => 68.6,
+            'water_temp_f_min' => 68.1,
+            'water_temp_f_max' => 69.2,
+            'swell_height_ft_avg' => 2.8,
+            'swell_period_seconds_avg' => 13,
+            'swell_direction_degrees_dominant' => 225,
+            'coverage' => [],
+            'is_partial' => false,
         ]);
         ScoreResult::query()->create([
             'score_run_id' => $scoreRun->id,
@@ -132,12 +159,22 @@ class WeeklyFishingDigestNotificationTest extends TestCase
         $this->assertStringContainsString('Wide Open', $html);
         $this->assertStringContainsString('Weekly target fish', $html);
         $this->assertStringContainsString('Best day', $html);
-        $this->assertStringContainsString('Best trip options', $html);
+        $this->assertStringContainsString('Offshore conditions', $html);
+        $this->assertStringContainsString('Coronado Islands (Mexico)', $html);
+        $this->assertStringContainsString('Best day · Coronado Islands (Mexico) · Jun 20, 2026', $html);
+        $this->assertStringContainsString('68.6°F average (68.1–69.2°F)', $html);
+        $this->assertStringContainsString('2.8 ft at 13 sec · SW', $html);
+        $this->assertStringNotContainsString('58.2°F', $html);
+        $this->assertStringContainsString('Best previous trips for Yellowtail', $html);
+        $this->assertStringContainsString('Catch date', $html);
+        $this->assertStringNotContainsString('Top recent trips', $html);
+        $this->assertStringNotContainsString('Best trip options', $html);
         $this->assertStringContainsString('Recommended boats', $html);
-        $this->assertStringContainsString('Book', $html);
+        $this->assertStringContainsString('View booking options', $html);
         $this->assertStringContainsString('Pacific Queen', $html);
         $this->assertStringContainsString('Overnight', $html);
         $this->assertStringContainsString('6/20/26', $html);
+        $this->assertStringContainsString('68 Yellowtail caught 6/20/26', $html);
         $this->assertStringContainsString('68', $html);
         $this->assertStringContainsString('↗', $html);
         $this->assertStringContainsString('https://www.fishermanslanding.com/fishcounts.php', $html);

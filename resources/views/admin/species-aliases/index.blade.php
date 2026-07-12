@@ -3,6 +3,9 @@
         ->map(fn ($item) => [
             'id' => $item->id,
             'name' => $item->name,
+            'environmental_location_profile' => $item->environmental_location_profile,
+            'environmental_location_profile_label' => $environmentalLocationProfiles[$item->environmental_location_profile] ?? $item->environmental_location_profile,
+            'update_url' => route('admin.species.update', $item),
             'aliases' => $item->aliases
                 ->map(fn ($alias) => [
                     'id' => $alias->id,
@@ -26,11 +29,21 @@
             x-data="{
                 species: {{ Illuminate\Support\Js::from($speciesOptions) }},
                 selectedSpeciesId: {{ Illuminate\Support\Js::from($normalizedSelectedSpeciesId) }},
+                selectedEnvironmentalLocationProfile: {{ Illuminate\Support\Js::from(old('species_environmental_location_profile')) }},
+                init() {
+                    if (! this.selectedEnvironmentalLocationProfile) {
+                        this.syncEnvironmentalLocationProfile();
+                    }
+                },
                 get selectedSpecies() {
                     return this.species.find((species) => species.id === this.selectedSpeciesId) || null;
                 },
                 selectSpecies(id) {
                     this.selectedSpeciesId = id;
+                    this.syncEnvironmentalLocationProfile();
+                },
+                syncEnvironmentalLocationProfile() {
+                    this.selectedEnvironmentalLocationProfile = this.selectedSpecies?.environmental_location_profile || null;
                 },
             }"
         >
@@ -42,12 +55,21 @@
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <h3 class="font-semibold text-gray-900">Active species</h3>
 
-                    <form method="POST" action="{{ route('admin.species.store') }}" class="grid gap-3 sm:grid-cols-[minmax(16rem,1fr)_auto] sm:items-end">
+                    <form method="POST" action="{{ route('admin.species.store') }}" class="grid gap-3 sm:grid-cols-[minmax(14rem,1fr)_minmax(15rem,1fr)_auto] sm:items-end">
                         @csrf
                         <div>
                             <x-input-label for="species_name" value="Name" />
                             <x-text-input id="species_name" name="name" class="mt-1 block w-full" :value="old('name')" />
                             <x-input-error :messages="$errors->get('name')" class="mt-2" />
+                        </div>
+                        <div>
+                            <x-input-label for="new_species_environmental_location_profile" value="Condition profile" />
+                            <x-form.select id="new_species_environmental_location_profile" name="environmental_location_profile">
+                                @foreach ($environmentalLocationProfiles as $profile => $label)
+                                    <option value="{{ $profile }}" @selected(old('environmental_location_profile', config('fish.conditions.location_profile')) === $profile)>{{ $label }}</option>
+                                @endforeach
+                            </x-form.select>
+                            <x-input-error :messages="$errors->get('environmental_location_profile')" class="mt-2" />
                         </div>
                         <x-primary-button>Save species</x-primary-button>
                     </form>
@@ -78,6 +100,7 @@
                         <div>
                             <h3 class="font-semibold text-gray-900" x-text="selectedSpecies?.name"></h3>
                             <p class="mt-1 text-sm text-gray-500" x-text="selectedSpecies ? selectedSpecies.aliases.length + (selectedSpecies.aliases.length === 1 ? ' alias' : ' aliases') : ''"></p>
+                            <p class="mt-1 text-sm text-gray-500" x-text="selectedSpecies?.environmental_location_profile_label"></p>
                         </div>
 
                         <form method="POST" action="{{ route('admin.species-aliases.store') }}" class="grid gap-3 sm:grid-cols-[minmax(16rem,1fr)_auto] sm:items-end">
@@ -92,6 +115,23 @@
                             <x-primary-button>Save alias</x-primary-button>
                         </form>
                     </div>
+
+                    <form method="POST" x-bind:action="selectedSpecies?.update_url" class="mt-6 grid gap-3 border-t pt-6 sm:grid-cols-[minmax(16rem,24rem)_auto] sm:items-end">
+                        @csrf
+                        @method('PATCH')
+                        <input type="hidden" name="species_id" :value="selectedSpeciesId">
+                        <div>
+                            <x-input-label for="species_environmental_location_profile" value="Condition profile" />
+                            <x-form.select id="species_environmental_location_profile" name="species_environmental_location_profile" :enhance="false" x-model="selectedEnvironmentalLocationProfile">
+                                @foreach ($environmentalLocationProfiles as $profile => $label)
+                                    <option value="{{ $profile }}">{{ $label }}</option>
+                                @endforeach
+                            </x-form.select>
+                            <p class="mt-1 text-sm text-gray-500">Controls which environmental conditions appear in alerts and weekly digests for this species.</p>
+                            <x-input-error :messages="$errors->get('species_environmental_location_profile')" class="mt-2" />
+                        </div>
+                        <x-secondary-button type="submit">Save condition profile</x-secondary-button>
+                    </form>
 
                     <div class="mt-6 divide-y">
                         <template x-if="selectedSpecies && selectedSpecies.aliases.length === 0">

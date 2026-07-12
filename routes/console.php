@@ -8,6 +8,12 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Schedule::command('booking:sync-provider-identifiers')
+    ->dailyAt('00:30')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('fish:scrape-daily')
     ->dailyAt('01:00')
     ->timezone('America/Los_Angeles')

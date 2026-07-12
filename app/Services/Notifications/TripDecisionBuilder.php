@@ -29,7 +29,16 @@ class TripDecisionBuilder
      *     source_url: ?string,
      *     source_highlight_url: ?string,
      *     booking_url: ?string,
-     *     booking_availability: array<string, mixed>
+     *     booking_availability: array<string, mixed>,
+     *     booking_provider_trip_id: ?string,
+     *     booking_departure_at: ?string,
+     *     booking_departure_at_display: ?string,
+     *     booking_is_direct: bool,
+     *     booking_open_spots: ?int,
+     *     booking_availability_pulled_at: ?string,
+     *     booking_availability_pulled_at_display: ?string,
+     *     booking_status_text: ?string,
+     *     booking_fallback_reason: ?string
      * }>
      */
     public function rankedTrips(AlertRule $rule, CarbonImmutable $from, CarbonImmutable $to, int $limit = 5): Collection
@@ -133,6 +142,8 @@ class TripDecisionBuilder
             'booking_url' => $bookingUrl,
             'booking_availability' => $availability->toArray(),
             'booking_provider_trip_id' => $availability->providerTripId,
+            'booking_departure_at' => $availability->departureAt?->toIso8601String(),
+            'booking_departure_at_display' => $availability->departureAtDisplay(),
             'booking_is_direct' => $availability->isDirectBooking,
             'booking_open_spots' => $availability->openSpots,
             'booking_availability_pulled_at' => $availability->availabilityPulledAt?->toIso8601String(),
