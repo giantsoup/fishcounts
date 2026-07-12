@@ -8,32 +8,32 @@
 
 - [ ] **Q9. What exact model should configuration default to, and is it available to the intended OpenAI project?**
   - Recommended: Verify account access to `gpt-5.6-luna` immediately before implementation and keep the model configurable.
-  - Answer: `TBD`
+  - Answer: Verify account access to `gpt-5.6-luna` immediately before implementation and keep the model configurable.
 
 - [ ] **Q10. What reasoning effort should be the initial default?**
   - Recommended: `low`, compared with `none` during shadow evaluation.
-  - Answer: `TBD`
+  - Answer: medium or high depending on our testing and the success rate
 
 - [ ] **Q11. What OpenAI data should be stored locally?**
   - Recommended: Validated structured result, response ID, model/version, token usage, cost estimate, and bounded failure metadata; do not retain the full raw response by default.
-  - Answer: `TBD`
+  - Answer: Validated structured result, response ID, model/version, token usage, cost estimate, and bounded failure metadata; do not retain the full raw response by default.
 
 - [ ] **Q12–Q14. What daily and monthly budgets and enforcement behavior should apply?**
   - Recommended: `$2` daily, `$25` monthly, and a hard stop on new AI calls while deterministic parsing continues.
-  - Daily answer: `TBD`
-  - Monthly answer: `TBD`
-  - Hard-stop answer: `TBD`
+  - Daily answer: no daily limit
+  - Monthly answer: $50 I have already set this $50 limit in the OpenAI settings as a hard limit so the API will fail after using this amount
+  - Hard-stop answer: $50
 
 - [ ] **How long should AI review/audit records be retained?**
   - Recommended: Retain validated decisions and audit metadata indefinitely; prune raw failure payloads after 30 days. Adjust to the application's operational needs.
-  - Answer: `TBD`
+  - Answer: Keep 3 months of data at all times, add the 4th month as we go, then on the first day of the 5th month, prune the entire oldest month of data so that we keep a rotating minimum of 3 months of data  
 
 - [ ] **What candidate-list and input-token bounds should apply?**
   - Recommended: Send only active canonical candidates relevant to the diagnostic type, with configurable input and output limits.
-  - Answer: `TBD`
+  - Answer: Send only active canonical candidates relevant to the diagnostic type, with configurable input and output limits.
 
 - [ ] **Approved to begin Phase 3?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

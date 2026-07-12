@@ -8,18 +8,18 @@
 
 - [ ] **Should this phase preserve exact parsing, normalization, failure, and deduplication behavior?**
   - Recommended: Yes; this is a behavior-neutral refactor.
-  - Answer: `TBD`
+  - Answer: Yes; this is a behavior-neutral refactor.
 
 - [ ] **Should one reusable action serve normal parsing and backfill reparsing?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Should this phase contain no migrations or external API calls?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Approved to begin Phase 1?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

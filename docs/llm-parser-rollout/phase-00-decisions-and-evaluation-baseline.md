@@ -1,50 +1,50 @@
 # Phase 0 — Decisions and Evaluation Baseline
 
-**Status:** Not started  
+**Status:** Implementation complete; awaiting corpus approval and pull request
 **Implementation dependency:** None  
 **Secret-handling rule:** Never place API keys or tokens in this file.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q1. Should implementation use one pull request and one approval per phase?**
+- [x] **Q1. Should implementation use one pull request and one approval per phase?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Q2. Should the Luna fallback remain non-blocking?**
+- [x] **Q2. Should the Luna fallback remain non-blocking?**
   - Recommended: Yes. Deterministic parsing and deduplication should complete even when OpenAI is unavailable.
   - Answer: Yes
 
-- [ ] **Q3. Are there known failures beyond the current database examples?**
+- [x] **Q3. Are there known failures beyond the current database examples?**
   - Include the source paragraph, incorrect output, and expected output for each example.
   - Answer: Non known failures outside of what we have already handled.
 
-- [ ] **Q4. Are sanitized fish-count paragraphs and public source URLs safe to send to OpenAI, store as diagnostic context, and include in GitHub issues?**
+- [x] **Q4. Are sanitized fish-count paragraphs and public source URLs safe to send to OpenAI, store as diagnostic context, and include in GitHub issues?**
   - Recommended: Permit only public fish-count text and URLs. Exclude HTML, cookies, request headers, credentials, and unrelated page content.
   - OpenAI answer: Yes, excluding your recommended list of items
   - Local storage answer: Yes, excluding your recommended list of items
   - GitHub issue answer: Yes, excluding your recommended list of items
 
-- [ ] **Q5. What historical scope should be used?**
+- [x] **Q5. What historical scope should be used?**
   - Recommended: Process new payloads first; review unresolved and historical payloads only after shadow validation.
   - Answer: Process new payloads first; review unresolved and historical payloads only after shadow validation.
 
-- [ ] **Q6. May the implementation use Laravel's HTTP client without adding an OpenAI or GitHub SDK?**
+- [x] **Q6. May the implementation use Laravel's HTTP client without adding an OpenAI or GitHub SDK?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Q7. Which role may review and approve AI recommendations?**
+- [x] **Q7. Which role may review and approve AI recommendations?**
   - Recommended: Existing administrators only.
   - Answer: Existing administrators only.
 
-- [ ] **May sanitized evaluation fixtures be committed to the repository?**
+- [x] **May sanitized evaluation fixtures be committed to the repository?**
   - Recommended: Yes, provided they contain only public fish-count text and no credentials or private metadata.
   - Answer: Yes, provided they contain only public fish-count text and no credentials or private metadata.
 
-- [ ] **How should parser versions be identified for fingerprints and invalidation?**
+- [x] **How should parser versions be identified for fingerprints and invalidation?**
   - Recommended: Use the explicit parser version already attached to each parsed report; never infer it from deployment time.
   - Answer: Use the explicit parser version already attached to each parsed report; never infer it from deployment time.
 
-- [ ] **Approved to begin Phase 0?**
+- [x] **Approved to begin Phase 0?**
   - Answer: Yes
 
 ## Objective
@@ -99,4 +99,3 @@ Remove the new evaluation fixtures and tests. There is no schema or production-d
 ## Deliverable
 
 One reviewable pull request containing only the approved evaluation corpus and any test-only supporting code.
-

@@ -10,30 +10,30 @@
   - Proposed: unknown alias, fractional trip conflict, prose captured as an entity,
     excessive name length, unaccounted numeric tokens, empty or unexpectedly small
     result set, structured-source fallback, and extracted-value/source-span mismatch.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **What clean-corpus false-positive ceiling is acceptable?**
   - Recommended starting target: less than 5%, with every known regression detected.
-  - Answer: `TBD`
+  - Answer: less than 5%, with every known regression detected.
 
 - [ ] **What maximum paragraph/context length may be stored?**
   - Recommended: retain the complete sanitized fish-count paragraph with a configurable upper bound; never retain the full page HTML.
-  - Answer: `TBD`
+  - Answer: retain the complete sanitized fish-count paragraph with a configurable upper bound; never retain the full page HTML.
 
 - [ ] **Should repeated bad values in different paragraphs remain separate occurrences?**
   - Recommended: Yes, using a report/paragraph fingerprint.
-  - Answer: `TBD`
+  - Answer: Yes, using a report/paragraph fingerprint.
 
 - [ ] **How should an “unexpectedly small” result be defined?**
   - Recommended: Source-specific evidence only; do not use a global report-count threshold.
-  - Answer: `TBD`
+  - Answer: Source-specific evidence only; do not use a global report-count threshold.
 
 - [ ] **Should fingerprints invalidate when the parser version or sanitized source paragraph changes?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Approved to begin Phase 2?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

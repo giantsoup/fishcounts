@@ -1,0 +1,412 @@
+{
+    "schema_version": 1,
+    "corpus_version": "phase-0-v1",
+    "review_status": "manually_reviewed",
+    "corpus_approval": "pending_user_review",
+    "metrics_definition_status": "manually_reviewed_pending_user_approval",
+    "scope": "new_payloads_first",
+    "architecture_decisions": {
+        "delivery": "one_pull_request_and_approval_per_phase",
+        "fallback": "non_blocking",
+        "external_clients": "laravel_http_client_without_provider_sdks",
+        "reviewer_role": "administrator",
+        "shareable_data": [
+            "public_fish_count_text",
+            "public_source_url"
+        ],
+        "sharing_approval": {
+            "openai": "public_fish_count_text_and_public_source_url_only",
+            "local_diagnostics": "public_fish_count_text_and_public_source_url_only",
+            "github_issues": "public_fish_count_text_and_public_source_url_only"
+        },
+        "excluded_data": [
+            "html",
+            "cookies",
+            "request_headers",
+            "credentials",
+            "unrelated_page_content",
+            "private_user_data"
+        ],
+        "historical_scope": "after_shadow_validation",
+        "parser_version_source": "explicit_parsed_report_metadata",
+        "confidence_policy": "measured_results_not_model_self_report",
+        "additional_known_failures": "none_beyond_existing_examples",
+        "fixtures_commit_safe": true,
+        "phase_zero_implementation_authorized": true
+    },
+    "shadow_metrics": {
+        "diagnostic_recall": {
+            "numerator": "known_defects_with_expected_diagnostic_detected",
+            "denominator": "known_defect_fixtures_reviewed",
+            "unit": "ratio",
+            "direction": "maximize",
+            "quality_gate": "set_after_baseline"
+        },
+        "clean_false_positive_rate": {
+            "numerator": "clean_reports_with_any_diagnostic",
+            "denominator": "clean_report_fixtures_reviewed",
+            "unit": "ratio",
+            "direction": "minimize",
+            "quality_gate": "set_after_baseline"
+        },
+        "human_classification_agreement": {
+            "numerator": "reviewed_recommendations_matching_expected_classification_and_correction",
+            "denominator": "recommendations_human_reviewed",
+            "unit": "ratio",
+            "direction": "maximize",
+            "quality_gate": "set_after_baseline"
+        },
+        "invalid_schema_rate": {
+            "numerator": "provider_results_rejected_by_schema_validation",
+            "denominator": "provider_results_received",
+            "unit": "ratio",
+            "direction": "minimize",
+            "quality_gate": "set_after_baseline"
+        },
+        "invalid_canonical_id_rate": {
+            "numerator": "schema_valid_results_with_unknown_or_inactive_canonical_ids",
+            "denominator": "schema_valid_results_referencing_canonical_ids",
+            "unit": "ratio",
+            "direction": "minimize",
+            "quality_gate": "set_after_baseline"
+        },
+        "average_latency": {
+            "numerator": "sum_of_completed_review_latency_milliseconds",
+            "denominator": "completed_provider_reviews",
+            "unit": "milliseconds",
+            "direction": "minimize",
+            "quality_gate": "baseline_only"
+        },
+        "average_token_cost": {
+            "numerator": "sum_of_input_and_output_token_cost_usd",
+            "denominator": "completed_provider_reviews",
+            "unit": "usd_per_review",
+            "direction": "minimize",
+            "quality_gate": "baseline_only"
+        }
+    },
+    "fixtures": [
+        {
+            "id": "unknown-legitimate-species-alias-bontio",
+            "categories": ["unknown_legitimate_alias"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["current_unresolved_parser_error", "corrected_parser_migration", "existing_test"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "The Dolphin returned from a Full Day trip with 2 Bontio for 22 anglers.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "Full Day", "anglers": 22, "counts": []}],
+                    "errors": [{"type": "unknown_species_alias", "field": "species", "raw_value": "Bontio"}]
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "unknown_alias", "field": "species", "raw_value": "Bontio"}],
+                "classification": "legitimate_alias",
+                "canonical_target": {"type": "species", "key": "bonito", "name": "Bonito"},
+                "corrected_parse": {"reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "Full Day", "anglers": 22, "counts": [{"species": "Bonito", "retained": 2, "released": 0}]}]},
+                "github_issue": {"create": false, "reason": "Reference-data alias correction."}
+            }
+        },
+        {
+            "id": "new-species-candidate-pacific-mackerel",
+            "categories": ["new_entity_candidate"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["current_unresolved_parser_error", "corrected_parser_migration"],
+            "evaluation_context": "historical_pre_correction_when_the_canonical_species_did_not_exist",
+            "source": {
+                "source_key": "sportfishingreport_landing_pages",
+                "url": "https://www.sportfishingreport.com/dock_totals/boats.php",
+                "format": "structured",
+                "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1"
+            },
+            "input": {
+                "sanitized_text": "Oceanside 95 1/2 Day 22 anglers 31 Pacific Mackerel, 8 Rockfish.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Oceanside 95", "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1", "trip_type": "1/2 Day", "anglers": 22, "counts": [{"species": "Rockfish", "retained": 8, "released": 0}]}],
+                    "errors": [{"type": "unknown_species_alias", "field": "species", "raw_value": "Pacific Mackerel"}]
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "unknown_alias", "field": "species", "raw_value": "Pacific Mackerel"}],
+                "classification": "new_entity_candidate",
+                "canonical_target": {"type": "species", "key": "pacific-mackerel", "name": "Pacific Mackerel"},
+                "corrected_parse": {"reports": [{"boat": "Oceanside 95", "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1", "trip_type": "1/2 Day", "anglers": 22, "counts": [{"species": "Pacific Mackerel", "retained": 31, "released": 0}, {"species": "Rockfish", "retained": 8, "released": 0}]}]},
+                "github_issue": {"create": true, "reason": "A new canonical species requires human confirmation and reference-data work."}
+            }
+        },
+        {
+            "id": "prose-captured-as-species-returned-with",
+            "categories": ["sentence_fragment_as_species"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["current_unresolved_parser_error", "existing_test"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "The Dolphin AM trip returned with 43 Calico Bass, 7 Sheephead and 6 White Seabass released for 22 anglers.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "1/2 Day AM", "anglers": 22, "counts": [{"species": "Returned With", "retained": 43, "released": 0}]}],
+                    "errors": [{"type": "unknown_species_alias", "field": "species", "raw_value": "Returned With"}]
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "prose_captured_as_entity", "field": "species", "raw_value": "Returned With"}, {"type": "extracted_value_source_span_mismatch", "field": "species_counts", "raw_value": "43 Calico Bass, 7 Sheephead and 6 White Seabass released"}],
+                "classification": "parser_boundary_error",
+                "canonical_target": null,
+                "corrected_parse": {"reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "1/2 Day AM", "anglers": 22, "counts": [{"species": "Calico Bass", "retained": 43, "released": 0}, {"species": "Sheephead", "retained": 7, "released": 0}, {"species": "White Seabass", "retained": 0, "released": 6}]}]},
+                "github_issue": {"create": true, "reason": "The parser consumed narrative prose as a species and lost valid counts."}
+            }
+        },
+        {
+            "id": "sentence-fragment-captured-as-boat",
+            "categories": ["sentence_fragment_as_boat_name"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["corrected_parser_migration", "existing_test", "known_silent_failure"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "FridayThe Dolphin Twilight trip last night returned with 18 Sand Bass for 14 anglers.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Fridaythe Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "Twilight", "anglers": 14, "counts": [{"species": "Sand Bass", "retained": 18, "released": 0}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "prose_captured_as_entity", "field": "boat", "raw_value": "Fridaythe Dolphin"}],
+                "classification": "parser_boundary_error",
+                "canonical_target": {"type": "boat", "key": "dolphin", "name": "Dolphin"},
+                "corrected_parse": {"reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "Twilight", "anglers": 14, "counts": [{"species": "Sand Bass", "retained": 18, "released": 0}]}]},
+                "github_issue": {"create": true, "reason": "A plausible but incorrect boat silently creates or selects the wrong entity."}
+            }
+        },
+        {
+            "id": "fractional-three-quarter-day-not-a-fish-count",
+            "categories": ["fractional_trip_type"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test", "known_silent_failure"],
+            "source": {
+                "source_key": "seaforth_landing",
+                "url": "https://www.seaforthlanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-seaforth_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "The Sea Watch local 3/4 Day trip finished with 12 Yellowtail, 85 Barracuda and 25 Calico Bass for 28 anglers.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Sea Watch", "parser_version": "source-specific-seaforth_landing-v1", "trip_type": "Unknown", "anglers": 28, "counts": [{"species": "Day Trip Finished With", "retained": 4, "released": 0}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "fractional_trip_conflict", "field": "trip_type", "raw_value": "3/4 Day"}, {"type": "prose_captured_as_entity", "field": "species", "raw_value": "Day Trip Finished With"}],
+                "classification": "fractional_trip_conflict",
+                "canonical_target": {"type": "trip_type", "key": "34-day", "name": "3/4 Day"},
+                "corrected_parse": {"reports": [{"boat": "Sea Watch", "parser_version": "source-specific-seaforth_landing-v1", "trip_type": "3/4 Day", "anglers": 28, "counts": [{"species": "Yellowtail", "retained": 12, "released": 0}, {"species": "Barracuda", "retained": 85, "released": 0}, {"species": "Calico Bass", "retained": 25, "released": 0}]}]},
+                "github_issue": {"create": true, "reason": "The fractional trip type was interpreted as a count and corrupted the report."}
+            }
+        },
+        {
+            "id": "fractional-half-day-structured-clean",
+            "categories": ["fractional_trip_type", "clean_structured_report"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test"],
+            "source": {
+                "source_key": "hm_landing",
+                "url": "https://www.hmlanding.com/fish-counts.php",
+                "format": "structured",
+                "parser_version": "source-specific-hm_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "Premier | 1/2 Day AM | 32 anglers | 25 Calico Bass Released, 21 Calico Bass, 9 Rockfish.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Premier", "parser_version": "source-specific-hm_landing-v1", "trip_type": "1/2 Day AM", "anglers": 32, "counts": [{"species": "Calico Bass", "retained": 21, "released": 25}, {"species": "Rockfish", "retained": 9, "released": 0}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [],
+                "classification": "clean",
+                "canonical_target": null,
+                "corrected_parse": {"reports": [{"boat": "Premier", "parser_version": "source-specific-hm_landing-v1", "trip_type": "1/2 Day AM", "anglers": 32, "counts": [{"species": "Calico Bass", "retained": 21, "released": 25}, {"species": "Rockfish", "retained": 9, "released": 0}]}]},
+                "github_issue": {"create": false, "reason": "The structured report is correct and must not generate a diagnostic."}
+            }
+        },
+        {
+            "id": "weight-mistaken-for-anglers",
+            "categories": ["incorrect_anglers"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test", "known_silent_failure"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "The Dolphin AM trip returned with 1 Halibut at 38 lbs and 12 Rockfish for 20 anglers.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "1/2 Day AM", "anglers": 38, "counts": [{"species": "Halibut", "retained": 1, "released": 0}, {"species": "Rockfish", "retained": 12, "released": 0}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "extracted_value_source_span_mismatch", "field": "anglers", "raw_value": "38"}],
+                "classification": "value_extraction_error",
+                "canonical_target": null,
+                "corrected_parse": {"reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "1/2 Day AM", "anglers": 20, "counts": [{"species": "Halibut", "retained": 1, "released": 0}, {"species": "Rockfish", "retained": 12, "released": 0}]}]},
+                "github_issue": {"create": true, "reason": "A weight was silently stored as the angler count."}
+            }
+        },
+        {
+            "id": "retained-and-released-counts-swapped",
+            "categories": ["incorrect_retained_count", "incorrect_released_count"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test", "known_silent_failure"],
+            "source": {
+                "source_key": "hm_landing",
+                "url": "https://www.hmlanding.com/fish-counts.php",
+                "format": "structured",
+                "parser_version": "source-specific-hm_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "Premier | 1/2 Day AM | 32 anglers | 25 Calico Bass Released, 21 Calico Bass.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Premier", "parser_version": "source-specific-hm_landing-v1", "trip_type": "1/2 Day AM", "anglers": 32, "counts": [{"species": "Calico Bass", "retained": 25, "released": 21}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "extracted_value_source_span_mismatch", "field": "species_counts", "raw_value": "25 Calico Bass Released, 21 Calico Bass"}],
+                "classification": "value_extraction_error",
+                "canonical_target": {"type": "species", "key": "calico-bass", "name": "Calico Bass"},
+                "corrected_parse": {"reports": [{"boat": "Premier", "parser_version": "source-specific-hm_landing-v1", "trip_type": "1/2 Day AM", "anglers": 32, "counts": [{"species": "Calico Bass", "retained": 21, "released": 25}]}]},
+                "github_issue": {"create": true, "reason": "Retained and released values were silently reversed."}
+            }
+        },
+        {
+            "id": "narrative-report-disappears",
+            "categories": ["report_disappears"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test", "known_silent_failure"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v1"
+            },
+            "input": {
+                "sanitized_text": "The Pacific Queen returned this morning with 49 Yellowtail for 30 anglers on a 1.5 Day charter.",
+                "deterministic_parse": {"reports": [], "errors": []}
+            },
+            "expected": {
+                "diagnostics": [{"type": "empty_or_unexpectedly_small_result_set", "field": "report", "raw_value": "Pacific Queen"}],
+                "classification": "missing_report",
+                "canonical_target": {"type": "boat", "key": "pacific-queen", "name": "Pacific Queen"},
+                "corrected_parse": {"reports": [{"boat": "Pacific Queen", "parser_version": "source-specific-fishermans_landing-v1", "trip_type": "1.5 Day", "anglers": 30, "counts": [{"species": "Yellowtail", "retained": 49, "released": 0}]}]},
+                "github_issue": {"create": true, "reason": "A valid source report disappeared without an actionable parser error."}
+            }
+        },
+        {
+            "id": "clean-narrative-multi-species-report",
+            "categories": ["clean_narrative_report"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "narrative",
+                "parser_version": "source-specific-fishermans_landing-v2"
+            },
+            "input": {
+                "sanitized_text": "The Poseidon called in with 12 Bluefin Tuna, 25 Yellowtail, 5 Bonito and 71 Vermillion Rockfish for 23 anglers on a 2 Day trip.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Poseidon", "parser_version": "source-specific-fishermans_landing-v2", "trip_type": "2 Day", "anglers": 23, "counts": [{"species": "Bluefin Tuna", "retained": 12, "released": 0}, {"species": "Yellowtail", "retained": 25, "released": 0}, {"species": "Bonito", "retained": 5, "released": 0}, {"species": "Vermillion Rockfish", "retained": 71, "released": 0}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [],
+                "classification": "clean",
+                "canonical_target": null,
+                "corrected_parse": {"reports": [{"boat": "Poseidon", "parser_version": "source-specific-fishermans_landing-v2", "trip_type": "2 Day", "anglers": 23, "counts": [{"species": "Bluefin Tuna", "retained": 12, "released": 0}, {"species": "Yellowtail", "retained": 25, "released": 0}, {"species": "Bonito", "retained": 5, "released": 0}, {"species": "Vermillion Rockfish", "retained": 71, "released": 0}]}]},
+                "github_issue": {"create": false, "reason": "The narrative report is correct and must not generate a diagnostic."}
+            }
+        },
+        {
+            "id": "clean-structured-report",
+            "categories": ["clean_structured_report"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["existing_test"],
+            "source": {
+                "source_key": "fishermans_landing",
+                "url": "https://www.fishermanslanding.com/fishcounts.php",
+                "format": "structured",
+                "parser_version": "source-specific-fishermans_landing-v2"
+            },
+            "input": {
+                "sanitized_text": "Dolphin | Full Day | 20 anglers | 40 Yellowtail, 5 Calico Bass, 8 Calico Bass Released.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v2", "trip_type": "Full Day", "anglers": 20, "counts": [{"species": "Yellowtail", "retained": 40, "released": 0}, {"species": "Calico Bass", "retained": 5, "released": 8}]}],
+                    "errors": []
+                }
+            },
+            "expected": {
+                "diagnostics": [],
+                "classification": "clean",
+                "canonical_target": null,
+                "corrected_parse": {"reports": [{"boat": "Dolphin", "parser_version": "source-specific-fishermans_landing-v2", "trip_type": "Full Day", "anglers": 20, "counts": [{"species": "Yellowtail", "retained": 40, "released": 0}, {"species": "Calico Bass", "retained": 5, "released": 8}]}]},
+                "github_issue": {"create": false, "reason": "The structured report is correct and must not generate a diagnostic."}
+            }
+        },
+        {
+            "id": "six-hour-trip-type-alias",
+            "categories": ["unknown_legitimate_alias", "fractional_trip_type"],
+            "manually_reviewed": true,
+            "privacy_reviewed": true,
+            "provenance": ["current_unresolved_parser_error", "corrected_parser_migration"],
+            "source": {
+                "source_key": "sportfishingreport_landing_pages",
+                "url": "https://www.sportfishingreport.com/dock_totals/boats.php",
+                "format": "structured",
+                "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1"
+            },
+            "input": {
+                "sanitized_text": "Chubasco II | 6 Hour | 25 anglers | 37 Calico Bass, 14 Rockfish.",
+                "deterministic_parse": {
+                    "reports": [{"boat": "Chubasco II", "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1", "trip_type": null, "anglers": 25, "counts": [{"species": "Calico Bass", "retained": 37, "released": 0}, {"species": "Rockfish", "retained": 14, "released": 0}]}],
+                    "errors": [{"type": "unknown_trip_type_alias", "field": "trip_type", "raw_value": "6 Hour"}]
+                }
+            },
+            "expected": {
+                "diagnostics": [{"type": "unknown_alias", "field": "trip_type", "raw_value": "6 Hour"}],
+                "classification": "legitimate_alias",
+                "canonical_target": {"type": "trip_type", "key": "34-day", "name": "3/4 Day"},
+                "corrected_parse": {"reports": [{"boat": "Chubasco II", "parser_version": "source-specific-sportfishingreport-party-boat-scores-v1", "trip_type": "3/4 Day", "anglers": 25, "counts": [{"species": "Calico Bass", "retained": 37, "released": 0}, {"species": "Rockfish", "retained": 14, "released": 0}]}]},
+                "github_issue": {"create": false, "reason": "Reference-data alias correction."}
+            }
+        }
+    ]
+}
