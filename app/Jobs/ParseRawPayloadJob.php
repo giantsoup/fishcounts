@@ -2,11 +2,8 @@
 
 namespace App\Jobs;
 
-use App\DTOs\RawPayloadData;
+use App\Actions\Parsing\ParseRawPayloadAction;
 use App\Models\RawScrapePayload;
-use App\Services\Parsing\TripReportNormalizer;
-use App\Services\Scraping\SourceAdapterRegistry;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -38,24 +35,9 @@ class ParseRawPayloadJob implements ShouldBeUnique, ShouldQueue
         return [30, 120, 300];
     }
 
-    public function handle(SourceAdapterRegistry $registry, TripReportNormalizer $normalizer): void
+    public function handle(ParseRawPayloadAction $parseRawPayload): void
     {
-        $payload = RawScrapePayload::query()->with('scrapeSource')->findOrFail($this->rawScrapePayloadId);
-        $adapter = $registry->forSource($payload->scrapeSource);
-
-        $parsed = $adapter->parse(new RawPayloadData(
-            sourceKey: $payload->scrapeSource->slug,
-            targetDate: CarbonImmutable::parse($payload->target_date),
-            url: $payload->url,
-            body: $payload->payload,
-            metadata: $payload->metadata ?? [],
-        ));
-
-        $normalizer->replaceForPayload($payload, $parsed);
-
-        if ($this->shouldDispatchDeduplication) {
-            DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
-        }
+        $parseRawPayload->handle($this->rawScrapePayloadId, $this->shouldDispatchDeduplication);
     }
 
     public function failed(Throwable $throwable): void

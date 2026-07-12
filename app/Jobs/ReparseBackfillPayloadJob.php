@@ -2,11 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Actions\Parsing\ParseRawPayloadAction;
 use App\Enums\BackfillReparseRunStatus;
 use App\Models\BackfillReparseRun;
 use App\Models\RawScrapePayload;
-use App\Services\Parsing\TripReportNormalizer;
-use App\Services\Scraping\SourceAdapterRegistry;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -43,7 +42,7 @@ class ReparseBackfillPayloadJob implements ShouldBeUnique, ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(SourceAdapterRegistry $registry, TripReportNormalizer $normalizer): void
+    public function handle(ParseRawPayloadAction $parseRawPayload): void
     {
         $reparseRun = BackfillReparseRun::query()->findOrFail($this->backfillReparseRunId);
 
@@ -51,7 +50,7 @@ class ReparseBackfillPayloadJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        (new ParseRawPayloadJob($this->rawScrapePayloadId))->handle($registry, $normalizer);
+        $parseRawPayload->handle($this->rawScrapePayloadId);
 
         BackfillReparseRun::query()
             ->whereKey($this->backfillReparseRunId)
