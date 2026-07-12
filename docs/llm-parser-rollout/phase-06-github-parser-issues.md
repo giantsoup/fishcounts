@@ -8,33 +8,33 @@
 
 - [ ] **Q16. What repository should receive parser-bug issues?**
   - Expected current repository: `giantsoup/fishcounts`; confirm before implementation.
-  - Answer: `TBD`
+  - Answer: giantsoup/fishcounts
 
 - [ ] **Q17. Is the repository public or private, and may sanitized paragraphs/source URLs appear in its issues?**
-  - Visibility: `TBD`
-  - Paragraph/URL answer: `TBD`
+  - Visibility: Public
+  - Paragraph/URL answer: Yes
 
 - [ ] **Q18. What authentication method should be used?**
   - Recommended long-term: GitHub App. Simplest initial option: fine-grained PAT restricted to this repository with `Issues: write`.
-  - Answer: `TBD`
-  - Secret location/status only: `TBD`
+  - Answer: GitHub App. Simplest initial option: fine-grained PAT restricted to this repository with `Issues: write`.
+  - Secret location/status only: .env file
 
 - [ ] **Q19. Which labels should be applied, and may missing labels be created?**
   - Recommended: `parser-bug`, `llm-detected`, and an existing source label when available.
-  - Labels: `TBD`
-  - Create missing labels: `TBD`
+  - Labels: `parser-bug`, `llm-detected`, and an existing source label when available.
+  - Create missing labels: Yes
 
 - [ ] **Q20. What issue-title format should be used?**
   - Recommended: `[Parser][source-slug] Short description of incorrect parse`.
-  - Answer: `TBD`
+  - Answer: `[Parser][source-slug] Short description of incorrect parse`
 
 - [ ] **Q21. What confidence threshold permits automatic issue creation?**
   - Recommended provisional value: `0.95`, subject to Phase 4–5 evidence and PHP validation.
-  - Answer: `TBD`
+  - Answer: `0.95`, subject to Phase 4–5 evidence and PHP validation.
 
 - [ ] **Q22. Should the first five issue candidates be previews requiring approval?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Q23. How should recurring occurrences be handled?**
   - Recommended: Count/link locally without repetitive comments; comment only for materially different reproductions if later approved.

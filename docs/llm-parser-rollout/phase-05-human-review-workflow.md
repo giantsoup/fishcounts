@@ -8,26 +8,26 @@
 
 - [ ] **Q7. Which role or gate may view and act on AI reviews?**
   - Recommended: Existing administrators only.
-  - Answer: `TBD`
+  - Answer: Admins only
 
 - [ ] **Which human actions should be available?**
   - Recommended: Accept existing alias, reject recommendation, dismiss parser error, retry review, and leave open.
-  - Answer: `TBD`
+  - Answer: Accept existing alias, reject recommendation, dismiss parser error, retry review, and leave open.
 
 - [ ] **What should happen when a review becomes stale before approval?**
   - Recommended: Reject the action, show why it is stale, and offer a fresh review.
-  - Answer: `TBD`
+  - Answer: Reject the action, show why it is stale, and offer a fresh review.
 
 - [ ] **Should human review actions send notifications?**
   - Recommended: Audit history only during initial rollout.
-  - Answer: `TBD`
+  - Answer: Audit history only during initial rollout.
 
 - [ ] **How long should human approval/rejection audit history be retained?**
   - Recommended: Indefinitely unless a formal retention policy requires pruning.
-  - Answer: `TBD`
+  - Answer: Indefinitely unless a formal retention policy requires pruning.
 
 - [ ] **Approved to begin Phase 5?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

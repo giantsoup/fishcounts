@@ -8,37 +8,37 @@
 
 - [ ] **Q8. In which environments may real OpenAI calls run?**
   - Recommended: Local off by default, staging on, production on only for controlled shadow traffic.
-  - Local answer: `TBD`
-  - Staging answer: `TBD`
-  - Production answer: `TBD`
+  - Local answer: off by default, but we need to be able to actually hit the API during development to verify everything works
+  - Staging answer: We have no staging at the moment
+  - Production answer: On for our specific use cases
 
 - [ ] **Is the OpenAI API key provisioned as an environment secret in each enabled environment?**
-  - Secret location/status only: `TBD`
+  - Secret location/status only: its in the .env file under the key `OPENAI_API_KEY`
 
 - [ ] **Q9–Q11. Confirm model, reasoning, and `store: false`.**
-  - Model: `TBD`
-  - Reasoning: `TBD`
-  - `store: false`: `TBD`
+  - Model: gpt-5.6-luna
+  - Reasoning: medium
+  - `store: false`: Yes use store: false
 
 - [ ] **Q13. What shadow duration and sample size must be reached?**
   - Recommended: At least seven normal production parsing days and 50 human-reviewed recommendations when sufficient diagnostics occur.
-  - Answer: `TBD`
+  - Answer: At least seven normal production parsing days and 50 human-reviewed recommendations when sufficient diagnostics occur.
 
 - [ ] **Q14. What quality gates must shadow mode meet?**
   - Recommended: All known fixtures detected, clean-corpus false positives below the approved ceiling, at least 95% human classification agreement, and zero invalid results applied.
-  - Answer: `TBD`
+  - Answer: All known fixtures detected, clean-corpus false positives below the approved ceiling, at least 95% human classification agreement, and zero invalid results applied.
 
 - [ ] **Q15. Are any scrape sources excluded from OpenAI review?**
   - Recommended: None if only approved sanitized public paragraphs are sent.
-  - Answer: `TBD`
+  - Answer: None if only approved sanitized public paragraphs are sent.
 
 - [ ] **Q38–Q40. May the `ai-parsing` queue be added, with one initial worker and no Redis/Horizon dependency?**
-  - Add queue/restart workers: `TBD`
-  - Initial concurrency: `TBD`
-  - Keep database queue: `TBD`
+  - Add queue/restart workers: Yes
+  - Initial concurrency: Yes
+  - Keep database queue: Yes
 
 - [ ] **Approved to begin Phase 4?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 
