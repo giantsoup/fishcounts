@@ -1,58 +1,168 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FishCounts
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+FishCounts is a Laravel web application for collecting San Diego sportfishing counts, normalizing trip reports, scoring fishing activity, and notifying anglers when a bite is heating up. It combines catch data with marine and lunar conditions and links promising trips to available booking options.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Collects daily fish counts from San Diego landing and aggregator sources.
+- Preserves raw responses and normalizes boats, landings, trip types, species, and counts.
+- Scores configurable alert rules using catch volume, counts per angler, fleet breadth, and source confidence.
+- Collects tides, marine observations, swell data, and moon conditions for San Diego and the Coronado Islands.
+- Sends hot-bite alerts and weekly digests by email or Discord.
+- Provides authenticated views for counts, scores, alert history, notification settings, and booking links.
+- Provides administrators with source, backfill, parser-error, alias, environmental-data, queue-failure, notification-log, and user management tools.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Tech Stack
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.4 and Laravel 13
+- Laravel Breeze authentication with Blade, Alpine.js, and Tailwind CSS
+- Vite 8 and Node.js 20.19+ or 22.12+
+- PHPUnit 12
+- SQLite for the default local environment
+- PostgreSQL and Redis in the Docker Compose environment
+- MariaDB, database queues, and database cache are also supported by the native deployment configuration
 
-## Learning Laravel
+## Local Setup
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Prerequisites
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- PHP 8.4 with the extensions required by Laravel and the selected database
+- Composer 2
+- Node.js 20.19+ or 22.12+ and npm
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+### Installation
 
-## Agentic Development
+1. Clone the repository and enter its directory.
+2. Create the local environment file and SQLite database:
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+   ```bash
+   cp .env.example .env
+   touch database/database.sqlite
+   ```
+
+3. Review `.env`. For the default setup, set `APP_URL=http://localhost:8000` and leave `DB_CONNECTION=sqlite`. Never commit secrets or production credentials.
+4. Install dependencies, generate the application key, run migrations, and build the frontend:
+
+   ```bash
+   composer run setup
+   ```
+
+5. Create the first administrator, then seed reference data and the administrator's default alert rule:
+
+   ```bash
+   php artisan fish:create-admin
+   php artisan db:seed
+   ```
+
+6. Start the web server, queue listener, application log viewer, and Vite development server:
+
+   ```bash
+   composer run dev
+   ```
+
+The application is available at <http://localhost:8000>. Sign in with the administrator account created in step 5.
+
+## Configuration
+
+The checked-in `.env.example` documents the local defaults. Important settings include:
+
+| Setting | Purpose |
+| --- | --- |
+| `APP_URL` | Base URL used for generated application links. |
+| `DB_*` | Database connection settings. SQLite is the local default. |
+| `QUEUE_CONNECTION` | Queue backend; the local default is `database`. |
+| `MAIL_*` | Mail transport and sender used for alerts and password resets. The local default writes mail to the log. |
+| `DISCORD_WEBHOOK_URL` | Optional default Discord webhook for notifications; add it to `.env` when needed. |
+| `FISH_SCRAPER_USER_AGENT` | Identifies this application to fish-count sources. Use a real contact URL. |
+| `FISH_CONDITIONS_*` | Environmental profile, coordinates, time zone, user agent, and HTTP timeouts. |
+
+User-specific email addresses and Discord webhooks can be managed from the notification settings page. Notification destinations are encrypted at rest.
+
+## Data Pipeline
+
+The daily pipeline runs in `America/Los_Angeles` and uses separate queues for scraping, parsing, scoring, notifications, environmental collection, and backfills.
+
+| Time | Command | Responsibility |
+| --- | --- | --- |
+| 12:30 a.m. | `booking:sync-provider-identifiers` | Refresh external booking-provider boat identifiers. |
+| 12:45 a.m. | `fish:collect-environmental-data today` | Collect current environmental conditions. |
+| 12:50 a.m. | `fish:collect-environmental-data yesterday --finalize` | Finalize the prior day's conditions. |
+| 1:00 a.m. | `fish:scrape-daily` | Fetch and parse the prior day's fish counts. |
+| 1:15 a.m. | `fish:score-latest` | Score enabled alert rules. |
+| 1:25 a.m. | `fish:send-hot-alerts` | Send threshold-crossing notifications. |
+| Sunday, 7:00 a.m. | `fish:send-weekly-digest` | Send the weekly fishing digest. |
+
+`composer run dev` starts a queue listener, but it does not start the scheduler. To exercise scheduled tasks locally, run this in another terminal:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+php artisan schedule:work
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Inspect the authoritative schedule at any time with `php artisan schedule:list`.
 
-## Contributing
+## Useful Commands
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+# Run the daily scrape pipeline for the default date
+php artisan fish:scrape-daily
 
-## Code of Conduct
+# Scrape and reparse a specific date
+php artisan fish:scrape-date 2026-07-01
+php artisan fish:reparse-date 2026-07-01
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Collect or backfill environmental data
+php artisan fish:collect-environmental-data 2026-07-01
+php artisan fish:backfill-environmental-data --from=2026-07-01 --to=2026-07-07
 
-## Security Vulnerabilities
+# Score a date and send its alerts
+php artisan fish:score-date 2026-07-01
+php artisan fish:send-hot-alerts 2026-07-01
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Validate the native VPS production configuration
+php artisan fish:production-check
+```
 
-## License
+Use `php artisan help <command>` before running backfills or other operational commands to review all arguments and options.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Testing and Code Quality
+
+Run the PHPUnit suite through Laravel's test runner:
+
+```bash
+composer test
+```
+
+Run a focused test while developing:
+
+```bash
+php artisan test --compact tests/Feature/CountsAndScoresIndexTest.php
+php artisan test --compact --filter=testName
+```
+
+Format modified PHP files with Laravel Pint:
+
+```bash
+vendor/bin/pint --dirty --format agent
+```
+
+Build production frontend assets with:
+
+```bash
+npm run build
+```
+
+## Deployment
+
+The repository includes Docker Compose services for the application, PostgreSQL, Redis, the queue worker, and the scheduler. A native Nginx/PHP-FPM/MariaDB deployment is also supported. See [DEPLOYMENT.md](DEPLOYMENT.md) for production configuration, health checks, backups, and the release procedure.
+
+Before deploying, configure real secrets and mail delivery and set `APP_ENV=production` and `APP_DEBUG=false`. For the native database-backed VPS configuration, also run:
+
+```bash
+php artisan fish:production-check
+```
+
+The unauthenticated `/up` endpoint provides Laravel's application health check. The `/healthz` readiness endpoint also verifies that the application can query its database.
+
+## Responsible Data Collection
+
+Scrapers identify themselves with `FISH_SCRAPER_USER_AGENT`, restrict outbound requests to configured hosts, and apply source-specific rate limits. Keep the user agent's contact URL current, respect source terms and robots policies, and avoid increasing collection frequency without reviewing upstream limits.
