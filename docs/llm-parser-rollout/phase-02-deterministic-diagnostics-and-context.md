@@ -1,38 +1,38 @@
 # Phase 2 — Deterministic Diagnostics and Context
 
-**Status:** Not started  
+**Status:** Implementation complete
 **Implementation dependency:** Phase 1 deployed and verified  
 **Secret-handling rule:** Diagnostic context must never contain credentials, cookies, or request headers.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Are the initial diagnostic categories approved?**
+- [x] **Are the initial diagnostic categories approved?**
   - Proposed: unknown alias, fractional trip conflict, prose captured as an entity,
     excessive name length, unaccounted numeric tokens, empty or unexpectedly small
     result set, structured-source fallback, and extracted-value/source-span mismatch.
   - Answer: Yes
 
-- [ ] **What clean-corpus false-positive ceiling is acceptable?**
+- [x] **What clean-corpus false-positive ceiling is acceptable?**
   - Recommended starting target: less than 5%, with every known regression detected.
   - Answer: less than 5%, with every known regression detected.
 
-- [ ] **What maximum paragraph/context length may be stored?**
+- [x] **What maximum paragraph/context length may be stored?**
   - Recommended: retain the complete sanitized fish-count paragraph with a configurable upper bound; never retain the full page HTML.
   - Answer: retain the complete sanitized fish-count paragraph with a configurable upper bound; never retain the full page HTML.
 
-- [ ] **Should repeated bad values in different paragraphs remain separate occurrences?**
+- [x] **Should repeated bad values in different paragraphs remain separate occurrences?**
   - Recommended: Yes, using a report/paragraph fingerprint.
   - Answer: Yes, using a report/paragraph fingerprint.
 
-- [ ] **How should an “unexpectedly small” result be defined?**
+- [x] **How should an “unexpectedly small” result be defined?**
   - Recommended: Source-specific evidence only; do not use a global report-count threshold.
   - Answer: Source-specific evidence only; do not use a global report-count threshold.
 
-- [ ] **Should fingerprints invalidate when the parser version or sanitized source paragraph changes?**
+- [x] **Should fingerprints invalidate when the parser version or sanitized source paragraph changes?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Approved to begin Phase 2?**
+- [x] **Approved to begin Phase 2?**
   - Answer: Yes
 
 ## Objective

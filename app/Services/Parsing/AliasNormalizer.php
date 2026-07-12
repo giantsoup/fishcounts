@@ -5,7 +5,6 @@ namespace App\Services\Parsing;
 use App\Models\Boat;
 use App\Models\BoatAlias;
 use App\Models\Landing;
-use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\Species;
@@ -24,10 +23,6 @@ class AliasNormalizer
             ->first();
         $species = $alias?->species ?? Species::query()->where('slug', Str::slug($rawValue))->first();
 
-        if ($species === null) {
-            $this->recordUnknown($payload, 'unknown_species_alias', 'species', $rawValue);
-        }
-
         return $species;
     }
 
@@ -42,10 +37,6 @@ class AliasNormalizer
             ->whereIn('normalized_alias', [$normalized, Str::of($rawValue)->lower()->squish()->toString()])
             ->first();
         $tripType = $alias?->tripType ?? TripType::query()->where('slug', Str::slug($rawValue))->first();
-
-        if ($tripType === null) {
-            $this->recordUnknown($payload, 'unknown_trip_type_alias', 'trip_type', $rawValue);
-        }
 
         return $tripType;
     }
@@ -97,8 +88,6 @@ class AliasNormalizer
             ->first();
 
         if ($boat === null) {
-            $this->recordUnknown($payload, 'unknown_boat_alias', 'boat', $rawValue);
-
             return null;
         }
 
@@ -107,21 +96,6 @@ class AliasNormalizer
         }
 
         return $boat;
-    }
-
-    private function recordUnknown(RawScrapePayload $payload, string $type, string $field, string $rawValue): void
-    {
-        ParserError::query()->firstOrCreate(
-            [
-                'raw_scrape_payload_id' => $payload->id,
-                'scrape_source_id' => $payload->scrape_source_id,
-                'target_date' => $payload->target_date,
-                'error_type' => $type,
-                'raw_field' => $field,
-                'raw_value' => $rawValue,
-            ],
-            ['message' => "Unknown {$field} alias [{$rawValue}]."],
-        );
     }
 
     private function normalize(string $value): string

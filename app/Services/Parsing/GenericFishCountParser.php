@@ -24,7 +24,7 @@ class GenericFishCountParser
             ->filter()
             ->values();
 
-        return new ParsedFishCountCollection($reports);
+        return new ParsedFishCountCollection($reports, 'generic-line-v2', 'narrative');
     }
 
     public function parseLine(RawPayloadData $payload, string $line, string $parserVersion = 'generic-line-v2'): ?ParsedTripReportData

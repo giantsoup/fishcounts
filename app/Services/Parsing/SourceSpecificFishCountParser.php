@@ -43,7 +43,7 @@ class SourceSpecificFishCountParser
         $panelHtml = $this->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
-            return new ParsedFishCountCollection(collect());
+            return new ParsedFishCountCollection(collect(), $parserVersion, 'party-boat-scores');
         }
 
         preg_match_all('/<div\b(?=[^>]*border-top:\s*1px\s+solid\s+#dedede)[^>]*>(?<row>.*?)(?=<div\b(?=[^>]*border-top:\s*1px\s+solid\s+#dedede)|<\/table>|<\/div>\s*<br><br>|\z)/is', $panelHtml, $rowMatches);
@@ -53,7 +53,7 @@ class SourceSpecificFishCountParser
             ->filter()
             ->values();
 
-        return new ParsedFishCountCollection($reports);
+        return new ParsedFishCountCollection($reports, $parserVersion, 'party-boat-scores');
     }
 
     private function sportfishingReportSanDiegoPanelHtml(string $html): ?string
@@ -121,21 +121,21 @@ class SourceSpecificFishCountParser
         $jsonReports = $this->parseJsonPayload($payload, $parserVersion);
 
         if ($jsonReports->isNotEmpty()) {
-            return new ParsedFishCountCollection($jsonReports);
+            return new ParsedFishCountCollection($jsonReports, $parserVersion, 'structured-json');
         }
 
         if ($payload->sourceKey === 'seaforth_landing') {
             $narrativeReports = $this->parseSeaforthNarrativePayload($payload, $parserVersion);
 
             if ($narrativeReports->isNotEmpty()) {
-                return new ParsedFishCountCollection($narrativeReports);
+                return new ParsedFishCountCollection($narrativeReports, $parserVersion, $narrativeReports->first()?->metadata['format'] ?? 'narrative');
             }
         }
 
         $tableReports = $this->parseHtmlTables($payload, $parserVersion);
 
         if ($tableReports->isNotEmpty()) {
-            return new ParsedFishCountCollection($tableReports);
+            return new ParsedFishCountCollection($tableReports, $parserVersion, 'structured-table');
         }
 
         return new ParsedFishCountCollection(
@@ -154,6 +154,8 @@ class SourceSpecificFishCountParser
                         metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v2']),
                     );
                 }),
+            $parserVersion,
+            'generic-fallback',
         );
     }
 

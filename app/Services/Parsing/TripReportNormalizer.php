@@ -4,6 +4,9 @@ namespace App\Services\Parsing;
 
 use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
+use App\DTOs\ParserDiagnosticData;
+use App\DTOs\RawPayloadData;
+use App\Enums\ParserDiagnosticType;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\SourceType;
 use App\Models\ParserError;
@@ -11,6 +14,7 @@ use App\Models\RawScrapePayload;
 use App\Models\ScrapeSource;
 use App\Models\SpeciesCount;
 use App\Models\TripReport;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -20,11 +24,28 @@ class TripReportNormalizer
 {
     private const SPORTFISHING_REPORT_SOURCE_SLUG = 'sportfishingreport_landing_pages';
 
-    public function __construct(private readonly AliasNormalizer $normalizer) {}
+    public function __construct(
+        private readonly AliasNormalizer $normalizer,
+        private readonly ParsedReportValidator $validator,
+    ) {}
 
-    public function replaceForPayload(RawScrapePayload $payload, ParsedFishCountCollection $parsed): int
+    /** @param null|array<int, ParserDiagnosticData> $diagnostics */
+    public function replaceForPayload(RawScrapePayload $payload, ParsedFishCountCollection $parsed, ?array $diagnostics = null): int
     {
-        return DB::transaction(function () use ($payload, $parsed): int {
+        $payload->loadMissing('scrapeSource');
+        $diagnostics ??= $this->validator->validate(
+            $payload,
+            new RawPayloadData(
+                sourceKey: $payload->scrapeSource->slug,
+                targetDate: CarbonImmutable::parse($payload->target_date),
+                url: $payload->url,
+                body: $payload->payload,
+                metadata: $payload->metadata ?? [],
+            ),
+            $parsed,
+        );
+
+        return DB::transaction(function () use ($payload, $parsed, $diagnostics): int {
             ParserError::query()
                 ->where('raw_scrape_payload_id', $payload->id)
                 ->where(function (Builder $query): void {
@@ -32,6 +53,10 @@ class TripReportNormalizer
                         ->orWhere('resolution_type', '!=', ParserErrorResolutionType::Dismissed->value);
                 })
                 ->delete();
+
+            foreach ($diagnostics as $diagnostic) {
+                $this->storeDiagnostic($payload, $diagnostic);
+            }
 
             TripReport::query()
                 ->where('source_id', $payload->scrape_source_id)
@@ -93,11 +118,42 @@ class TripReportNormalizer
 
             $payload->update([
                 'parsed_at' => now(),
-                'parser_version' => $parsed->tripReports->first()?->metadata['parser'] ?? 'unknown',
+                'parser_version' => $parsed->tripReports->first()?->metadata['parser'] ?? $parsed->parserVersion ?? 'unknown',
             ]);
 
             return $count;
         });
+    }
+
+    private function storeDiagnostic(RawScrapePayload $payload, ParserDiagnosticData $diagnostic): void
+    {
+        ParserError::query()->firstOrCreate(
+            ['diagnostic_fingerprint' => $diagnostic->diagnosticFingerprint],
+            [
+                'raw_scrape_payload_id' => $payload->id,
+                'scrape_source_id' => $payload->scrape_source_id,
+                'target_date' => $payload->target_date,
+                'error_type' => $this->errorType($diagnostic),
+                'raw_field' => $diagnostic->field,
+                'raw_value' => $diagnostic->rawValue,
+                'message' => $diagnostic->message,
+                'context' => $diagnostic->context,
+                'report_fingerprint' => $diagnostic->reportFingerprint,
+            ],
+        );
+    }
+
+    private function errorType(ParserDiagnosticData $diagnostic): string
+    {
+        if ($diagnostic->type !== ParserDiagnosticType::UnknownAlias) {
+            return $diagnostic->type->value;
+        }
+
+        return match ($diagnostic->field) {
+            'boat' => 'unknown_boat_alias',
+            'trip_type' => 'unknown_trip_type_alias',
+            default => 'unknown_species_alias',
+        };
     }
 
     private function landingNameFromSource(ScrapeSource $source): ?string

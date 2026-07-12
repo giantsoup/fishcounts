@@ -103,6 +103,27 @@ return [
         ],
     ],
 
+    'parsing' => [
+        'diagnostics' => [
+            'suspicious_enabled' => (bool) env('FISH_SUSPICIOUS_PARSE_DIAGNOSTICS', false),
+            'max_paragraph_length' => (int) env('FISH_DIAGNOSTIC_PARAGRAPH_MAX_LENGTH', 2000),
+            'max_entity_name_length' => 60,
+            'structured_source_keys' => [
+                'hm_landing',
+                'point_loma_sportfishing',
+                'sandiego_fish_reports',
+                'sportfishingreport_landing_pages',
+            ],
+            'source_specific_result_evidence' => [
+                'fishermans_landing' => 'narrative_report_paragraph',
+                'seaforth_landing' => 'narrative_report_paragraph',
+                'hm_landing' => 'structured_report_row',
+                'point_loma_sportfishing' => 'structured_report_row',
+                'sportfishingreport_landing_pages' => 'party_boat_score_row',
+            ],
+        ],
+    ],
+
     'scoring' => [
         'targets' => [
             'yellowtail' => [
