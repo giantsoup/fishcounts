@@ -3,13 +3,17 @@
 namespace Tests\Feature;
 
 use App\Actions\Parsing\ParseRawPayloadAction;
+use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedReportValidationData;
 use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParsedTripReportData;
+use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\DTOs\RawPayloadData;
 use App\Enums\ParserDiagnosticType;
 use App\Enums\ScrapeRunType;
+use App\Jobs\DeduplicateTripReportsJob;
+use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\Landing;
 use App\Models\ParserError;
@@ -18,10 +22,12 @@ use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Services\Parsing\DiagnosticContextFactory;
 use App\Services\Parsing\ParsedReportValidator;
+use App\Services\Parsing\TripReportNormalizer;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -29,6 +35,58 @@ use Tests\TestCase;
 class ParserDiagnosticPersistenceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_ai_review_dispatch_is_after_commit_and_does_not_replace_deterministic_parsing(): void
+    {
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        Queue::fake();
+        $payload = $this->payload('<p>The Dolphin returned with 4 Moon Fish for 20 anglers on a Full Day trip.</p>');
+
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+
+        $this->assertSame(1, $result->parsedReportCount);
+        $this->assertSame(1, $result->diagnosticCount);
+        Queue::assertPushed(ReviewParserDiagnosticsJob::class, fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id && $job->afterCommit === true);
+    }
+
+    public function test_openai_outage_cannot_undo_deterministic_parsing_or_deduplication(): void
+    {
+        config()->set('fish.ai_review.enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', false);
+        config()->set('services.openai.api_key', 'test-key');
+        Queue::fake();
+        $payload = $this->payload('<p>The Dolphin returned with 4 Moon Fish for 20 anglers on a Full Day trip.</p>');
+
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+        (new DeduplicateTripReportsJob('2026-07-12'))->handle(app(TripReportNormalizer::class));
+
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new ConnectionException('OpenAI is unavailable.');
+            }
+        });
+
+        try {
+            app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+            $this->fail('Expected the simulated provider outage.');
+        } catch (ConnectionException) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertSame(1, $result->parsedReportCount);
+        $this->assertSame(1, $result->diagnosticCount);
+        $this->assertDatabaseHas('trip_reports', [
+            'raw_scrape_payload_id' => $payload->id,
+            'is_deduped_primary' => true,
+        ]);
+        $this->assertDatabaseHas('parser_errors', [
+            'raw_scrape_payload_id' => $payload->id,
+            'raw_value' => 'Moon Fish',
+        ]);
+    }
 
     public function test_repeated_unknown_values_in_different_paragraphs_have_distinct_stable_occurrences(): void
     {

@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Services\AI\DisabledParserDiagnosticReviewer;
+use App\Services\AI\OpenAiParserDiagnosticReviewer;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -14,7 +17,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(ParserDiagnosticReviewer::class, DisabledParserDiagnosticReviewer::class);
+        $this->app->bind(
+            ParserDiagnosticReviewer::class,
+            (bool) config('fish.ai_review.enabled') && filled(config('services.openai.api_key'))
+                ? OpenAiParserDiagnosticReviewer::class
+                : DisabledParserDiagnosticReviewer::class,
+        );
     }
 
     /**
@@ -23,5 +31,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::define('admin', fn ($user): bool => $user->isAdmin());
+
+        RateLimiter::for('ai-parser-reviews', fn (): Limit => Limit::perMinute(
+            max(1, (int) config('fish.ai_review.rate_limit_per_minute')),
+        )->by('openai-parser-reviews'));
     }
 }

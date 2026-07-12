@@ -21,6 +21,35 @@ final class ParserDiagnosticReviewSchema
     }
 
     /** @return array<string, mixed> */
+    public function batchFormat(): array
+    {
+        return [
+            'type' => 'json_schema',
+            'name' => 'parser_diagnostic_review_batch',
+            'strict' => true,
+            'schema' => [
+                'type' => 'object',
+                'additionalProperties' => false,
+                'properties' => [
+                    'results' => [
+                        'type' => 'array',
+                        'items' => [
+                            'type' => 'object',
+                            'additionalProperties' => false,
+                            'properties' => [
+                                'diagnostic_fingerprint' => ['type' => 'string', 'pattern' => '^[a-f0-9]{64}$'],
+                                ...$this->schema()['properties'],
+                            ],
+                            'required' => ['diagnostic_fingerprint', ...$this->schema()['required']],
+                        ],
+                    ],
+                ],
+                'required' => ['results'],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
     public function schema(): array
     {
         return [

@@ -5,6 +5,7 @@ namespace App\Actions\Parsing;
 use App\DTOs\ParseRawPayloadResult;
 use App\DTOs\RawPayloadData;
 use App\Jobs\DeduplicateTripReportsJob;
+use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Services\Parsing\ParsedReportValidator;
@@ -44,6 +45,13 @@ class ParseRawPayloadAction
 
         if ($shouldDispatchDeduplication) {
             DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
+        }
+
+        if ($diagnosticCount > 0 && (bool) config('fish.ai_review.dispatch_enabled')) {
+            rescue(
+                fn () => ReviewParserDiagnosticsJob::dispatch($payload->id)->afterCommit(),
+                report: true,
+            );
         }
 
         return new ParseRawPayloadResult(

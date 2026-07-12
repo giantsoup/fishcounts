@@ -11,7 +11,13 @@
 
 The production VPS uses Nginx, PHP-FPM, MariaDB, Supervisor, and Certbot. Match the existing server convention by setting `DB_CONNECTION=mariadb`, `QUEUE_CONNECTION=database`, `CACHE_STORE=database`, and `SESSION_DRIVER=database`.
 
-Run the queue worker through Supervisor with the database queue connection, and run the Laravel scheduler from cron.
+Run the existing application queue worker through Supervisor with the database queue connection, and run the Laravel scheduler from cron. Add a separate `ai-parsing` Supervisor program with `numprocs=1` and this command so AI latency cannot occupy deterministic parsing workers:
+
+```shell
+php artisan queue:work database --queue=ai-parsing --sleep=3 --tries=0 --timeout=210
+```
+
+Keep `DB_QUEUE_RETRY_AFTER` greater than 210 seconds. Restart Supervisor workers only after the Phase 3 schema and dark Phase 4 code are deployed.
 
 ## Reverse Proxy
 

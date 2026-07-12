@@ -133,6 +133,8 @@ return [
         'store_provider_response' => false,
         'connect_timeout_seconds' => (int) env('FISH_AI_REVIEW_CONNECT_TIMEOUT', 10),
         'timeout_seconds' => (int) env('FISH_AI_REVIEW_TIMEOUT', 60),
+        'retry_window_minutes' => (int) env('FISH_AI_REVIEW_RETRY_WINDOW_MINUTES', 15),
+        'rate_limit_per_minute' => (int) env('FISH_AI_REVIEW_RATE_LIMIT_PER_MINUTE', 5),
         'prompt_version' => env('FISH_AI_REVIEW_PROMPT_VERSION', 'v1'),
         'schema_version' => env('FISH_AI_REVIEW_SCHEMA_VERSION', 'v1'),
         'limits' => [
@@ -152,6 +154,7 @@ return [
             'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 50000000),
             'hard_stop' => true,
             'reservation_ttl_minutes' => (int) env('FISH_AI_REVIEW_RESERVATION_TTL_MINUTES', 15),
+            'estimated_request_cost_micros' => (int) env('FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS', 1000000),
         ],
         'retention' => [
             'complete_months' => (int) env('FISH_AI_REVIEW_RETENTION_MONTHS', 3),

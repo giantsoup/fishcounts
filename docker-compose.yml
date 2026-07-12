@@ -49,6 +49,27 @@ services:
       redis:
         condition: service_started
 
+  ai-queue:
+    build:
+      context: .
+    command: php artisan queue:work database --queue=ai-parsing --sleep=3 --tries=0 --timeout=210
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: fishcounts
+      DB_USERNAME: fishcounts
+      DB_PASSWORD: fishcounts
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+    volumes:
+      - .:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   scheduler:
     build:
       context: .

@@ -237,7 +237,7 @@ class ParserDiagnosticReviewTest extends TestCase
         $this->assertInstanceOf(DisabledParserDiagnosticReviewer::class, $reviewer);
         $this->expectException(LogicException::class);
 
-        $reviewer->review(new ParserDiagnosticReviewRequestData(
+        $reviewer->review([new ParserDiagnosticReviewRequestData(
             payloadId: 1,
             payloadHash: hash('sha256', 'payload'),
             diagnosticFingerprint: hash('sha256', 'diagnostic'),
@@ -246,7 +246,7 @@ class ParserDiagnosticReviewTest extends TestCase
             rawValue: 'Moon Fish',
             context: [],
             candidates: [],
-        ));
+        )]);
     }
 
     private function review(RawScrapePayload $payload, ?ParserError $parserError = null): ParserDiagnosticReview

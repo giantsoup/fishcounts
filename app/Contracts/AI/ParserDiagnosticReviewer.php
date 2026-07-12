@@ -2,10 +2,13 @@
 
 namespace App\Contracts\AI;
 
+use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\DTOs\ParserDiagnosticReviewRequestData;
-use App\DTOs\ParserDiagnosticReviewResultData;
 
 interface ParserDiagnosticReviewer
 {
-    public function review(ParserDiagnosticReviewRequestData $request): ParserDiagnosticReviewResultData;
+    /**
+     * @param  non-empty-list<ParserDiagnosticReviewRequestData>  $requests
+     */
+    public function review(array $requests): ParserDiagnosticReviewProviderResponseData;
 }

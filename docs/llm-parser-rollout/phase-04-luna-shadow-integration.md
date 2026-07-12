@@ -1,43 +1,43 @@
 # Phase 4 — Luna Shadow Integration
 
-**Status:** Not started  
+**Status:** Application implementation complete; production shadow evaluation pending
 **Implementation dependency:** Phase 3 deployed with integration disabled  
 **Secret-handling rule:** Record only whether secrets are provisioned and where; never write secret values here.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q8. In which environments may real OpenAI calls run?**
+- [x] **Q8. In which environments may real OpenAI calls run?**
   - Recommended: Local off by default, staging on, production on only for controlled shadow traffic.
   - Local answer: off by default, but we need to be able to actually hit the API during development to verify everything works
   - Staging answer: We have no staging at the moment
   - Production answer: On for our specific use cases
 
-- [ ] **Is the OpenAI API key provisioned as an environment secret in each enabled environment?**
+- [x] **Is the OpenAI API key provisioned as an environment secret in each enabled environment?**
   - Secret location/status only: its in the .env file under the key `OPENAI_API_KEY`
 
-- [ ] **Q9–Q11. Confirm model, reasoning, and `store: false`.**
+- [x] **Q9–Q11. Confirm model, reasoning, and `store: false`.**
   - Model: gpt-5.6-luna
   - Reasoning: medium
   - `store: false`: Yes use store: false
 
-- [ ] **Q13. What shadow duration and sample size must be reached?**
+- [x] **Q13. What shadow duration and sample size must be reached?**
   - Recommended: At least seven normal production parsing days and 50 human-reviewed recommendations when sufficient diagnostics occur.
   - Answer: At least seven normal production parsing days and 50 human-reviewed recommendations when sufficient diagnostics occur.
 
-- [ ] **Q14. What quality gates must shadow mode meet?**
+- [x] **Q14. What quality gates must shadow mode meet?**
   - Recommended: All known fixtures detected, clean-corpus false positives below the approved ceiling, at least 95% human classification agreement, and zero invalid results applied.
   - Answer: All known fixtures detected, clean-corpus false positives below the approved ceiling, at least 95% human classification agreement, and zero invalid results applied.
 
-- [ ] **Q15. Are any scrape sources excluded from OpenAI review?**
+- [x] **Q15. Are any scrape sources excluded from OpenAI review?**
   - Recommended: None if only approved sanitized public paragraphs are sent.
   - Answer: None if only approved sanitized public paragraphs are sent.
 
-- [ ] **Q38–Q40. May the `ai-parsing` queue be added, with one initial worker and no Redis/Horizon dependency?**
+- [x] **Q38–Q40. May the `ai-parsing` queue be added, with one initial worker and no Redis/Horizon dependency?**
   - Add queue/restart workers: Yes
   - Initial concurrency: Yes
   - Keep database queue: Yes
 
-- [ ] **Approved to begin Phase 4?**
+- [x] **Approved to begin Phase 4?**
   - Answer: Yes
 
 ## Objective
@@ -94,7 +94,7 @@ Send eligible diagnostics to Luna in read-only shadow mode, record validated rec
 1. Deploy schema/configuration first with all AI flags off.
 2. Deploy dark application and job code.
 3. Update and restart workers.
-4. Enable staging calls.
+4. With no staging environment available, perform an explicit local opt-in call using sanitized test data.
 5. Enable limited production shadow traffic.
 6. Expand shadow traffic only after reviewing metrics.
 
@@ -105,4 +105,3 @@ Disable AI dispatch. Queued jobs must no-op or be drained before incompatible co
 ## Deliverable
 
 One pull request containing the OpenAI adapter, shadow job, queue configuration, safety controls, and HTTP/job tests.
-

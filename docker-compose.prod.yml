@@ -14,6 +14,11 @@ services:
     volumes:
       - storage-data:/app/storage
 
+  ai-queue:
+    restart: unless-stopped
+    volumes:
+      - storage-data:/app/storage
+
   scheduler:
     restart: unless-stopped
     volumes:
