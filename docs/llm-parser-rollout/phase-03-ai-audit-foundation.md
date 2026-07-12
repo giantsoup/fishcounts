@@ -1,38 +1,40 @@
 # Phase 3 — AI Audit Foundation
 
-**Status:** Not started  
+**Status:** Implementation complete
 **Implementation dependency:** Phase 2 deployed and signal quality approved  
 **Secret-handling rule:** This phase adds configuration keys, not secret values.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q9. What exact model should configuration default to, and is it available to the intended OpenAI project?**
+- [x] **Q9. What exact model should configuration default to, and is it available to the intended OpenAI project?**
   - Recommended: Verify account access to `gpt-5.6-luna` immediately before implementation and keep the model configurable.
   - Answer: Verify account access to `gpt-5.6-luna` immediately before implementation and keep the model configurable.
+  - Verified: The intended project returned HTTP 200 for `gpt-5.6-luna` and completed a minimal `store: false` Responses request on July 12, 2026.
 
-- [ ] **Q10. What reasoning effort should be the initial default?**
+- [x] **Q10. What reasoning effort should be the initial default?**
   - Recommended: `low`, compared with `none` during shadow evaluation.
   - Answer: medium or high depending on our testing and the success rate
+  - Initial default: `medium`, as confirmed in the Phase 4 decisions; shadow evaluation will compare alternatives.
 
-- [ ] **Q11. What OpenAI data should be stored locally?**
+- [x] **Q11. What OpenAI data should be stored locally?**
   - Recommended: Validated structured result, response ID, model/version, token usage, cost estimate, and bounded failure metadata; do not retain the full raw response by default.
   - Answer: Validated structured result, response ID, model/version, token usage, cost estimate, and bounded failure metadata; do not retain the full raw response by default.
 
-- [ ] **Q12–Q14. What daily and monthly budgets and enforcement behavior should apply?**
+- [x] **Q12–Q14. What daily and monthly budgets and enforcement behavior should apply?**
   - Recommended: `$2` daily, `$25` monthly, and a hard stop on new AI calls while deterministic parsing continues.
   - Daily answer: no daily limit
   - Monthly answer: $50 I have already set this $50 limit in the OpenAI settings as a hard limit so the API will fail after using this amount
   - Hard-stop answer: $50
 
-- [ ] **How long should AI review/audit records be retained?**
+- [x] **How long should AI review/audit records be retained?**
   - Recommended: Retain validated decisions and audit metadata indefinitely; prune raw failure payloads after 30 days. Adjust to the application's operational needs.
   - Answer: Keep 3 months of data at all times, add the 4th month as we go, then on the first day of the 5th month, prune the entire oldest month of data so that we keep a rotating minimum of 3 months of data  
 
-- [ ] **What candidate-list and input-token bounds should apply?**
+- [x] **What candidate-list and input-token bounds should apply?**
   - Recommended: Send only active canonical candidates relevant to the diagnostic type, with configurable input and output limits.
   - Answer: Send only active canonical candidates relevant to the diagnostic type, with configurable input and output limits.
 
-- [ ] **Approved to begin Phase 3?**
+- [x] **Approved to begin Phase 3?**
   - Answer: Yes
 
 ## Objective
@@ -93,4 +95,3 @@ Keep additive tables during application rollback. Reverse migrations only after 
 ## Deliverable
 
 One pull request containing audit schema, models, enums, DTOs, JSON Schema, contracts, configuration, bindings, and validation tests.
-

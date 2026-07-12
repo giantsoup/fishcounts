@@ -6,6 +6,7 @@ use App\Enums\ParserErrorResolutionType;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Guarded(['id'])]
 class ParserError extends Model
@@ -36,5 +37,11 @@ class ParserError extends Model
     public function resolver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resolved_by_user_id');
+    }
+
+    /** @return HasMany<ParserDiagnosticReview, $this> */
+    public function diagnosticReviews(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReview::class);
     }
 }

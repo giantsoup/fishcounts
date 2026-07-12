@@ -37,4 +37,10 @@ class RawScrapePayload extends Model
     {
         return $this->hasMany(TripReport::class);
     }
+
+    /** @return HasMany<ParserDiagnosticReview, $this> */
+    public function parserDiagnosticReviews(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReview::class);
+    }
 }

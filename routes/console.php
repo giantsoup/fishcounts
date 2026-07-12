@@ -50,3 +50,9 @@ Schedule::command('fish:send-weekly-digest')
     ->timezone('America/Los_Angeles')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('ai-reviews:prune')
+    ->monthly()
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();

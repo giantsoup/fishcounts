@@ -124,6 +124,40 @@ return [
         ],
     ],
 
+    'ai_review' => [
+        'enabled' => (bool) env('FISH_AI_REVIEW_ENABLED', false),
+        'dispatch_enabled' => (bool) env('FISH_AI_REVIEW_DISPATCH_ENABLED', false),
+        'provider' => env('FISH_AI_REVIEW_PROVIDER', 'openai'),
+        'model' => env('FISH_AI_REVIEW_MODEL', 'gpt-5.6-luna'),
+        'reasoning_effort' => env('FISH_AI_REVIEW_REASONING_EFFORT', 'medium'),
+        'store_provider_response' => false,
+        'connect_timeout_seconds' => (int) env('FISH_AI_REVIEW_CONNECT_TIMEOUT', 10),
+        'timeout_seconds' => (int) env('FISH_AI_REVIEW_TIMEOUT', 60),
+        'prompt_version' => env('FISH_AI_REVIEW_PROMPT_VERSION', 'v1'),
+        'schema_version' => env('FISH_AI_REVIEW_SCHEMA_VERSION', 'v1'),
+        'limits' => [
+            'max_candidates' => (int) env('FISH_AI_REVIEW_MAX_CANDIDATES', 100),
+            'max_input_tokens' => (int) env('FISH_AI_REVIEW_MAX_INPUT_TOKENS', 12000),
+            'max_output_tokens' => (int) env('FISH_AI_REVIEW_MAX_OUTPUT_TOKENS', 2000),
+            'max_corrections' => (int) env('FISH_AI_REVIEW_MAX_CORRECTIONS', 20),
+            'max_rationale_length' => (int) env('FISH_AI_REVIEW_MAX_RATIONALE_LENGTH', 2000),
+            'max_failure_message_length' => (int) env('FISH_AI_REVIEW_MAX_FAILURE_MESSAGE_LENGTH', 1000),
+        ],
+        'confidence' => [
+            'minimum_actionable' => (float) env('FISH_AI_REVIEW_MINIMUM_ACTIONABLE_CONFIDENCE', 0.75),
+            'high' => (float) env('FISH_AI_REVIEW_HIGH_CONFIDENCE', 0.90),
+        ],
+        'budgets' => [
+            'daily_limit_micros' => null,
+            'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 50000000),
+            'hard_stop' => true,
+            'reservation_ttl_minutes' => (int) env('FISH_AI_REVIEW_RESERVATION_TTL_MINUTES', 15),
+        ],
+        'retention' => [
+            'complete_months' => (int) env('FISH_AI_REVIEW_RETENTION_MONTHS', 3),
+        ],
+    ],
+
     'scoring' => [
         'targets' => [
             'yellowtail' => [
