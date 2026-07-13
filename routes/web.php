@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\EnvironmentalBackfillController;
 use App\Http\Controllers\Admin\EnvironmentalConditionController;
 use App\Http\Controllers\Admin\FailedJobController;
 use App\Http\Controllers\Admin\NotificationDeliveryController;
+use App\Http\Controllers\Admin\ParserBugReportController;
 use App\Http\Controllers\Admin\ParserDiagnosticReviewController;
 use App\Http\Controllers\Admin\ParserErrorController;
 use App\Http\Controllers\Admin\RawPayloadController;
@@ -87,7 +88,10 @@ Route::middleware('auth')->group(function (): void {
             Route::post('dismiss', [ParserDiagnosticReviewController::class, 'dismiss'])->name('dismiss');
             Route::post('retry', [ParserDiagnosticReviewController::class, 'retry'])->name('retry');
             Route::post('leave-open', [ParserDiagnosticReviewController::class, 'leaveOpen'])->name('leave-open');
+            Route::post('prepare-github-issue', [ParserBugReportController::class, 'prepare'])->name('prepare-github-issue');
         });
+        Route::post('parser-bug-reports/{parserBugReport}/approve', [ParserBugReportController::class, 'approve'])
+            ->name('parser-bug-reports.approve');
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');
         Route::post('species', [SpeciesAliasController::class, 'storeSpecies'])->name('species.store');
         Route::patch('species/{species}', [SpeciesAliasController::class, 'updateSpecies'])->name('species.update');

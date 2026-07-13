@@ -90,6 +90,7 @@ class ParserDiagnosticReview extends Model
     {
         $this->transitionTo(ParserDiagnosticReviewStatus::Pending);
         $this->forceFill([
+            'parser_bug_report_id' => null,
             'classification' => null,
             'confidence' => null,
             'validated_result' => null,
@@ -136,6 +137,12 @@ class ParserDiagnosticReview extends Model
     public function parserError(): BelongsTo
     {
         return $this->belongsTo(ParserError::class);
+    }
+
+    /** @return BelongsTo<ParserBugReport, $this> */
+    public function parserBugReport(): BelongsTo
+    {
+        return $this->belongsTo(ParserBugReport::class);
     }
 
     /** @return HasMany<AiBudgetReservation, $this> */

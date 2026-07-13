@@ -52,7 +52,7 @@ services:
   ai-queue:
     build:
       context: .
-    command: php artisan queue:work database --queue=ai-parsing --sleep=3 --tries=0 --timeout=210
+    command: php artisan queue:work database --queue=ai-parsing,github-issues --sleep=3 --tries=0 --timeout=210
     env_file:
       - .env
     environment:

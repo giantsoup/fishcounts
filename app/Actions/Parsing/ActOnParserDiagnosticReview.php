@@ -36,6 +36,7 @@ class ActOnParserDiagnosticReview
         private readonly CreateTripTypeAlias $createTripTypeAlias,
         private readonly ParseRawPayloadAction $parseRawPayload,
         private readonly TripReportNormalizer $tripReportNormalizer,
+        private readonly InvalidateParserBugReport $invalidateParserBugReport,
     ) {}
 
     public function accept(ParserError $parserError, ParserDiagnosticReview $review, User $actor): void
@@ -69,6 +70,7 @@ class ActOnParserDiagnosticReview
                 'canonical_name' => $target->getAttribute('name'),
                 'alias' => $alias,
             ]);
+            $this->invalidateParserBugReport->handle($review, ParserDiagnosticReviewActionType::Accepted->value);
 
             return $parserError->raw_scrape_payload_id;
         }, attempts: 3);
@@ -80,11 +82,20 @@ class ActOnParserDiagnosticReview
 
     public function reject(ParserError $parserError, ParserDiagnosticReview $review, User $actor): bool
     {
-        if ($review->status !== ParserDiagnosticReviewStatus::Succeeded) {
-            throw ValidationException::withMessages(['review' => 'Only a completed AI recommendation can be rejected.']);
-        }
+        return DB::transaction(function () use ($parserError, $review, $actor): bool {
+            [$parserError, $review] = $this->lockCurrent($parserError, $review);
 
-        return $this->recordOpenAction($parserError, $review, $actor, ParserDiagnosticReviewActionType::Rejected);
+            if ($review->status !== ParserDiagnosticReviewStatus::Succeeded) {
+                throw ValidationException::withMessages(['review' => 'Only a completed AI recommendation can be rejected.']);
+            }
+
+            $recorded = $this->record($parserError, $review, $actor, ParserDiagnosticReviewActionType::Rejected);
+            if ($recorded) {
+                $this->invalidateParserBugReport->handle($review, ParserDiagnosticReviewActionType::Rejected->value);
+            }
+
+            return $recorded;
+        }, attempts: 3);
     }
 
     public function leaveOpen(ParserError $parserError, ParserDiagnosticReview $review, User $actor): bool
@@ -101,6 +112,8 @@ class ActOnParserDiagnosticReview
             if (! $recorded) {
                 return false;
             }
+
+            $this->invalidateParserBugReport->handle($review, ParserDiagnosticReviewActionType::Dismissed->value);
 
             $parserError->forceFill([
                 'resolved_at' => now(),
@@ -135,6 +148,7 @@ class ActOnParserDiagnosticReview
                 return false;
             }
 
+            $this->invalidateParserBugReport->handle($review, ParserDiagnosticReviewActionType::Retried->value);
             $review->prepareForRetry();
             DB::afterCommit(fn () => ReviewParserDiagnosticsJob::dispatch($parserError->raw_scrape_payload_id));
 

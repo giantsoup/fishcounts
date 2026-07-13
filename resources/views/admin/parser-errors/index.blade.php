@@ -107,6 +107,7 @@
                             @php
                                 $review = $error->latestDiagnosticReview;
                                 $reviewTarget = $review ? $reviewTargets->get($review->id) : null;
+                                $parserBugReport = $review?->parserBugReport;
                             @endphp
 
                             <section class="rounded-lg border border-indigo-100 bg-indigo-50 p-4 lg:col-span-5" aria-label="AI diagnostic review">
@@ -180,6 +181,67 @@
                                                 </li>
                                             @endforeach
                                         </ul>
+                                    </div>
+                                @endif
+
+                                @if ($githubIssuesEnabled && $review)
+                                    <div class="mt-4 border-t border-indigo-100 pt-3">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">GitHub parser-bug issue</p>
+
+                                        @if ($parserBugReport)
+                                            <p class="mt-1 text-sm font-medium text-gray-900">{{ str($parserBugReport->status->value)->headline() }} · {{ $parserBugReport->occurrence_count }} occurrence(s)</p>
+                                            <p class="mt-1 text-sm text-gray-800">{{ $parserBugReport->title }}</p>
+
+                                            @if ($parserBugReport->issue_url)
+                                                <p class="mt-2 text-sm">
+                                                    <a class="text-blue-700" href="{{ $parserBugReport->issue_url }}" rel="noreferrer">View GitHub issue #{{ $parserBugReport->issue_number }}</a>
+                                                    · {{ str($parserBugReport->issue_state)->headline() }}
+                                                </p>
+                                            @else
+                                                <details class="mt-2 text-sm">
+                                                    <summary class="cursor-pointer font-medium text-gray-700">Review exact issue preview</summary>
+                                                    <pre class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ $parserBugReport->body }}</pre>
+                                                </details>
+
+                                                @if ($parserBugReport->status === \App\Enums\ParserBugReportStatus::Invalidated)
+                                                    <p class="mt-2 text-sm text-amber-800">This preview was invalidated by a later human action and cannot be published.</p>
+                                                @elseif ($parserBugReport->requires_approval && $parserBugReport->approved_at === null)
+                                                    <form method="POST" action="{{ route('admin.parser-bug-reports.approve', $parserBugReport) }}" class="mt-3">
+                                                        @csrf
+                                                        <x-primary-button type="submit">Approve GitHub issue preview</x-primary-button>
+                                                    </form>
+                                                @elseif (! $parserBugReport->requires_approval && $parserBugReport->approved_at === null)
+                                                    <p class="mt-2 text-xs text-gray-600">This candidate is eligible for automatic publication.</p>
+                                                    @if (config('fish.github_issues.write_enabled'))
+                                                        <form method="POST" action="{{ route('admin.parser-bug-reports.approve', $parserBugReport) }}" class="mt-2">
+                                                            @csrf
+                                                            <x-secondary-button type="submit">{{ $parserBugReport->status === \App\Enums\ParserBugReportStatus::Failed ? 'Retry GitHub issue' : 'Queue GitHub issue' }}</x-secondary-button>
+                                                        </form>
+                                                    @endif
+                                                @elseif ($parserBugReport->approved_at)
+                                                    <p class="mt-2 text-xs text-green-700">Approved by {{ $parserBugReport->approved_by_name }}. Publication is {{ config('fish.github_issues.write_enabled') ? 'enabled' : 'waiting for the GitHub write flag' }}.</p>
+                                                    @if (config('fish.github_issues.write_enabled'))
+                                                        <form method="POST" action="{{ route('admin.parser-bug-reports.approve', $parserBugReport) }}" class="mt-2">
+                                                            @csrf
+                                                            <x-secondary-button type="submit">Publish approved issue</x-secondary-button>
+                                                        </form>
+                                                    @endif
+                                                @endif
+                                            @endif
+
+                                            @if ($parserBugReport->failure_message)
+                                                <p class="mt-2 text-sm text-red-700">{{ $parserBugReport->failure_message }}</p>
+                                            @endif
+                                        @elseif ($review->status === \App\Enums\ParserDiagnosticReviewStatus::Succeeded
+                                            && (float) $review->confidence >= (float) config('fish.github_issues.minimum_confidence')
+                                            && in_array($review->classification?->value, config('fish.github_issues.eligible_classifications'), true))
+                                            <form method="POST" action="{{ route('admin.parser-errors.reviews.prepare-github-issue', [$error, $review]) }}" class="mt-2">
+                                                @csrf
+                                                <x-secondary-button type="submit">Prepare GitHub issue preview</x-secondary-button>
+                                            </form>
+                                        @else
+                                            <p class="mt-1 text-sm text-gray-600">This review does not meet the validated parser-bug threshold.</p>
+                                        @endif
                                     </div>
                                 @endif
 

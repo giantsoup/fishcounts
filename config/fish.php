@@ -162,6 +162,43 @@ return [
         ],
     ],
 
+    'github_issues' => [
+        'enabled' => (bool) env('FISH_GITHUB_ISSUES_ENABLED', false),
+        'write_enabled' => (bool) env('FISH_GITHUB_ISSUES_WRITE_ENABLED', false),
+        'preview_mode' => (bool) env('FISH_GITHUB_ISSUES_PREVIEW_MODE', true),
+        'required_preview_count' => (int) env('FISH_GITHUB_ISSUES_REQUIRED_PREVIEW_COUNT', 5),
+        'repository' => 'giantsoup/fishcounts',
+        'assignee' => 'giantsoup',
+        'minimum_confidence' => (float) env('FISH_GITHUB_ISSUES_MINIMUM_CONFIDENCE', 0.95),
+        'eligible_classifications' => [
+            'new_entity_candidate',
+            'parser_boundary_error',
+            'fractional_trip_conflict',
+            'value_extraction_error',
+            'missing_report',
+        ],
+        'required_labels' => [
+            'parser-bug' => [
+                'color' => 'd73a4a',
+                'description' => 'Defect in deterministic fish-count parsing.',
+            ],
+            'llm-detected' => [
+                'color' => '7057ff',
+                'description' => 'Detected by the validated Luna review workflow.',
+            ],
+        ],
+        'connect_timeout_seconds' => (int) env('FISH_GITHUB_ISSUES_CONNECT_TIMEOUT', 10),
+        'timeout_seconds' => (int) env('FISH_GITHUB_ISSUES_TIMEOUT', 30),
+        'retry_window_minutes' => (int) env('FISH_GITHUB_ISSUES_RETRY_WINDOW_MINUTES', 30),
+        'rate_limit_per_minute' => (int) env('FISH_GITHUB_ISSUES_RATE_LIMIT_PER_MINUTE', 5),
+        'limits' => [
+            'max_title_length' => 255,
+            'max_body_length' => 60000,
+            'max_section_length' => 8000,
+            'max_failure_message_length' => 1000,
+        ],
+    ],
+
     'scoring' => [
         'targets' => [
             'yellowtail' => [

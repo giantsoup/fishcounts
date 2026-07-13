@@ -19,6 +19,15 @@ return [
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
     ],
 
+    'github_app' => [
+        'client_id' => env('GITHUB_APP_CLIENT_ID'),
+        'installation_id' => env('GITHUB_APP_INSTALLATION_ID'),
+        'private_key_path' => env('GITHUB_APP_PRIVATE_KEY_PATH'),
+        'private_key_base64' => env('GITHUB_APP_PRIVATE_KEY_BASE64'),
+        'base_url' => env('GITHUB_API_BASE_URL', 'https://api.github.com'),
+        'api_version' => env('GITHUB_API_VERSION', '2026-03-10'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

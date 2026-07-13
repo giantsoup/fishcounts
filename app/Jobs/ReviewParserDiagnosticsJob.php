@@ -196,6 +196,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 $result = $resultValidator->validate($providerResponse->results[$review->diagnostic_fingerprint], $request);
                 $review->forceFill($this->resultAttributes($result->toArray(), $providerResponse, $index, $reviews->count(), $estimatedCost))->save();
                 $review->transitionTo(ParserDiagnosticReviewStatus::Succeeded);
+                $this->dispatchParserBugIssue($review);
             }
 
             $budgetManager->settle($reservation, $estimatedCost);
@@ -348,5 +349,21 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         $message = preg_replace('/(?:sk-[A-Za-z0-9_-]+|Bearer\s+\S+)/i', '[redacted]', $throwable->getMessage()) ?? 'AI review failed.';
 
         return str($message)->limit((int) config('fish.ai_review.limits.max_failure_message_length'))->toString();
+    }
+
+    private function dispatchParserBugIssue(ParserDiagnosticReview $review): void
+    {
+        if (! config('fish.github_issues.enabled')
+            || $review->confidence === null
+            || (float) $review->confidence < (float) config('fish.github_issues.minimum_confidence')
+            || ! in_array($review->classification?->value, config('fish.github_issues.eligible_classifications'), true)) {
+            return;
+        }
+
+        try {
+            CreateParserBugIssueJob::dispatch($review->id);
+        } catch (Throwable $throwable) {
+            report($throwable);
+        }
     }
 }

@@ -6,6 +6,7 @@ use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ScrapeRunType;
+use App\Jobs\CreateParserBugIssueJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserError;
@@ -16,6 +17,7 @@ use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use LogicException;
 use RuntimeException;
 use Tests\TestCase;
@@ -96,6 +98,45 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame(1000, $review->estimated_cost_micros);
         $this->assertModelExists($parserError);
         $this->assertNull($parserError->refresh()->resolved_at);
+    }
+
+    public function test_validated_parser_bug_dispatches_only_the_separate_github_job(): void
+    {
+        Queue::fake();
+        config()->set('fish.github_issues.enabled', true);
+        config()->set('fish.github_issues.write_enabled', false);
+        [$payload, $parserError] = $this->payloadAndError();
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($parserError->diagnostic_fingerprint) implements ParserDiagnosticReviewer
+        {
+            public function __construct(private readonly string $fingerprint) {}
+
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                return new ParserDiagnosticReviewProviderResponseData(
+                    responseId: 'resp_parser_bug',
+                    model: 'gpt-5.6-luna',
+                    results: [$this->fingerprint => [
+                        'classification' => 'value_extraction_error',
+                        'confidence' => 0.99,
+                        'rationale' => 'The deterministic parser extracted the wrong value.',
+                        'corrections' => [],
+                    ]],
+                    refused: false,
+                    refusal: null,
+                    inputTokens: 20,
+                    cachedInputTokens: 0,
+                    outputTokens: 10,
+                    reasoningTokens: 0,
+                    totalTokens: 30,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+
+        $review = ParserDiagnosticReview::query()->sole();
+        Queue::assertPushed(CreateParserBugIssueJob::class, fn (CreateParserBugIssueJob $job): bool => $job->parserDiagnosticReviewId === $review->id);
+        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
     }
 
     public function test_disabled_queued_jobs_no_op_without_resolving_or_calling_the_provider(): void

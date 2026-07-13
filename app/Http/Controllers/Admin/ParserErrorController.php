@@ -20,12 +20,16 @@ class ParserErrorController extends Controller
     {
         $showAll = $request->string('status')->toString() === 'all';
         $humanReviewEnabled = (bool) config('fish.ai_review.human_review_enabled');
+        $githubIssuesEnabled = $humanReviewEnabled && (bool) config('fish.github_issues.enabled');
         $errors = ParserError::query()
             ->with([
                 'rawScrapePayload',
                 'resolver',
                 'scrapeSource',
-                ...($humanReviewEnabled ? ['latestDiagnosticReview.humanActions.actor'] : []),
+                ...($humanReviewEnabled ? [
+                    'latestDiagnosticReview.humanActions.actor',
+                    ...($githubIssuesEnabled ? ['latestDiagnosticReview.parserBugReport'] : []),
+                ] : []),
             ])
             ->when(! $showAll, fn ($query) => $query->whereNull('resolved_at'))
             ->latest()
@@ -39,6 +43,7 @@ class ParserErrorController extends Controller
             'tripTypes' => TripType::query()->where('is_active', true)->orderedForDisplay()->get(),
             'showAll' => $showAll,
             'humanReviewEnabled' => $humanReviewEnabled,
+            'githubIssuesEnabled' => $githubIssuesEnabled,
             'reviewTargets' => $humanReviewEnabled ? $this->reviewTargets($errors->getCollection()) : collect(),
         ]);
     }

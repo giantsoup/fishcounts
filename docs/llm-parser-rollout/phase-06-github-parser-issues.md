@@ -1,58 +1,58 @@
 # Phase 6 — GitHub Parser-Bug Issues
 
-**Status:** Not started  
+**Status:** Application implementation complete; five-preview rollout pending
 **Implementation dependency:** Phase 5 review quality supports parser-bug classification  
 **Secret-handling rule:** Never put a GitHub token in this file, the database, logs, prompts, or issue bodies.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q16. What repository should receive parser-bug issues?**
+- [x] **Q16. What repository should receive parser-bug issues?**
   - Expected current repository: `giantsoup/fishcounts`; confirm before implementation.
   - Answer: giantsoup/fishcounts
 
-- [ ] **Q17. Is the repository public or private, and may sanitized paragraphs/source URLs appear in its issues?**
+- [x] **Q17. Is the repository public or private, and may sanitized paragraphs/source URLs appear in its issues?**
   - Visibility: Public
   - Paragraph/URL answer: Yes
 
-- [ ] **Q18. What authentication method should be used?**
+- [x] **Q18. What authentication method should be used?**
   - Recommended long-term: GitHub App. Simplest initial option: fine-grained PAT restricted to this repository with `Issues: write`.
   - Answer: GitHub App. Simplest initial option: fine-grained PAT restricted to this repository with `Issues: write`.
   - Secret location/status only: .env file
 
-- [ ] **Q19. Which labels should be applied, and may missing labels be created?**
+- [x] **Q19. Which labels should be applied, and may missing labels be created?**
   - Recommended: `parser-bug`, `llm-detected`, and an existing source label when available.
   - Labels: `parser-bug`, `llm-detected`, and an existing source label when available.
   - Create missing labels: Yes
 
-- [ ] **Q20. What issue-title format should be used?**
+- [x] **Q20. What issue-title format should be used?**
   - Recommended: `[Parser][source-slug] Short description of incorrect parse`.
   - Answer: `[Parser][source-slug] Short description of incorrect parse`
 
-- [ ] **Q21. What confidence threshold permits automatic issue creation?**
+- [x] **Q21. What confidence threshold permits automatic issue creation?**
   - Recommended provisional value: `0.95`, subject to Phase 4–5 evidence and PHP validation.
   - Answer: `0.95`, subject to Phase 4–5 evidence and PHP validation.
 
-- [ ] **Q22. Should the first five issue candidates be previews requiring approval?**
+- [x] **Q22. Should the first five issue candidates be previews requiring approval?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Q23. How should recurring occurrences be handled?**
+- [x] **Q23. How should recurring occurrences be handled?**
   - Recommended: Count/link locally without repetitive comments; comment only for materially different reproductions if later approved.
   - Answer: Count/link locally without repetitive comments; comment only for materially different reproductions if later approved.
 
-- [ ] **What should happen when a matching GitHub issue is already closed?**
+- [x] **What should happen when a matching GitHub issue is already closed?**
   - Recommended: Link and count locally; require human approval before reopening or commenting.
   - Answer: Link and count locally; require human approval before reopening or commenting.
 
-- [ ] **Q24. Should issues have an automatic assignee or milestone?**
+- [x] **Q24. Should issues have an automatic assignee or milestone?**
   - Recommended: Neither initially.
   - Answer: Automatically assign me (Taylor Oyer)
 
-- [ ] **Q25. Should issue bodies include a copy-ready Codex task?**
+- [x] **Q25. Should issue bodies include a copy-ready Codex task?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Approved to begin Phase 6?**
+- [x] **Approved to begin Phase 6?**
   - Answer: Yes
 
 ## Objective
@@ -111,4 +111,3 @@ Disable GitHub writes. Preserve local bug signatures and issue links. Drain/no-o
 ## Deliverable
 
 One pull request containing issue audit schema, contract/client/job, deterministic templates, feature flags, and dedupe/error tests.
-
