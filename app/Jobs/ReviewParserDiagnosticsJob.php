@@ -115,7 +115,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 $requestValidator->validate($request);
             } catch (ValidationException|ValueError $exception) {
                 $review->transitionTo(ParserDiagnosticReviewStatus::Running);
-                $review->fail($this->safeFailureMessage($exception));
+                $review->fail($this->safeFailureMessage($exception), 'schema_validation');
 
                 continue;
             }
@@ -143,7 +143,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             }
 
             $estimatedCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
-            $reservation = $budgetManager->reserveMonthly(
+            $reservation = $budgetManager->reserve(
                 provider: (string) config('fish.ai_review.provider'),
                 reservationKey: 'parser-review-'.hash('sha256', $payload->id.'|'.$payload->payload_hash.'|'.($reviews->first()->attempts + 1)),
                 estimatedCostMicros: $estimatedCost,
@@ -209,7 +209,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 report: true,
             );
         } catch (AiBudgetExceededException) {
-            $this->skip($reviews);
+            $this->skip($reviews, 'budget_exhausted');
         } catch (Throwable $throwable) {
             if ($reservation instanceof AiBudgetReservation) {
                 if ($throwable instanceof ConnectionException) {
@@ -298,6 +298,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 'model' => $response->model,
                 'estimated_cost_micros' => $this->share($estimatedCost, $index, $reviews->count()),
                 'failure_message' => str($response->refusal)->limit((int) config('fish.ai_review.limits.max_failure_message_length'))->toString(),
+                'failure_category' => 'provider_refusal',
             ])->save();
             $review->transitionTo(ParserDiagnosticReviewStatus::Refused);
         }
@@ -332,9 +333,14 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         return intdiv($total, $count) + ($index < $total % $count ? 1 : 0);
     }
 
-    private function skip(Collection $reviews): void
+    private function skip(Collection $reviews, ?string $category = null): void
     {
         foreach ($reviews as $review) {
+            if ($category !== null) {
+                $review->failure_category = $category;
+                $review->save();
+            }
+
             if ($review->status === ParserDiagnosticReviewStatus::Running) {
                 $review->transitionTo(ParserDiagnosticReviewStatus::Stale);
             } elseif ($review->status === ParserDiagnosticReviewStatus::Pending) {
@@ -355,7 +361,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         $message = $this->safeFailureMessage($throwable);
         foreach ($reviews as $review) {
             if ($review->status === ParserDiagnosticReviewStatus::Running) {
-                $review->fail($message);
+                $review->fail($message, $this->failureCategory($throwable));
             }
         }
     }
@@ -365,6 +371,27 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         $message = preg_replace('/(?:sk-[A-Za-z0-9_-]+|Bearer\s+\S+)/i', '[redacted]', $throwable->getMessage()) ?? 'AI review failed.';
 
         return str($message)->limit((int) config('fish.ai_review.limits.max_failure_message_length'))->toString();
+    }
+
+    private function failureCategory(Throwable $throwable): string
+    {
+        if ($throwable instanceof ValidationException || $throwable instanceof ValueError || $throwable instanceof UnexpectedValueException) {
+            return 'schema_validation';
+        }
+
+        if ($throwable instanceof ConnectionException) {
+            return 'provider_unavailable';
+        }
+
+        if ($throwable instanceof RequestException) {
+            return match ($throwable->response->status()) {
+                401, 403 => 'invalid_credentials',
+                429 => 'rate_limited',
+                default => $throwable->response->serverError() ? 'provider_unavailable' : 'provider_request',
+            };
+        }
+
+        return 'application';
     }
 
     private function dispatchParserBugIssue(ParserDiagnosticReview $review): void

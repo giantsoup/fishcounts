@@ -56,3 +56,9 @@ Schedule::command('ai-reviews:prune')
     ->timezone('America/Los_Angeles')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('ai-reviews:monitor')
+    ->everyFiveMinutes()
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping(10)
+    ->onOneServer();

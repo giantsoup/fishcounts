@@ -4,12 +4,18 @@ namespace App\Console\Commands;
 
 use App\Enums\BookingProvider;
 use App\Enums\EnvironmentalLocationType;
+use App\Jobs\CreateParserBugIssueJob;
+use App\Jobs\ProcessHistoricalAiReviewRunItemJob;
+use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\EnvironmentalSource;
 use App\Models\Landing;
+use DateTimeZone;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 #[Signature('fish:production-check {--skip-database : Validate config only without opening a database connection}')]
@@ -41,6 +47,7 @@ class ProductionCheckCommand extends Command
         );
 
         $this->checkConditionConfiguration($failures);
+        $this->checkAiReviewConfiguration($failures);
 
         if ($this->option('skip-database')) {
             $warnings[] = 'Database reachability check skipped.';
@@ -69,6 +76,43 @@ class ProductionCheckCommand extends Command
         $this->info('Production checks passed.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param  array<int, string>  $failures
+     */
+    private function checkAiReviewConfiguration(array &$failures): void
+    {
+        $dailyLimit = (int) config('fish.ai_review.budgets.daily_limit_micros');
+        $monthlyLimit = (int) config('fish.ai_review.budgets.monthly_limit_micros');
+        $estimatedRequestCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
+        $budgetTimezone = (string) config('fish.ai_review.budgets.timezone');
+        $retryAfter = (int) config('queue.connections.database.retry_after');
+        $largestJobTimeout = max(
+            (new ReviewParserDiagnosticsJob(0))->timeout,
+            (new CreateParserBugIssueJob(0))->timeout,
+            (new ProcessHistoricalAiReviewRunItemJob(0))->timeout,
+        );
+        $databaseCache = Cache::store('database')->getStore();
+
+        $this->assert($dailyLimit > 0, 'Daily AI budget hard limit is configured.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be greater than zero.', $failures);
+        $this->assert($monthlyLimit > 0 && $monthlyLimit >= $dailyLimit, 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be at least the daily limit.', $failures);
+        $this->assert($estimatedRequestCost > 0, 'AI estimated request cost is configured.', 'FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be greater than zero.', $failures);
+        $this->assert(in_array($budgetTimezone, DateTimeZone::listIdentifiers(), true), 'AI budget timezone is valid.', 'FISH_AI_REVIEW_BUDGET_TIMEZONE must be a valid timezone identifier.', $failures);
+        $this->assert((bool) config('fish.ai_review.budgets.hard_stop'), 'AI budget hard stop is enabled.', 'AI budget hard stop must remain enabled.', $failures);
+        $this->assert($databaseCache instanceof LockProvider, 'Database cache supports atomic locks.', 'The database cache store must support atomic locks for uniqueness, scheduling, and rate limiting.', $failures);
+        $this->assert($retryAfter > $largestJobTimeout, 'Database queue retry_after exceeds every AI/GitHub job timeout.', "DB_QUEUE_RETRY_AFTER must exceed {$largestJobTimeout} seconds.", $failures);
+
+        if (config('fish.ai_review.enabled')) {
+            $this->assert(filled(config('services.openai.api_key')), 'OpenAI credentials are provisioned.', 'OPENAI_API_KEY is required when AI reviews are enabled.', $failures);
+        }
+
+        if (config('fish.github_issues.enabled')) {
+            $githubCredentialsReady = filled(config('services.github_app.client_id'))
+                && filled(config('services.github_app.installation_id'))
+                && (filled(config('services.github_app.private_key_path')) || filled(config('services.github_app.private_key_base64')));
+            $this->assert($githubCredentialsReady, 'GitHub App credentials are provisioned.', 'GitHub App credentials are required when GitHub parser issues are enabled.', $failures);
+        }
     }
 
     /**

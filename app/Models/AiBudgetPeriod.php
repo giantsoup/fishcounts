@@ -38,4 +38,10 @@ class AiBudgetPeriod extends Model
     {
         return $this->hasMany(AiBudgetReservation::class);
     }
+
+    /** @return HasMany<AiBudgetReservation, $this> */
+    public function dailyReservations(): HasMany
+    {
+        return $this->hasMany(AiBudgetReservation::class, 'daily_ai_budget_period_id');
+    }
 }

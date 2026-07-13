@@ -39,6 +39,12 @@ class AiBudgetReservation extends Model
         return $this->belongsTo(AiBudgetPeriod::class, 'ai_budget_period_id');
     }
 
+    /** @return BelongsTo<AiBudgetPeriod, $this> */
+    public function dailyBudgetPeriod(): BelongsTo
+    {
+        return $this->belongsTo(AiBudgetPeriod::class, 'daily_ai_budget_period_id');
+    }
+
     /** @return BelongsTo<ParserDiagnosticReview, $this> */
     public function parserDiagnosticReview(): BelongsTo
     {

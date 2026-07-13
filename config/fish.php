@@ -161,7 +161,8 @@ return [
             'high' => (float) env('FISH_AI_REVIEW_HIGH_CONFIDENCE', 0.90),
         ],
         'budgets' => [
-            'daily_limit_micros' => null,
+            'timezone' => env('FISH_AI_REVIEW_BUDGET_TIMEZONE', 'America/Los_Angeles'),
+            'daily_limit_micros' => (int) env('FISH_AI_REVIEW_DAILY_LIMIT_MICROS', 5000000),
             'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 50000000),
             'hard_stop' => true,
             'reservation_ttl_minutes' => (int) env('FISH_AI_REVIEW_RESERVATION_TTL_MINUTES', 15),
@@ -169,6 +170,13 @@ return [
         ],
         'retention' => [
             'complete_months' => (int) env('FISH_AI_REVIEW_RETENTION_MONTHS', 3),
+        ],
+        'operations' => [
+            'queue_depth_warning' => (int) env('FISH_AI_REVIEW_QUEUE_DEPTH_WARNING', 100),
+            'queue_age_warning_minutes' => (int) env('FISH_AI_REVIEW_QUEUE_AGE_WARNING_MINUTES', 10),
+            'stale_review_warning' => (int) env('FISH_AI_REVIEW_STALE_WARNING', 10),
+            'failure_warning' => (int) env('FISH_AI_REVIEW_FAILURE_WARNING', 5),
+            'historical_max_items' => (int) env('FISH_AI_REVIEW_HISTORICAL_MAX_ITEMS', 1000),
         ],
         'automation' => [
             'enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_ENABLED', false),

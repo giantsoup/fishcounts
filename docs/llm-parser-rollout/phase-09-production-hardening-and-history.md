@@ -1,48 +1,49 @@
 # Phase 9 — Production Hardening and Historical Processing
 
-**Status:** Not started  
+**Status:** Implemented
+
 **Implementation dependency:** Earlier enabled phases meet their production exit gates  
 **Secret-handling rule:** Record secret-management systems and provisioning status only, never secret values.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q36. What is the production deployment method?**
+- [x] **Q36. What is the production deployment method?**
   - Confirm whether the repository's Docker Compose deployment workflow remains authoritative.
   - Answer: Deployment is Ci/CD github actions, I will have to manually update things like the .env file after pushing to production
 
-- [ ] **Q37. Where are OpenAI/GitHub secrets and feature flags managed?**
+- [x] **Q37. Where are OpenAI/GitHub secrets and feature flags managed?**
   - Answer: In the .env file and at the respective Github and OpenAI online dashboards
 
-- [ ] **Q38. May deployment add the `ai-parsing` queue and restart workers?**
+- [x] **Q38. May deployment add the `ai-parsing` queue and restart workers?**
   - Answer: Yes
 
-- [ ] **Q39. What production AI-worker concurrency should be used?**
+- [x] **Q39. What production AI-worker concurrency should be used?**
   - Recommended initial value: One worker with provider rate limiting.
   - Answer: One worker with provider rate limiting.
 
-- [ ] **Q40. Should the existing database queue remain in use without adding Redis or Horizon?**
+- [x] **Q40. Should the existing database queue remain in use without adding Redis or Horizon?**
   - Recommended: Yes unless measured operations justify a dependency change.
   - Answer: Yes unless measured operations justify a dependency change.
 
-- [ ] **Q41. Are reversible production migrations authorized after each pull request is approved?**
+- [x] **Q41. Are reversible production migrations authorized after each pull request is approved?**
   - Answer: All migrations are approved once they are committed to the main branch
 
-- [ ] **Q42. Must each historical/backfill run receive separate authorization with a call count and hard budget?**
+- [x] **Q42. Must each historical/backfill run receive separate authorization with a call count and hard budget?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Where should operational alerts be sent?**
+- [x] **Where should operational alerts be sent?**
   - Options: application logs/admin dashboard only, email, Discord, or another destination.
-  - Answer: application logs/admin dashboard and email
+  - Answer: application logs and the admin dashboard only for now; no email alerts.
 
-- [ ] **What retention/pruning cadence should apply to bounded failure metadata and obsolete reviews?**
-  - Answer: Keep only 3 months of data
+- [x] **What retention/pruning cadence should apply to bounded failure metadata and obsolete reviews?**
+  - Answer: Keep only a rolling 3 months of transient data.
 
-- [ ] **May the full PHPUnit suite be run after phase-specific tests pass?**
+- [x] **May the full PHPUnit suite be run after phase-specific tests pass?**
   - This approval will be reconfirmed when implementation reaches this phase.
   - Answer: Yes
 
-- [ ] **Approved to begin Phase 9?**
+- [x] **Approved to begin Phase 9?**
   - Answer: Yes
 
 ## Objective
@@ -104,3 +105,32 @@ Disable AI/GitHub/override flags, stop new historical dispatch, drain or no-op q
 
 One pull request containing production metrics, budgets, pruning/scheduling, bounded historical commands, and operational/failure tests. Historical execution remains a separate approved operation.
 
+## Production Operations
+
+GitHub Actions and `.github/scripts/deploy.sh` are the authoritative production deployment path. Docker Compose remains a local/development workflow and is not the production deployment authority. Production secrets and feature flags are manually provisioned in the shared production `.env`; credential rotation is performed at the OpenAI or GitHub dashboard and then provisioned into that file without recording values in the repository or database.
+
+Daily AI budgets reset at midnight in `FISH_AI_REVIEW_BUDGET_TIMEZONE`, which defaults to `America/Los_Angeles`.
+
+The backward-compatible deployment order is:
+
+1. Leave AI, GitHub-write, and override feature flags disabled when deploying new integration code dark.
+2. Install the release, run reversible migrations, clear stale configuration, and run `fish:production-check` before release activation.
+3. Activate the release and restart existing database workers. Run one worker for `ai-parsing,github-issues` with a 220-second timeout; database `retry_after` must remain greater than 220 seconds.
+4. Enable limited AI dispatch through the shared production `.env`, refresh configuration, and inspect the admin dashboard queue, failure, stale-review, token, cost, and remaining-budget metrics.
+5. Expand only after the limited batch remains within quality, provider, queue, and budget thresholds. GitHub writes and report overrides remain independently gated.
+
+Historical selection always uses payload `target_date`. `new` means unresolved diagnostics with no prior review. `unresolved` and `historical` include open diagnostics with no review or a failed, refused, stale, or skipped review. Every execution requires an inclusive date range, maximum payload count, hard budget, and a unique authorization reference. Reusing the same authorization reference safely returns the existing run instead of creating duplicate work.
+
+The deployment migration assigns existing AI reservations to local-day budget periods before the daily cap becomes active, so current spend is included on the first rollout day. Historical budgets are charged conservatively per provider attempt; retries consume remaining authorization and stop before another call when the run budget is exhausted. A higher configured request estimate cannot be used against an older, lower per-item authorization.
+
+```shell
+php artisan ai-reviews:dispatch historical --from=2026-01-01 --to=2026-01-31 --max=10 --budget-micros=5000000 --dry-run
+php artisan ai-reviews:dispatch historical --from=2026-01-01 --to=2026-01-31 --max=10 --budget-micros=5000000 --authorized-by="approved batch reference"
+php artisan ai-reviews:historical RUN_ID pause
+php artisan ai-reviews:historical RUN_ID resume
+php artisan ai-reviews:historical RUN_ID stop
+```
+
+Historical execution is never part of deployment. Operators review each dry-run count and estimated maximum cost before separately authorizing execution.
+
+For rollback, first disable AI dispatch, GitHub writes, and overrides in the shared production `.env`; refresh configuration; stop every active historical run; and restart workers so queued provider jobs safely no-op. Drain or delete only the new historical item jobs before activating a release that predates their job class. Preserve AI review, budget, bug-report, override, and historical audit tables. Reparse affected payloads after disabling active overrides. Only then switch the release symlink and restart workers again.

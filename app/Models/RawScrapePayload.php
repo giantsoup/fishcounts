@@ -44,6 +44,12 @@ class RawScrapePayload extends Model
         return $this->hasMany(ParserDiagnosticReview::class);
     }
 
+    /** @return HasMany<ParserError, $this> */
+    public function parserErrors(): HasMany
+    {
+        return $this->hasMany(ParserError::class);
+    }
+
     /** @return HasMany<ParserReportOverride, $this> */
     public function parserReportOverrides(): HasMany
     {

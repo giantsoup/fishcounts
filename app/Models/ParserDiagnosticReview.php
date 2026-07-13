@@ -63,6 +63,7 @@ class ParserDiagnosticReview extends Model
             $attributes['started_at'] = now();
             $attributes['failed_at'] = null;
             $attributes['failure_message'] = null;
+            $attributes['failure_category'] = null;
         }
 
         if ($status === ParserDiagnosticReviewStatus::Succeeded || $status === ParserDiagnosticReviewStatus::Refused) {
@@ -76,13 +77,14 @@ class ParserDiagnosticReview extends Model
         $this->forceFill($attributes)->save();
     }
 
-    public function fail(string $message): void
+    public function fail(string $message, string $category = 'application'): void
     {
         $this->failure_message = Str::limit(
             $message,
             (int) config('fish.ai_review.limits.max_failure_message_length'),
             '',
         );
+        $this->failure_category = $category;
 
         $this->transitionTo(ParserDiagnosticReviewStatus::Failed);
     }
@@ -107,6 +109,7 @@ class ParserDiagnosticReview extends Model
             'completed_at' => null,
             'failed_at' => null,
             'failure_message' => null,
+            'failure_category' => null,
         ])->save();
     }
 
