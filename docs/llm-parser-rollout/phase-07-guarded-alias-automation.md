@@ -8,32 +8,32 @@
 
 - [ ] **Q26. Which existing entity types are eligible for automatic alias resolution?**
   - Recommended: Species and trip types only initially. Keep boats and every new entity manual.
-  - Species: `TBD`
-  - Trip types: `TBD`
-  - Boats: `TBD`
+  - Species: Yes
+  - Trip types: Yes
+  - Boats: Yes
 
 - [ ] **Q27. What confidence threshold is required?**
   - Recommended provisional value: `0.98`, finalized from measured human-review results.
-  - Answer: `TBD`
+  - Answer: 0.98
 
 - [ ] **Q28. What minimum live human-reviewed sample is required?**
   - Recommended: At least 50 recommendations and no incorrect result among cases that would have qualified for automation.
-  - Answer: `TBD`
+  - Answer: At least 50 recommendations and no incorrect result among cases that would have qualified for automation.
 
 - [ ] **Q29. Must reversal use an explicit audited administrator action?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Q30. Where should successful automatic resolutions be reported?**
   - Recommended: Admin audit history only initially.
-  - Answer: `TBD`
+  - Answer: Admin audit history only initially.
 
 - [ ] **Confirm that Luna may never create a canonical boat, species, or trip type.**
   - Recommended: Confirm.
-  - Answer: `TBD`
+  - Answer: Confirmed, it should recommend creating a canonical item and Admins must manually approve.
 
 - [ ] **Approved to begin Phase 7?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

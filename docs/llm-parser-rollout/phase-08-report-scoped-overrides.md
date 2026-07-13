@@ -8,34 +8,34 @@
 
 - [ ] **Q31. May Luna eventually propose occurrence-specific report overrides?**
   - Recommended: Yes, with human approval initially.
-  - Answer: `TBD`
+  - Answer: Yes, with human approval initially.
 
 - [ ] **Q32. Which fields may an override change?**
   - Recommended: Existing boat selection, existing trip type, anglers, existing species selection, retained count, and released count. Disallow arbitrary JSON/database patches.
-  - Answer: `TBD`
+  - Answer: Existing boat selection, existing trip type, anglers, existing species selection, retained count, and released count. Disallow arbitrary JSON/database patches.
 
 - [ ] **Must overrides require human approval initially?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Q33. Should overrides invalidate when source paragraph, report fingerprint, or parser version changes?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Q34. Must every parser-defect override link to a deduplicated GitHub issue?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **May an approved override reparse and therefore alter previously normalized historical data for that payload/date?**
   - Recommended: Yes, but show the affected scope before approval and preserve audit/rollback information.
-  - Answer: `TBD`
+  - Answer: Yes, but show the affected scope before approval and preserve audit/rollback information.
 
 - [ ] **Q35. Is automatic override application explicitly deferred until separate evidence and approval exist?**
   - Recommended: Yes; do not set an automatic threshold now.
-  - Answer: `TBD`
+  - Answer: Yes; do not set an automatic threshold now.
 
 - [ ] **Approved to begin Phase 8?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

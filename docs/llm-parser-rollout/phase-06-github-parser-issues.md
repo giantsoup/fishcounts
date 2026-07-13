@@ -38,22 +38,22 @@
 
 - [ ] **Q23. How should recurring occurrences be handled?**
   - Recommended: Count/link locally without repetitive comments; comment only for materially different reproductions if later approved.
-  - Answer: `TBD`
+  - Answer: Count/link locally without repetitive comments; comment only for materially different reproductions if later approved.
 
 - [ ] **What should happen when a matching GitHub issue is already closed?**
   - Recommended: Link and count locally; require human approval before reopening or commenting.
-  - Answer: `TBD`
+  - Answer: Link and count locally; require human approval before reopening or commenting.
 
 - [ ] **Q24. Should issues have an automatic assignee or milestone?**
   - Recommended: Neither initially.
-  - Answer: `TBD`
+  - Answer: Automatically assign me (Taylor Oyer)
 
 - [ ] **Q25. Should issue bodies include a copy-ready Codex task?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Approved to begin Phase 6?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 

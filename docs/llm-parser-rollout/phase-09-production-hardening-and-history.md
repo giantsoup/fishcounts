@@ -8,42 +8,42 @@
 
 - [ ] **Q36. What is the production deployment method?**
   - Confirm whether the repository's Docker Compose deployment workflow remains authoritative.
-  - Answer: `TBD`
+  - Answer: Deployment is Ci/CD github actions, I will have to manually update things like the .env file after pushing to production
 
 - [ ] **Q37. Where are OpenAI/GitHub secrets and feature flags managed?**
-  - Answer: `TBD`
+  - Answer: In the .env file and at the respective Github and OpenAI online dashboards
 
 - [ ] **Q38. May deployment add the `ai-parsing` queue and restart workers?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Q39. What production AI-worker concurrency should be used?**
   - Recommended initial value: One worker with provider rate limiting.
-  - Answer: `TBD`
+  - Answer: One worker with provider rate limiting.
 
 - [ ] **Q40. Should the existing database queue remain in use without adding Redis or Horizon?**
   - Recommended: Yes unless measured operations justify a dependency change.
-  - Answer: `TBD`
+  - Answer: Yes unless measured operations justify a dependency change.
 
 - [ ] **Q41. Are reversible production migrations authorized after each pull request is approved?**
-  - Answer: `TBD`
+  - Answer: All migrations are approved once they are committed to the main branch
 
 - [ ] **Q42. Must each historical/backfill run receive separate authorization with a call count and hard budget?**
   - Recommended: Yes.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Where should operational alerts be sent?**
   - Options: application logs/admin dashboard only, email, Discord, or another destination.
-  - Answer: `TBD`
+  - Answer: application logs/admin dashboard and email
 
 - [ ] **What retention/pruning cadence should apply to bounded failure metadata and obsolete reviews?**
-  - Answer: `TBD`
+  - Answer: Keep only 3 months of data
 
 - [ ] **May the full PHPUnit suite be run after phase-specific tests pass?**
   - This approval will be reconfirmed when implementation reaches this phase.
-  - Answer: `TBD`
+  - Answer: Yes
 
 - [ ] **Approved to begin Phase 9?**
-  - Answer: `TBD`
+  - Answer: Yes
 
 ## Objective
 
