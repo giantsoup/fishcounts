@@ -127,6 +127,7 @@ return [
     'ai_review' => [
         'enabled' => (bool) env('FISH_AI_REVIEW_ENABLED', false),
         'dispatch_enabled' => (bool) env('FISH_AI_REVIEW_DISPATCH_ENABLED', false),
+        'human_review_enabled' => (bool) env('FISH_AI_REVIEW_HUMAN_WORKFLOW_ENABLED', false),
         'provider' => env('FISH_AI_REVIEW_PROVIDER', 'openai'),
         'model' => env('FISH_AI_REVIEW_MODEL', 'gpt-5.6-luna'),
         'reasoning_effort' => env('FISH_AI_REVIEW_REASONING_EFFORT', 'medium'),

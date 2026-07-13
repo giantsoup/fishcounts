@@ -17,8 +17,7 @@ enum ParserDiagnosticReviewStatus: string
         return match ($this) {
             self::Pending => in_array($status, [self::Running, self::Stale, self::Skipped], true),
             self::Running => in_array($status, [self::Succeeded, self::Failed, self::Refused, self::Stale], true),
-            self::Failed => $status === self::Pending,
-            self::Succeeded, self::Refused, self::Stale, self::Skipped => false,
+            self::Failed, self::Succeeded, self::Refused, self::Stale, self::Skipped => $status === self::Pending,
         };
     }
 }

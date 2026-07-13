@@ -7,7 +7,6 @@ use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParserDiagnosticData;
 use App\DTOs\RawPayloadData;
 use App\Enums\ParserDiagnosticType;
-use App\Enums\ParserErrorResolutionType;
 use App\Enums\SourceType;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -48,10 +47,7 @@ class TripReportNormalizer
         return DB::transaction(function () use ($payload, $parsed, $diagnostics): int {
             ParserError::query()
                 ->where('raw_scrape_payload_id', $payload->id)
-                ->where(function (Builder $query): void {
-                    $query->whereNull('resolution_type')
-                        ->orWhere('resolution_type', '!=', ParserErrorResolutionType::Dismissed->value);
-                })
+                ->whereNull('resolution_type')
                 ->delete();
 
             foreach ($diagnostics as $diagnostic) {

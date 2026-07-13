@@ -10,7 +10,6 @@ use App\Enums\ParserDiagnosticReviewClassification;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserDiagnosticType;
 use App\Enums\ScrapeRunType;
-use App\Exceptions\InvalidParserDiagnosticReviewTransition;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -103,6 +102,10 @@ class ParserDiagnosticReviewTest extends TestCase
             'running:refused',
             'running:stale',
             'failed:pending',
+            'succeeded:pending',
+            'refused:pending',
+            'stale:pending',
+            'skipped:pending',
         ];
 
         foreach (ParserDiagnosticReviewStatus::cases() as $from) {
@@ -127,8 +130,8 @@ class ParserDiagnosticReviewTest extends TestCase
         $review->transitionTo(ParserDiagnosticReviewStatus::Succeeded);
 
         $this->assertNotNull($review->completed_at);
-        $this->expectException(InvalidParserDiagnosticReviewTransition::class);
         $review->transitionTo(ParserDiagnosticReviewStatus::Pending);
+        $this->assertSame(ParserDiagnosticReviewStatus::Pending, $review->status);
     }
 
     public function test_failure_metadata_is_bounded_before_persistence(): void

@@ -9,6 +9,10 @@
                 <p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>
             @endif
 
+            @if (session('errors')?->has('review'))
+                <p class="mb-4 text-sm text-red-700">{{ session('errors')->first('review') }}</p>
+            @endif
+
             <nav class="mb-4 flex gap-4 text-sm" aria-label="Parser error filters">
                 <a href="{{ route('admin.parser-errors.index') }}" @class(['font-semibold text-blue-700' => ! $showAll, 'text-gray-600 hover:text-gray-900' => $showAll])>Open</a>
                 <a href="{{ route('admin.parser-errors.index', ['status' => 'all']) }}" @class(['font-semibold text-blue-700' => $showAll, 'text-gray-600 hover:text-gray-900' => ! $showAll])>All</a>
@@ -90,7 +94,7 @@
                             @endif
 
                             @if (! $error->resolved_at)
-                                <form method="POST" action="{{ route('admin.parser-errors.dismiss', $error) }}" onsubmit="return confirm('Dismiss this parser error without creating an alias?');">
+                                <form method="POST" action="{{ route('admin.parser-errors.dismiss', $error) }}">
                                     @csrf
                                     @method('PATCH')
                                     <x-secondary-button type="submit">Dismiss error</x-secondary-button>
@@ -98,6 +102,127 @@
                                 </form>
                             @endif
                         </div>
+
+                        @if ($humanReviewEnabled)
+                            @php
+                                $review = $error->latestDiagnosticReview;
+                                $reviewTarget = $review ? $reviewTargets->get($review->id) : null;
+                            @endphp
+
+                            <section class="rounded-lg border border-indigo-100 bg-indigo-50 p-4 lg:col-span-5" aria-label="AI diagnostic review">
+                                <div class="grid gap-4 lg:grid-cols-3">
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">AI review</p>
+                                        @if ($review)
+                                            <p class="mt-1 text-sm font-medium text-gray-900">{{ str($review->status->value)->headline() }}</p>
+                                            <p class="text-sm text-gray-700">
+                                                {{ $review->classification ? str($review->classification->value)->headline() : 'No classification' }}
+                                                @if ($review->confidence !== null)
+                                                    · {{ Number::percentage((float) $review->confidence * 100, precision: 1) }} confidence
+                                                @endif
+                                            </p>
+                                            @if ($reviewTarget)
+                                                <p class="mt-2 text-sm text-gray-700">
+                                                    Candidate: {{ $reviewTarget->name }}
+                                                    @if (! $reviewTarget->is_active)
+                                                        <span class="text-red-700">(inactive)</span>
+                                                    @endif
+                                                </p>
+                                            @endif
+                                            @if ($review->failure_message)
+                                                <p class="mt-2 text-sm text-red-700">{{ $review->failure_message }}</p>
+                                            @endif
+                                        @else
+                                            <p class="mt-1 text-sm text-gray-600">No AI review is available.</p>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Rationale and source</p>
+                                        <p class="mt-1 whitespace-pre-wrap text-sm text-gray-800">{{ $review?->rationale ?? 'No rationale available.' }}</p>
+                                        @if (filled(data_get($error->context, 'sanitized_paragraph')))
+                                            <details class="mt-3 text-sm">
+                                                <summary class="cursor-pointer font-medium text-gray-700">Sanitized paragraph</summary>
+                                                <p class="mt-2 whitespace-pre-wrap text-gray-700">{{ data_get($error->context, 'sanitized_paragraph') }}</p>
+                                            </details>
+                                        @endif
+                                    </div>
+
+                                    <div>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Versions and usage</p>
+                                        @if ($review)
+                                            <dl class="mt-1 grid grid-cols-2 gap-x-3 text-xs text-gray-700">
+                                                <dt>Model</dt><dd>{{ $review->model }}</dd>
+                                                <dt>Prompt</dt><dd>{{ $review->prompt_version }}</dd>
+                                                <dt>Schema</dt><dd>{{ $review->schema_version }}</dd>
+                                                <dt>Parser</dt><dd>{{ data_get($error->context, 'parser_version', $error->rawScrapePayload?->parser_version ?? 'unknown') }}</dd>
+                                                <dt>Input tokens</dt><dd>{{ $review->input_tokens ?? 'n/a' }}</dd>
+                                                <dt>Cached tokens</dt><dd>{{ $review->cached_input_tokens }}</dd>
+                                                <dt>Output tokens</dt><dd>{{ $review->output_tokens ?? 'n/a' }}</dd>
+                                                <dt>Reasoning tokens</dt><dd>{{ $review->reasoning_tokens }}</dd>
+                                                <dt>Total tokens</dt><dd>{{ $review->total_tokens ?? 'n/a' }}</dd>
+                                                <dt>Estimated cost</dt><dd>{{ $review->estimated_cost_micros === null ? 'n/a' : Number::currency($review->estimated_cost_micros / 1_000_000) }}</dd>
+                                            </dl>
+                                        @else
+                                            <p class="mt-1 text-sm text-gray-600">No usage data available.</p>
+                                        @endif
+                                    </div>
+                                </div>
+
+                                @if ($review && $review->humanActions->isNotEmpty())
+                                    <div class="mt-4 border-t border-indigo-100 pt-3">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Human audit history</p>
+                                        <ul class="mt-1 space-y-1 text-xs text-gray-700">
+                                            @foreach ($review->humanActions->sortByDesc('created_at') as $humanAction)
+                                                <li>
+                                                    {{ str($humanAction->action->value)->headline() }} by {{ $humanAction->actor_name }}
+                                                    · {{ $humanAction->created_at->format('n/j/Y g:i A') }}
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+
+                                @if ($review && ! $error->resolved_at)
+                                    @if (in_array($review->classification, [\App\Enums\ParserDiagnosticReviewClassification::NewEntityCandidate, \App\Enums\ParserDiagnosticReviewClassification::Uncertain], true))
+                                        <p class="mt-4 text-sm font-medium text-amber-800">This outcome stays open for human handling and cannot create a canonical entity.</p>
+                                    @endif
+
+                                    <div class="mt-4 flex flex-wrap gap-2 border-t border-indigo-100 pt-4">
+                                        @if ($review->status === \App\Enums\ParserDiagnosticReviewStatus::Succeeded && $review->classification === \App\Enums\ParserDiagnosticReviewClassification::LegitimateAlias && $reviewTarget)
+                                            <form method="POST" action="{{ route('admin.parser-errors.reviews.accept', [$error, $review]) }}">
+                                                @csrf
+                                                <x-primary-button type="submit">Accept existing alias</x-primary-button>
+                                            </form>
+                                        @endif
+
+                                        @if ($review->status === \App\Enums\ParserDiagnosticReviewStatus::Succeeded)
+                                            <form method="POST" action="{{ route('admin.parser-errors.reviews.reject', [$error, $review]) }}">
+                                                @csrf
+                                                <x-secondary-button type="submit">Reject recommendation</x-secondary-button>
+                                            </form>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('admin.parser-errors.reviews.dismiss', [$error, $review]) }}">
+                                            @csrf
+                                            <x-secondary-button type="submit">Dismiss parser error</x-secondary-button>
+                                        </form>
+
+                                        @if (! in_array($review->status, [\App\Enums\ParserDiagnosticReviewStatus::Pending, \App\Enums\ParserDiagnosticReviewStatus::Running], true) && config('fish.ai_review.enabled') && config('fish.ai_review.dispatch_enabled'))
+                                            <form method="POST" action="{{ route('admin.parser-errors.reviews.retry', [$error, $review]) }}">
+                                                @csrf
+                                                <x-secondary-button type="submit">Retry review</x-secondary-button>
+                                            </form>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('admin.parser-errors.reviews.leave-open', [$error, $review]) }}">
+                                            @csrf
+                                            <x-secondary-button type="submit">Leave open</x-secondary-button>
+                                        </form>
+                                    </div>
+                                @endif
+                            </section>
+                        @endif
                     </div>
                 </div>
             @empty

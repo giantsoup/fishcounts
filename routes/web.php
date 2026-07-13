@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\EnvironmentalBackfillController;
 use App\Http\Controllers\Admin\EnvironmentalConditionController;
 use App\Http\Controllers\Admin\FailedJobController;
 use App\Http\Controllers\Admin\NotificationDeliveryController;
+use App\Http\Controllers\Admin\ParserDiagnosticReviewController;
 use App\Http\Controllers\Admin\ParserErrorController;
 use App\Http\Controllers\Admin\RawPayloadController;
 use App\Http\Controllers\Admin\ScrapeRunController;
@@ -80,6 +81,13 @@ Route::middleware('auth')->group(function (): void {
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');
         Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])->name('parser-errors.dismiss');
+        Route::prefix('parser-errors/{parserError}/reviews/{review}')->name('parser-errors.reviews.')->group(function (): void {
+            Route::post('accept', [ParserDiagnosticReviewController::class, 'accept'])->name('accept');
+            Route::post('reject', [ParserDiagnosticReviewController::class, 'reject'])->name('reject');
+            Route::post('dismiss', [ParserDiagnosticReviewController::class, 'dismiss'])->name('dismiss');
+            Route::post('retry', [ParserDiagnosticReviewController::class, 'retry'])->name('retry');
+            Route::post('leave-open', [ParserDiagnosticReviewController::class, 'leaveOpen'])->name('leave-open');
+        });
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');
         Route::post('species', [SpeciesAliasController::class, 'storeSpecies'])->name('species.store');
         Route::patch('species/{species}', [SpeciesAliasController::class, 'updateSpecies'])->name('species.update');

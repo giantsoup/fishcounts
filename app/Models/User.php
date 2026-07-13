@@ -51,4 +51,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(NotificationDestination::class);
     }
+
+    /** @return HasMany<ParserDiagnosticReviewAction, $this> */
+    public function parserDiagnosticReviewActions(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReviewAction::class, 'actor_user_id');
+    }
 }

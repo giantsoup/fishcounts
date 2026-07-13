@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Guarded(['id'])]
 class ParserError extends Model
@@ -43,5 +44,17 @@ class ParserError extends Model
     public function diagnosticReviews(): HasMany
     {
         return $this->hasMany(ParserDiagnosticReview::class);
+    }
+
+    /** @return HasOne<ParserDiagnosticReview, $this> */
+    public function latestDiagnosticReview(): HasOne
+    {
+        return $this->hasOne(ParserDiagnosticReview::class)->latestOfMany();
+    }
+
+    /** @return HasMany<ParserDiagnosticReviewAction, $this> */
+    public function humanReviewActions(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReviewAction::class);
     }
 }

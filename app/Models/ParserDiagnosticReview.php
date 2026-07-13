@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ParserCorrectionOperation;
 use App\Enums\ParserDiagnosticReviewClassification;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Exceptions\InvalidParserDiagnosticReviewTransition;
@@ -85,6 +86,46 @@ class ParserDiagnosticReview extends Model
         $this->transitionTo(ParserDiagnosticReviewStatus::Failed);
     }
 
+    public function prepareForRetry(): void
+    {
+        $this->transitionTo(ParserDiagnosticReviewStatus::Pending);
+        $this->forceFill([
+            'classification' => null,
+            'confidence' => null,
+            'validated_result' => null,
+            'rationale' => null,
+            'response_id' => null,
+            'input_tokens' => null,
+            'cached_input_tokens' => 0,
+            'output_tokens' => null,
+            'reasoning_tokens' => 0,
+            'total_tokens' => null,
+            'estimated_cost_micros' => null,
+            'started_at' => null,
+            'completed_at' => null,
+            'failed_at' => null,
+            'failure_message' => null,
+        ])->save();
+    }
+
+    /** @return null|array{type: string, id: int} */
+    public function recommendedCanonicalTarget(): ?array
+    {
+        $aliasCorrections = collect($this->validated_result['corrections'] ?? [])
+            ->filter(fn (array $correction): bool => ($correction['operation'] ?? null) === ParserCorrectionOperation::MapAlias->value)
+            ->values();
+
+        if ($aliasCorrections->count() !== 1) {
+            return null;
+        }
+
+        $correction = $aliasCorrections->first();
+
+        return is_string($correction['canonical_type'] ?? null) && is_int($correction['canonical_id'] ?? null)
+            ? ['type' => $correction['canonical_type'], 'id' => $correction['canonical_id']]
+            : null;
+    }
+
     /** @return BelongsTo<RawScrapePayload, $this> */
     public function rawScrapePayload(): BelongsTo
     {
@@ -101,5 +142,11 @@ class ParserDiagnosticReview extends Model
     public function budgetReservations(): HasMany
     {
         return $this->hasMany(AiBudgetReservation::class);
+    }
+
+    /** @return HasMany<ParserDiagnosticReviewAction, $this> */
+    public function humanActions(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReviewAction::class);
     }
 }

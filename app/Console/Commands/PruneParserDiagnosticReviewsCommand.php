@@ -24,6 +24,7 @@ class PruneParserDiagnosticReviewsCommand extends Command
 
         ParserDiagnosticReview::query()
             ->where('created_at', '<', $cutoff)
+            ->whereDoesntHave('humanActions')
             ->select('id')
             ->chunkById(500, function (Collection $reviews) use (&$deleted): void {
                 $deleted += ParserDiagnosticReview::query()->whereKey($reviews->pluck('id'))->delete();

@@ -4,9 +4,12 @@ namespace Tests\Feature;
 
 use App\Enums\ScrapeRunType;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewAction;
+use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,6 +44,53 @@ class PruneParserDiagnosticReviewsCommandTest extends TestCase
         $this->assertModelExists($february);
         $this->assertModelExists($april);
         $this->assertModelExists($may);
+    }
+
+    public function test_command_retains_human_review_audit_history_indefinitely(): void
+    {
+        CarbonImmutable::setTestNow('2026-05-01 00:05:00');
+        config()->set('fish.ai_review.retention.complete_months', 3);
+        $payload = $this->payload();
+        $review = $this->review($payload, 'human-reviewed', '2025-01-01 00:00:00');
+        $parserError = ParserError::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'target_date' => $payload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Moon Fish',
+            'message' => 'Unknown species alias.',
+        ]);
+        $actor = User::factory()->admin()->create();
+        ParserDiagnosticReviewAction::query()->create([
+            'parser_diagnostic_review_id' => $review->id,
+            'parser_error_id' => $parserError->id,
+            'actor_user_id' => $actor->id,
+            'actor_name' => $actor->name,
+            'actor_email' => $actor->email,
+            'action' => 'left_open',
+        ]);
+
+        $this->artisan('ai-reviews:prune')
+            ->expectsOutput('Pruned 0 parser diagnostic review records.')
+            ->assertSuccessful();
+
+        $this->assertModelExists($review);
+        $this->assertDatabaseHas('parser_diagnostic_review_actions', [
+            'parser_diagnostic_review_id' => $review->id,
+            'actor_user_id' => $actor->id,
+        ]);
+
+        $payload->delete();
+
+        $this->assertModelMissing($review);
+        $this->assertDatabaseHas('parser_diagnostic_review_actions', [
+            'parser_diagnostic_review_id' => null,
+            'parser_error_id' => $parserError->id,
+            'actor_user_id' => $actor->id,
+            'actor_name' => $actor->name,
+            'actor_email' => $actor->email,
+        ]);
     }
 
     private function review(RawScrapePayload $payload, string $fingerprint, string $createdAt): ParserDiagnosticReview

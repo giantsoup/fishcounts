@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Enums\ParserErrorResolutionType;
+use App\Actions\Species\CreateSpeciesAlias;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSpeciesAliasRequest;
 use App\Http\Requests\StoreSpeciesRequest;
 use App\Http\Requests\UpdateSpeciesEnvironmentalProfileRequest;
-use App\Models\ParserError;
 use App\Models\Species;
-use App\Models\SpeciesAlias;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -57,39 +55,20 @@ class SpeciesAliasController extends Controller
             ->with('selected_species_id', $species->id);
     }
 
-    public function store(StoreSpeciesAliasRequest $request): RedirectResponse
+    public function store(StoreSpeciesAliasRequest $request, CreateSpeciesAlias $createSpeciesAlias): RedirectResponse
     {
-        $alias = SpeciesAlias::query()->create([
-            'species_id' => $request->validated('species_id'),
-            'alias' => $request->validated('alias'),
-            'normalized_alias' => $request->normalizedAlias(),
-        ]);
-
-        $this->resolveParserError($request, $alias->alias);
+        $species = Species::query()->findOrFail($request->integer('species_id'));
+        $createSpeciesAlias->handle(
+            $species,
+            $request->validated('alias'),
+            $request->normalizedAlias(),
+            $request->user()->id,
+        );
 
         return redirect()
             ->back()
             ->with('status', 'Species alias saved.')
             ->with('selected_species_id', $request->validated('species_id'));
-    }
-
-    private function resolveParserError(StoreSpeciesAliasRequest $request, string $alias): void
-    {
-        $parserErrorId = $request->validated('parser_error_id');
-
-        if ($parserErrorId === null) {
-            return;
-        }
-
-        ParserError::query()
-            ->whereKey($parserErrorId)
-            ->where('raw_field', 'species')
-            ->where('raw_value', $alias)
-            ->update([
-                'resolved_at' => now(),
-                'resolved_by_user_id' => $request->user()->id,
-                'resolution_type' => ParserErrorResolutionType::Alias->value,
-            ]);
     }
 
     /** @return array<string, string> */
