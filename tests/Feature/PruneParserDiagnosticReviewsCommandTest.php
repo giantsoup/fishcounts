@@ -46,18 +46,20 @@ class PruneParserDiagnosticReviewsCommandTest extends TestCase
         $this->assertModelExists($may);
     }
 
-    public function test_rolling_cutoff_does_not_expand_to_nearly_four_months_late_in_a_month(): void
+    public function test_retention_prunes_whole_months_only_on_a_month_boundary(): void
     {
         CarbonImmutable::setTestNow('2026-05-31 12:00:00');
         config()->set('fish.ai_review.retention.complete_months', 3);
         $payload = $this->payload();
-        $outsideWindow = $this->review($payload, 'outside-window', '2026-02-27 11:59:59');
-        $atCutoff = $this->review($payload, 'at-cutoff', '2026-02-28 12:00:00');
+        $outsideWindow = $this->review($payload, 'outside-window', '2026-01-31 23:59:59');
+        $retainedOldestMonth = $this->review($payload, 'retained-oldest-month', '2026-02-01 00:00:00');
+        $retainedLateInOldestMonth = $this->review($payload, 'retained-late-in-oldest-month', '2026-02-27 11:59:59');
 
         $this->artisan('ai-reviews:prune')->assertSuccessful();
 
         $this->assertModelMissing($outsideWindow);
-        $this->assertModelExists($atCutoff);
+        $this->assertModelExists($retainedOldestMonth);
+        $this->assertModelExists($retainedLateInOldestMonth);
     }
 
     public function test_command_retains_human_review_audit_history_indefinitely(): void

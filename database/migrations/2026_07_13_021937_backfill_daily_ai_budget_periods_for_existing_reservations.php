@@ -12,7 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         $timezone = (string) config('fish.ai_review.budgets.timezone', 'America/Los_Angeles');
-        $limitMicros = (int) config('fish.ai_review.budgets.daily_limit_micros', 5_000_000);
+        $configuredDailyLimit = (int) config('fish.ai_review.budgets.daily_limit_micros', 0);
+        $limitMicros = $configuredDailyLimit > 0
+            ? $configuredDailyLimit
+            : (int) config('fish.ai_review.budgets.monthly_limit_micros', 50_000_000);
 
         DB::table('ai_budget_reservations as reservations')
             ->join('ai_budget_periods as monthly_period', 'monthly_period.id', '=', 'reservations.ai_budget_period_id')

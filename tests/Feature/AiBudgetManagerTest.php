@@ -137,11 +137,27 @@ class AiBudgetManagerTest extends TestCase
         app(AiBudgetManager::class)->settle($reservation, 501);
     }
 
-    public function test_daily_and_monthly_hard_limits_are_enabled(): void
+    public function test_monthly_hard_limit_is_enabled_without_an_independent_daily_limit_by_default(): void
     {
-        $this->assertSame(5000000, config('fish.ai_review.budgets.daily_limit_micros'));
+        $this->assertSame(0, config('fish.ai_review.budgets.daily_limit_micros'));
         $this->assertTrue(config('fish.ai_review.budgets.hard_stop'));
         $this->assertSame(50000000, config('fish.ai_review.budgets.monthly_limit_micros'));
+    }
+
+    public function test_disabled_daily_limit_uses_the_monthly_hard_stop_without_a_stricter_cap(): void
+    {
+        config()->set('fish.ai_review.budgets.daily_limit_micros', 0);
+        config()->set('fish.ai_review.budgets.monthly_limit_micros', 10_000);
+        $manager = app(AiBudgetManager::class);
+
+        $manager->reserve('openai', 'first-same-day-request', 6_000);
+        $manager->reserve('openai', 'second-same-day-request', 4_000);
+
+        $this->assertSame(10_000, $this->period('daily')->reserved_micros);
+        $this->assertSame(10_000, $this->period('monthly')->reserved_micros);
+
+        $this->expectException(AiBudgetExceededException::class);
+        $manager->reserve('openai', 'monthly-over-cap', 1);
     }
 
     public function test_daily_limit_stops_spend_even_when_monthly_budget_remains(): void

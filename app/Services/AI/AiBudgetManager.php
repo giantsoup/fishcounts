@@ -164,14 +164,17 @@ final class AiBudgetManager
     /** @return array<string, int> */
     private function configuredLimits(): array
     {
-        $limits = [
-            AiBudgetPeriodType::Daily->value => (int) config('fish.ai_review.budgets.daily_limit_micros'),
-            AiBudgetPeriodType::Monthly->value => (int) config('fish.ai_review.budgets.monthly_limit_micros'),
-        ];
+        $dailyLimit = (int) config('fish.ai_review.budgets.daily_limit_micros');
+        $monthlyLimit = (int) config('fish.ai_review.budgets.monthly_limit_micros');
 
-        if (min($limits) <= 0) {
+        if ($dailyLimit < 0 || $monthlyLimit <= 0) {
             throw new AiBudgetExceededException;
         }
+
+        $limits = [
+            AiBudgetPeriodType::Daily->value => $dailyLimit > 0 ? $dailyLimit : $monthlyLimit,
+            AiBudgetPeriodType::Monthly->value => $monthlyLimit,
+        ];
 
         return $limits;
     }

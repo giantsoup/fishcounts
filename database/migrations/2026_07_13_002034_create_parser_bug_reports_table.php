@@ -13,7 +13,10 @@ return new class extends Migration
     {
         Schema::create('parser_bug_reports', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('parser_diagnostic_review_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('parser_diagnostic_review_id')
+                ->nullable()
+                ->constrained(indexName: 'parser_bug_reports_review_id_foreign')
+                ->nullOnDelete();
             $table->unsignedSmallInteger('review_attempt')->default(0);
             $table->char('signature', 64)->unique();
             $table->string('source_slug');
@@ -47,7 +50,10 @@ return new class extends Migration
         Schema::create('parser_bug_report_occurrences', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('parser_bug_report_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('parser_diagnostic_review_id')->nullable()->constrained()->nullOnDelete();
+            $table->foreignId('parser_diagnostic_review_id')
+                ->nullable()
+                ->constrained(indexName: 'parser_bug_occurrences_review_id_foreign')
+                ->nullOnDelete();
             $table->foreignId('parser_error_id')->nullable()->constrained()->nullOnDelete();
             $table->unsignedSmallInteger('review_attempt');
             $table->timestamp('seen_at');

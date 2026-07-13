@@ -92,7 +92,12 @@
                 <div class="mt-5 grid gap-4 sm:grid-cols-2">
                     @foreach ($aiMetrics['budgets'] as $budget)
                         <div class="rounded border border-gray-200 p-4">
-                            <p class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ $budget['period'] }} budget</p>
+                            <p class="text-xs font-medium uppercase tracking-wide text-gray-500">
+                                {{ $budget['period'] }} budget
+                                @if (! $budget['independent_limit'])
+                                    <span class="normal-case tracking-normal">(monthly cap applies)</span>
+                                @endif
+                            </p>
                             <p class="mt-1 text-lg font-semibold">${{ number_format($budget['remaining_micros'] / 1_000_000, 2) }} remaining</p>
                             <p class="text-xs text-gray-500">${{ number_format($budget['spent_micros'] / 1_000_000, 2) }} spent · ${{ number_format($budget['reserved_micros'] / 1_000_000, 2) }} reserved · ${{ number_format($budget['limit_micros'] / 1_000_000, 2) }} limit</p>
                         </div>

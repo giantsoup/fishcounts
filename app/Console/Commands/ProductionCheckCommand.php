@@ -95,8 +95,8 @@ class ProductionCheckCommand extends Command
         );
         $databaseCache = Cache::store('database')->getStore();
 
-        $this->assert($dailyLimit > 0, 'Daily AI budget hard limit is configured.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be greater than zero.', $failures);
-        $this->assert($monthlyLimit > 0 && $monthlyLimit >= $dailyLimit, 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be at least the daily limit.', $failures);
+        $this->assert($dailyLimit >= 0, 'Optional daily AI budget limit is valid.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be zero or greater.', $failures);
+        $this->assert($monthlyLimit > 0 && ($dailyLimit === 0 || $monthlyLimit >= $dailyLimit), 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be positive and at least any enabled daily limit.', $failures);
         $this->assert($estimatedRequestCost > 0, 'AI estimated request cost is configured.', 'FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be greater than zero.', $failures);
         $this->assert(in_array($budgetTimezone, DateTimeZone::listIdentifiers(), true), 'AI budget timezone is valid.', 'FISH_AI_REVIEW_BUDGET_TIMEZONE must be a valid timezone identifier.', $failures);
         $this->assert((bool) config('fish.ai_review.budgets.hard_stop'), 'AI budget hard stop is enabled.', 'AI budget hard stop must remain enabled.', $failures);

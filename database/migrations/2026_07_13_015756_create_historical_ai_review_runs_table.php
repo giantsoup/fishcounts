@@ -40,7 +40,9 @@ return new class extends Migration
 
         Schema::create('historical_ai_review_run_items', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('historical_ai_review_run_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('historical_ai_review_run_id')
+                ->constrained(indexName: 'historical_ai_items_run_id_foreign')
+                ->cascadeOnDelete();
             $table->foreignId('raw_scrape_payload_id')->nullable()->constrained()->nullOnDelete();
             $table->char('payload_hash', 64);
             $table->char('item_fingerprint', 64);

@@ -26,7 +26,7 @@ class PruneParserDiagnosticReviewsCommand extends Command
     public function handle(AiBudgetManager $budgetManager): int
     {
         $retentionMonths = (int) config('fish.ai_review.retention.complete_months');
-        $cutoff = CarbonImmutable::now()->subMonthsNoOverflow($retentionMonths);
+        $cutoff = CarbonImmutable::now()->startOfMonth()->subMonthsNoOverflow($retentionMonths);
         $deleted = 0;
 
         ParserDiagnosticReview::query()

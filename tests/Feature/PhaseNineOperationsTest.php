@@ -317,7 +317,8 @@ class PhaseNineOperationsTest extends TestCase
             ->assertSee('Schema failures / stale total')
             ->assertSee('GitHub queue / oldest')
             ->assertSee('GitHub issue failures are above the 24-hour warning threshold.')
-            ->assertSee('$5.00 remaining')
+            ->assertSee('monthly cap applies')
+            ->assertSee('$50.00 remaining')
             ->assertSee('$50.00 limit');
     }
 
@@ -339,6 +340,10 @@ class PhaseNineOperationsTest extends TestCase
 
         $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
         $this->assertSame('1', $job->uniqueId());
+
+        $composer = json_decode(file_get_contents(base_path('composer.json')), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertStringContainsString('--timeout=220', implode(' ', $composer['scripts']['dev']));
+        $this->assertStringContainsString('--timeout=220', file_get_contents(base_path('DEPLOYMENT.md')));
     }
 
     public function test_worker_restart_retries_a_running_item_without_duplicate_processing(): void
@@ -538,6 +543,7 @@ class PhaseNineOperationsTest extends TestCase
 
         $dailyPeriod = AiBudgetPeriod::query()->where('period_type', 'daily')->sole();
         $this->assertSame('2026-07-12', $dailyPeriod->period_start->toDateString());
+        $this->assertSame(50_000_000, $dailyPeriod->limit_micros);
         $this->assertSame(750_000, $dailyPeriod->spent_micros);
         $this->assertSame($dailyPeriod->id, $reservation->refresh()->daily_ai_budget_period_id);
     }

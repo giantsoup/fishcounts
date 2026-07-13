@@ -14,10 +14,10 @@ The production VPS uses Nginx, PHP-FPM, MariaDB, Supervisor, and Certbot. Match 
 Run the existing application queue worker through Supervisor with the database queue connection, and run the Laravel scheduler from cron. Add a separate external-services Supervisor program with `numprocs=1` and this command so AI and GitHub latency cannot occupy deterministic parsing workers:
 
 ```shell
-php artisan queue:work database --queue=ai-parsing,github-issues --sleep=3 --tries=0 --timeout=210
+php artisan queue:work database --queue=ai-parsing,github-issues --sleep=3 --tries=0 --timeout=220
 ```
 
-Keep `DB_QUEUE_RETRY_AFTER` greater than 210 seconds. Restart Supervisor workers after deploying the Phase 6 schema and dark GitHub-write configuration.
+Keep `DB_QUEUE_RETRY_AFTER` greater than 220 seconds. Restart Supervisor workers after deploying the Phase 6 schema and dark GitHub-write configuration.
 
 For the Phase 6 rollout, provision `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_INSTALLATION_ID`, and either `GITHUB_APP_PRIVATE_KEY_PATH` or `GITHUB_APP_PRIVATE_KEY_BASE64` outside source control. Start with:
 

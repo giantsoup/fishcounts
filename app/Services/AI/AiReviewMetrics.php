@@ -58,14 +58,18 @@ final class AiReviewMetrics
         ];
     }
 
-    /** @return array<int, array<string, int|string>> */
+    /** @return array<int, array<string, bool|int|string>> */
     private function budgets(): array
     {
         $now = CarbonImmutable::now((string) config('fish.ai_review.budgets.timezone'));
 
         return collect([AiBudgetPeriodType::Daily, AiBudgetPeriodType::Monthly])->map(function (AiBudgetPeriodType $type) use ($now): array {
             $start = $type === AiBudgetPeriodType::Daily ? $now->toDateString() : $now->startOfMonth()->toDateString();
-            $limit = (int) config("fish.ai_review.budgets.{$type->value}_limit_micros");
+            $configuredDailyLimit = (int) config('fish.ai_review.budgets.daily_limit_micros');
+            $monthlyLimit = (int) config('fish.ai_review.budgets.monthly_limit_micros');
+            $limit = $type === AiBudgetPeriodType::Daily && $configuredDailyLimit === 0
+                ? $monthlyLimit
+                : (int) config("fish.ai_review.budgets.{$type->value}_limit_micros");
             $period = AiBudgetPeriod::query()
                 ->where('provider', config('fish.ai_review.provider'))
                 ->where('period_type', $type)
@@ -76,6 +80,7 @@ final class AiReviewMetrics
 
             return [
                 'period' => $type->value,
+                'independent_limit' => $type !== AiBudgetPeriodType::Daily || $configuredDailyLimit > 0,
                 'limit_micros' => $limit,
                 'spent_micros' => $spent,
                 'reserved_micros' => $reserved,

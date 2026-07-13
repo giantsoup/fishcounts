@@ -162,7 +162,7 @@ return [
         ],
         'budgets' => [
             'timezone' => env('FISH_AI_REVIEW_BUDGET_TIMEZONE', 'America/Los_Angeles'),
-            'daily_limit_micros' => (int) env('FISH_AI_REVIEW_DAILY_LIMIT_MICROS', 5000000),
+            'daily_limit_micros' => (int) env('FISH_AI_REVIEW_DAILY_LIMIT_MICROS', 0),
             'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 50000000),
             'hard_stop' => true,
             'reservation_ttl_minutes' => (int) env('FISH_AI_REVIEW_RESERVATION_TTL_MINUTES', 15),
