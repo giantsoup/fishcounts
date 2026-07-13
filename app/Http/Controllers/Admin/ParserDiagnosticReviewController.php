@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Parsing\ActOnParserDiagnosticReview;
+use App\Actions\Parsing\ReverseAutomatedParserDiagnosticReview;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ActOnParserDiagnosticReviewRequest;
+use App\Http\Requests\Admin\ReverseAutomatedParserDiagnosticReviewRequest;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewAction;
 use App\Models\ParserError;
 use Illuminate\Http\RedirectResponse;
 
@@ -64,5 +67,17 @@ class ParserDiagnosticReviewController extends Controller
         $recorded = $action->leaveOpen($parserError, $review, $request->user());
 
         return back()->with('status', $recorded ? 'Decision recorded. The parser error remains open.' : 'This leave-open decision was already recorded.');
+    }
+
+    public function reverseAutomation(
+        ReverseAutomatedParserDiagnosticReviewRequest $request,
+        ParserError $parserError,
+        ParserDiagnosticReview $review,
+        ParserDiagnosticReviewAction $automaticAction,
+        ReverseAutomatedParserDiagnosticReview $action,
+    ): RedirectResponse {
+        $action->handle($parserError, $review, $automaticAction, $request->user());
+
+        return back()->with('status', 'The automatic alias resolution was reversed. Affected payloads were reparsed and deduplicated.');
     }
 }

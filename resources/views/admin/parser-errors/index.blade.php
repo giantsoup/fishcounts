@@ -103,7 +103,7 @@
                             @endif
                         </div>
 
-                        @if ($humanReviewEnabled)
+                        @if ($reviewAuditEnabled)
                             @php
                                 $review = $error->latestDiagnosticReview;
                                 $reviewTarget = $review ? $reviewTargets->get($review->id) : null;
@@ -172,12 +172,21 @@
 
                                 @if ($review && $review->humanActions->isNotEmpty())
                                     <div class="mt-4 border-t border-indigo-100 pt-3">
-                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Human audit history</p>
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Review audit history</p>
                                         <ul class="mt-1 space-y-1 text-xs text-gray-700">
                                             @foreach ($review->humanActions->sortByDesc('created_at') as $humanAction)
                                                 <li>
                                                     {{ str($humanAction->action->value)->headline() }} by {{ $humanAction->actor_name }}
                                                     · {{ $humanAction->created_at->format('n/j/Y g:i A') }}
+
+                                                    @if ($humanAction->action === \App\Enums\ParserDiagnosticReviewActionType::AutomaticallyAccepted
+                                                        && ! $review->humanActions->contains(fn ($action) => $action->action === \App\Enums\ParserDiagnosticReviewActionType::AutomationReversed
+                                                            && $action->review_attempt === $humanAction->review_attempt))
+                                                        <form class="mt-1" method="POST" action="{{ route('admin.parser-errors.reviews.reverse-automation', [$error, $review, $humanAction]) }}">
+                                                            @csrf
+                                                            <x-secondary-button type="submit">Reverse automatic alias</x-secondary-button>
+                                                        </form>
+                                                    @endif
                                                 </li>
                                             @endforeach
                                         </ul>
@@ -245,7 +254,7 @@
                                     </div>
                                 @endif
 
-                                @if ($review && ! $error->resolved_at)
+                                @if ($humanReviewEnabled && $review && ! $error->resolved_at)
                                     @if (in_array($review->classification, [\App\Enums\ParserDiagnosticReviewClassification::NewEntityCandidate, \App\Enums\ParserDiagnosticReviewClassification::Uncertain], true))
                                         <p class="mt-4 text-sm font-medium text-amber-800">This outcome stays open for human handling and cannot create a canonical entity.</p>
                                     @endif

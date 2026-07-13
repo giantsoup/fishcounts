@@ -20,6 +20,7 @@ class ParserDiagnosticReviewFactory extends Factory
     {
         return [
             'raw_scrape_payload_id' => fn (): int => RawScrapePayload::query()->firstOrFail()->id,
+            'payload_hash' => fn (): string => RawScrapePayload::query()->firstOrFail()->payload_hash,
             'diagnostic_fingerprint' => fn (): string => hash('sha256', fake()->unique()->uuid()),
             'model' => 'gpt-5.6-luna',
             'prompt_version' => 'v1',

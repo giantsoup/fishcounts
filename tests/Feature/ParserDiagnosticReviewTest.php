@@ -60,6 +60,7 @@ class ParserDiagnosticReviewTest extends TestCase
         $this->assertTrue($parserError->diagnosticReviews->contains($review));
         $this->assertTrue(Schema::hasColumns('parser_diagnostic_reviews', [
             'raw_scrape_payload_id',
+            'payload_hash',
             'parser_error_id',
             'diagnostic_fingerprint',
             'validated_result',

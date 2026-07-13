@@ -88,6 +88,8 @@ Route::middleware('auth')->group(function (): void {
             Route::post('dismiss', [ParserDiagnosticReviewController::class, 'dismiss'])->name('dismiss');
             Route::post('retry', [ParserDiagnosticReviewController::class, 'retry'])->name('retry');
             Route::post('leave-open', [ParserDiagnosticReviewController::class, 'leaveOpen'])->name('leave-open');
+            Route::post('automatic-actions/{automaticAction}/reverse', [ParserDiagnosticReviewController::class, 'reverseAutomation'])
+                ->name('reverse-automation');
             Route::post('prepare-github-issue', [ParserBugReportController::class, 'prepare'])->name('prepare-github-issue');
         });
         Route::post('parser-bug-reports/{parserBugReport}/approve', [ParserBugReportController::class, 'approve'])

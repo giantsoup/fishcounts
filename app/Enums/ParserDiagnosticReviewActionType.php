@@ -9,4 +9,6 @@ enum ParserDiagnosticReviewActionType: string
     case Dismissed = 'dismissed';
     case Retried = 'retried';
     case LeftOpen = 'left_open';
+    case AutomaticallyAccepted = 'automatically_accepted';
+    case AutomationReversed = 'automation_reversed';
 }

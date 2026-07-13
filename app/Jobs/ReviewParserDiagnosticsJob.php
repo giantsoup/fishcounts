@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Actions\Parsing\AutomateParserDiagnosticReviews;
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Exceptions\AiBudgetExceededException;
@@ -74,6 +75,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         ParserDiagnosticReviewRequestValidator $requestValidator,
         ParserDiagnosticReviewResultValidator $resultValidator,
         AiBudgetManager $budgetManager,
+        AutomateParserDiagnosticReviews $automateParserDiagnosticReviews,
     ): void {
         if (! $this->enabled()) {
             return;
@@ -191,15 +193,21 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 }
             }
 
+            $automatableReviewIds = [];
             foreach ($reviews as $index => $review) {
                 $request = $requests[$review->diagnostic_fingerprint];
                 $result = $resultValidator->validate($providerResponse->results[$review->diagnostic_fingerprint], $request);
                 $review->forceFill($this->resultAttributes($result->toArray(), $providerResponse, $index, $reviews->count(), $estimatedCost))->save();
                 $review->transitionTo(ParserDiagnosticReviewStatus::Succeeded);
+                $automatableReviewIds[] = $review->id;
                 $this->dispatchParserBugIssue($review);
             }
 
             $budgetManager->settle($reservation, $estimatedCost);
+            rescue(
+                fn (): int => $automateParserDiagnosticReviews->handle($payload->id, $automatableReviewIds),
+                report: true,
+            );
         } catch (AiBudgetExceededException) {
             $this->skip($reviews);
         } catch (Throwable $throwable) {
@@ -247,15 +255,23 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             'diagnostic_fingerprint' => $parserError->diagnostic_fingerprint,
         ], [
             'parser_error_id' => $parserError->id,
+            'payload_hash' => $payload->payload_hash,
             'provider' => config('fish.ai_review.provider'),
             'model' => config('fish.ai_review.model'),
             'prompt_version' => config('fish.ai_review.prompt_version'),
             'schema_version' => config('fish.ai_review.schema_version'),
         ]);
 
-        if (in_array($review->status, [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Failed], true)
-            && $review->parser_error_id !== $parserError->id) {
-            $review->forceFill(['parser_error_id' => $parserError->id])->save();
+        $attributes = $review->parser_error_id !== $parserError->id
+            ? ['parser_error_id' => $parserError->id]
+            : [];
+
+        if (in_array($review->status, [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Failed], true)) {
+            $attributes['payload_hash'] = $payload->payload_hash;
+        }
+
+        if ($attributes !== []) {
+            $review->forceFill($attributes)->save();
         }
 
         return $review;

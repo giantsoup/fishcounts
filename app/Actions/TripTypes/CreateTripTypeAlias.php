@@ -11,9 +11,14 @@ use Illuminate\Validation\ValidationException;
 
 class CreateTripTypeAlias
 {
-    public function handle(TripType $tripType, string $alias, string $normalizedAlias, int $resolvedByUserId): TripTypeAlias
-    {
-        return DB::transaction(function () use ($tripType, $alias, $normalizedAlias, $resolvedByUserId): TripTypeAlias {
+    public function handle(
+        TripType $tripType,
+        string $alias,
+        string $normalizedAlias,
+        ?int $resolvedByUserId,
+        ParserErrorResolutionType $resolutionType = ParserErrorResolutionType::Alias,
+    ): TripTypeAlias {
+        return DB::transaction(function () use ($tripType, $alias, $normalizedAlias, $resolvedByUserId, $resolutionType): TripTypeAlias {
             $tripType = TripType::query()->lockForUpdate()->findOrFail($tripType->id);
             $tripTypeAlias = TripTypeAlias::query()
                 ->where('normalized_alias', $normalizedAlias)
@@ -42,7 +47,7 @@ class CreateTripTypeAlias
             ParserError::query()->whereKey($parserErrorIds)->update([
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $resolvedByUserId,
-                'resolution_type' => ParserErrorResolutionType::Alias->value,
+                'resolution_type' => $resolutionType->value,
             ]);
 
             return $tripTypeAlias;

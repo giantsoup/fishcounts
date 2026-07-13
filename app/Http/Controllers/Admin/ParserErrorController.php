@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserErrorResolutionType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DismissParserErrorRequest;
 use App\Models\Boat;
+use App\Models\ParserDiagnosticReviewAction;
 use App\Models\ParserError;
 use App\Models\Species;
 use App\Models\TripType;
@@ -20,13 +22,16 @@ class ParserErrorController extends Controller
     {
         $showAll = $request->string('status')->toString() === 'all';
         $humanReviewEnabled = (bool) config('fish.ai_review.human_review_enabled');
+        $reviewAuditEnabled = $humanReviewEnabled || ParserDiagnosticReviewAction::query()
+            ->where('action', ParserDiagnosticReviewActionType::AutomaticallyAccepted)
+            ->exists();
         $githubIssuesEnabled = $humanReviewEnabled && (bool) config('fish.github_issues.enabled');
         $errors = ParserError::query()
             ->with([
                 'rawScrapePayload',
                 'resolver',
                 'scrapeSource',
-                ...($humanReviewEnabled ? [
+                ...($reviewAuditEnabled ? [
                     'latestDiagnosticReview.humanActions.actor',
                     ...($githubIssuesEnabled ? ['latestDiagnosticReview.parserBugReport'] : []),
                 ] : []),
@@ -43,8 +48,9 @@ class ParserErrorController extends Controller
             'tripTypes' => TripType::query()->where('is_active', true)->orderedForDisplay()->get(),
             'showAll' => $showAll,
             'humanReviewEnabled' => $humanReviewEnabled,
+            'reviewAuditEnabled' => $reviewAuditEnabled,
             'githubIssuesEnabled' => $githubIssuesEnabled,
-            'reviewTargets' => $humanReviewEnabled ? $this->reviewTargets($errors->getCollection()) : collect(),
+            'reviewTargets' => $reviewAuditEnabled ? $this->reviewTargets($errors->getCollection()) : collect(),
         ]);
     }
 

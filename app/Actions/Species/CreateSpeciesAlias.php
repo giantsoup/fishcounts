@@ -11,9 +11,14 @@ use Illuminate\Validation\ValidationException;
 
 class CreateSpeciesAlias
 {
-    public function handle(Species $species, string $alias, string $normalizedAlias, int $resolvedByUserId): SpeciesAlias
-    {
-        return DB::transaction(function () use ($species, $alias, $normalizedAlias, $resolvedByUserId): SpeciesAlias {
+    public function handle(
+        Species $species,
+        string $alias,
+        string $normalizedAlias,
+        ?int $resolvedByUserId,
+        ParserErrorResolutionType $resolutionType = ParserErrorResolutionType::Alias,
+    ): SpeciesAlias {
+        return DB::transaction(function () use ($species, $alias, $normalizedAlias, $resolvedByUserId, $resolutionType): SpeciesAlias {
             $species = Species::query()->lockForUpdate()->findOrFail($species->id);
             $speciesAlias = SpeciesAlias::query()
                 ->where('normalized_alias', $normalizedAlias)
@@ -42,7 +47,7 @@ class CreateSpeciesAlias
             ParserError::query()->whereKey($parserErrorIds)->update([
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $resolvedByUserId,
-                'resolution_type' => ParserErrorResolutionType::Alias->value,
+                'resolution_type' => $resolutionType->value,
             ]);
 
             return $speciesAlias;

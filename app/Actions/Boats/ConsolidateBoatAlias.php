@@ -14,14 +14,21 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ConsolidateBoatAlias
 {
     public function __construct(private readonly TripReportNormalizer $tripReportNormalizer) {}
 
-    public function handle(Boat $canonicalBoat, string $alias, string $normalizedAlias, int $resolvedByUserId): BoatAlias
-    {
-        return DB::transaction(function () use ($canonicalBoat, $alias, $normalizedAlias, $resolvedByUserId): BoatAlias {
+    public function handle(
+        Boat $canonicalBoat,
+        string $alias,
+        string $normalizedAlias,
+        ?int $resolvedByUserId,
+        ParserErrorResolutionType $resolutionType = ParserErrorResolutionType::Alias,
+        bool $consolidateExistingBoats = true,
+    ): BoatAlias {
+        return DB::transaction(function () use ($canonicalBoat, $alias, $normalizedAlias, $resolvedByUserId, $resolutionType, $consolidateExistingBoats): BoatAlias {
             $canonicalBoat = Boat::query()->lockForUpdate()->findOrFail($canonicalBoat->id);
             $boatAlias = BoatAlias::query()
                 ->where('normalized_alias', $normalizedAlias)
@@ -34,6 +41,10 @@ class ConsolidateBoatAlias
                     ->where('slug', Str::slug($alias))
                     ->lockForUpdate()
                     ->first();
+
+            if (! $consolidateExistingBoats && ($boatAlias !== null || $variantBoat !== null)) {
+                throw ValidationException::withMessages(['alias' => 'This boat alias requires manual consolidation.']);
+            }
 
             if ($boatAlias === null) {
                 $boatAlias = BoatAlias::query()->create([
@@ -122,7 +133,7 @@ class ConsolidateBoatAlias
             ParserError::query()->whereKey($parserErrorIds)->update([
                 'resolved_at' => now(),
                 'resolved_by_user_id' => $resolvedByUserId,
-                'resolution_type' => ParserErrorResolutionType::Alias->value,
+                'resolution_type' => $resolutionType->value,
             ]);
 
             $this->tripReportNormalizer->refreshPrimaryReportsForDates(

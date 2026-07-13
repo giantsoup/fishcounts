@@ -160,6 +160,19 @@ return [
         'retention' => [
             'complete_months' => (int) env('FISH_AI_REVIEW_RETENTION_MONTHS', 3),
         ],
+        'automation' => [
+            'enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_ENABLED', false),
+            'species_enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_SPECIES_ENABLED', false),
+            'trip_types_enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_TRIP_TYPES_ENABLED', false),
+            'boats_enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_BOATS_ENABLED', false),
+            'minimum_confidence' => (float) env('FISH_AI_ALIAS_AUTOMATION_MINIMUM_CONFIDENCE', 0.98),
+            'minimum_human_reviewed_sample' => (int) env('FISH_AI_ALIAS_AUTOMATION_MINIMUM_HUMAN_SAMPLE', 50),
+            'freshness_hours' => (int) env('FISH_AI_ALIAS_AUTOMATION_FRESHNESS_HOURS', 24),
+            'lock_seconds' => (int) env('FISH_AI_ALIAS_AUTOMATION_LOCK_SECONDS', 120),
+            'lock_wait_seconds' => (int) env('FISH_AI_ALIAS_AUTOMATION_LOCK_WAIT_SECONDS', 5),
+            'actor_name' => 'Luna automation',
+            'actor_email' => 'system@fishcounts.invalid',
+        ],
     ],
 
     'github_issues' => [

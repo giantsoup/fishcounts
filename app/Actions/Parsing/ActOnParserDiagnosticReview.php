@@ -282,6 +282,7 @@ class ActOnParserDiagnosticReview
             'actor_email' => $actor->email,
             'details' => [
                 'diagnostic_fingerprint' => $review->diagnostic_fingerprint,
+                'source_field' => $parserError->raw_field,
                 'review_status' => $review->status->value,
                 'classification' => $review->classification?->value,
                 'confidence' => $review->confidence,
