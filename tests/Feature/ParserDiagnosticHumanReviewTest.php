@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\CanonicalEntityType;
 use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserDiagnosticReviewClassification;
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\Role;
@@ -13,6 +14,7 @@ use App\Jobs\ParseRawPayloadJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -22,12 +24,14 @@ use App\Models\SpeciesAlias;
 use App\Models\TripType;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Contracts\Bus\Dispatcher;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use Tests\TestCase;
 
 class ParserDiagnosticHumanReviewTest extends TestCase
@@ -101,6 +105,8 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertOk()
             ->assertSeeText('No AI review is available.')
             ->assertSeeText('Run AI review')
+            ->assertSeeText('Starting the review. Please keep this page open until the request is confirmed.')
+            ->assertSee('x-bind:disabled="submitting"', false)
             ->assertSeeInOrder([$route, 'name="_token"', 'Run AI review'], false);
 
         config()->set('fish.ai_review.enabled', false);
@@ -158,15 +164,27 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertRedirect($indexRoute)
             ->assertSessionHas('status', 'AI review queued.');
 
+        $run = ParserDiagnosticReviewRun::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $run->status);
+        $this->assertSame($payload->id, $run->raw_scrape_payload_id);
+        $this->assertSame($admin->id, $run->requested_by_user_id);
+
         $this->post($storeRoute)
             ->assertRedirect($indexRoute)
-            ->assertSessionHas('status', 'AI review queued.');
+            ->assertSessionHas('status', 'An AI review is already queued or running for this payload.');
+
+        $this->get($indexRoute)
+            ->assertOk()
+            ->assertSeeText('Queued')
+            ->assertSeeText('Waiting for an AI review worker. It is safe to leave or refresh this page.')
+            ->assertDontSee('action="'.$storeRoute.'"', false);
 
         Queue::assertPushedOn('ai-parsing', ReviewParserDiagnosticsJob::class);
         Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
         Queue::assertPushed(
             ReviewParserDiagnosticsJob::class,
-            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id,
+            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id
+                && $job->parserDiagnosticReviewRunId === $run->id,
         );
     }
 
@@ -193,12 +211,119 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertRedirect($indexRoute)
             ->assertSessionHas('status', 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.');
 
+        $run = ParserDiagnosticReviewRun::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Preparing, $run->status);
+
         $this->post($storeRoute)
-            ->assertSessionHas('status', 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.');
+            ->assertSessionHas('status', 'An AI review is already queued or running for this payload.');
+
+        $this->get($indexRoute)
+            ->assertOk()
+            ->assertSeeText('Preparing')
+            ->assertSeeText('The payload reparse is queued to prepare this diagnostic for AI review.')
+            ->assertDontSee('action="'.$storeRoute.'"', false);
 
         Queue::assertPushedOn('parsing', ParseRawPayloadJob::class);
         Queue::assertPushed(ParseRawPayloadJob::class, 1);
+        Queue::assertPushed(
+            ParseRawPayloadJob::class,
+            fn (ParseRawPayloadJob $job): bool => $job->parserDiagnosticReviewRunId === $run->id,
+        );
         Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+    }
+
+    public function test_stalled_manual_run_is_recoverable_without_duplicate_dispatch(): void
+    {
+        Queue::fake();
+        config()->set('fish.ai_review.operations.manual_run_stale_minutes', 60);
+        [$payload, $parserError] = $this->payloadAndError();
+        $admin = User::factory()->admin()->create();
+        $stalledRun = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'requested_by_user_id' => $admin->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+            'created_at' => now()->subMinutes(90),
+            'updated_at' => now()->subMinutes(90),
+        ]);
+        $indexRoute = route('admin.parser-errors.index');
+        $storeRoute = route('admin.parser-errors.reviews.store', $parserError);
+
+        $this->actingAs($admin)
+            ->get($indexRoute)
+            ->assertOk()
+            ->assertSeeText('The last AI review request appears stalled. It is safe to start a new review.')
+            ->assertSee('action="'.$storeRoute.'"', false);
+
+        $this->from($indexRoute)
+            ->post($storeRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', 'AI review queued.');
+
+        $newRun = ParserDiagnosticReviewRun::query()->whereKeyNot($stalledRun->id)->sole();
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $stalledRun->refresh()->status);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $newRun->status);
+        Queue::assertPushed(
+            ReviewParserDiagnosticsJob::class,
+            fn (ReviewParserDiagnosticsJob $job): bool => $job->parserDiagnosticReviewRunId === $newRun->id,
+        );
+        Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
+    }
+
+    public function test_dispatch_failure_is_reported_to_the_admin_and_marks_the_run_failed(): void
+    {
+        [$payload, $parserError] = $this->payloadAndError();
+        $admin = User::factory()->admin()->create();
+        $dispatcher = $this->mock(Dispatcher::class);
+        $dispatcher->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new RuntimeException('Queue storage is unavailable.'));
+
+        $this->actingAs($admin)
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertSessionHasErrors('review')
+            ->assertSessionMissing('status');
+
+        $run = ParserDiagnosticReviewRun::query()->sole();
+        $this->assertSame($payload->id, $run->raw_scrape_payload_id);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->status);
+        $this->assertSame('Queue storage is unavailable.', $run->failure_message);
+    }
+
+    public function test_active_automatic_retry_hides_the_manual_retry_action(): void
+    {
+        [$payload, $parserError] = $this->payloadAndError();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $review = $this->review($payload, $parserError, $species, [
+            'status' => ParserDiagnosticReviewStatus::Failed,
+            'failure_message' => 'The provider was temporarily unavailable.',
+        ]);
+        ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $retryRoute = route('admin.parser-errors.reviews.retry', [$parserError, $review]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertSeeText('The last attempt failed, and an automatic retry is still scheduled.')
+            ->assertDontSee('action="'.$retryRoute.'"', false);
+    }
+
+    public function test_completed_run_without_a_current_review_has_an_explicit_state(): void
+    {
+        [$payload] = $this->payloadAndError();
+        ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Completed,
+            'completed_at' => now(),
+        ]);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertSeeText('The last request completed, but it did not produce a current AI review.')
+            ->assertSeeText('Run AI review');
     }
 
     public function test_existing_ai_review_is_not_manually_queued_again(): void

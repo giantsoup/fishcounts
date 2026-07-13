@@ -177,6 +177,7 @@ return [
             'stale_review_warning' => (int) env('FISH_AI_REVIEW_STALE_WARNING', 10),
             'failure_warning' => (int) env('FISH_AI_REVIEW_FAILURE_WARNING', 5),
             'historical_max_items' => (int) env('FISH_AI_REVIEW_HISTORICAL_MAX_ITEMS', 1000),
+            'manual_run_stale_minutes' => (int) env('FISH_AI_REVIEW_MANUAL_RUN_STALE_MINUTES', 60),
         ],
         'automation' => [
             'enabled' => (bool) env('FISH_AI_ALIAS_AUTOMATION_ENABLED', false),

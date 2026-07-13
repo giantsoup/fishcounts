@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ScrapeRunType;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewAction;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -107,6 +109,30 @@ class PruneParserDiagnosticReviewsCommandTest extends TestCase
             'actor_name' => $actor->name,
             'actor_email' => $actor->email,
         ]);
+    }
+
+    public function test_command_retains_manual_run_audit_and_clears_old_failure_details(): void
+    {
+        CarbonImmutable::setTestNow('2026-05-01 00:05:00');
+        config()->set('fish.ai_review.retention.complete_months', 3);
+        $payload = $this->payload();
+        $actor = User::factory()->admin()->create();
+        $run = ParserDiagnosticReviewRun::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'requested_by_user_id' => $actor->id,
+            'status' => ParserDiagnosticReviewRunStatus::Failed,
+            'failure_message' => 'Old operational failure detail.',
+            'failed_at' => '2026-01-01 00:00:00',
+            'created_at' => '2026-01-01 00:00:00',
+            'updated_at' => '2026-01-01 00:00:00',
+        ]);
+
+        $this->artisan('ai-reviews:prune')->assertSuccessful();
+
+        $run->refresh();
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->status);
+        $this->assertSame($actor->id, $run->requested_by_user_id);
+        $this->assertNull($run->failure_message);
     }
 
     private function review(RawScrapePayload $payload, string $fingerprint, string $createdAt): ParserDiagnosticReview

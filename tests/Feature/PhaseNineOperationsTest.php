@@ -6,6 +6,7 @@ use App\Actions\Parsing\ParseRawPayloadAction;
 use App\Enums\HistoricalAiReviewRunItemStatus;
 use App\Enums\HistoricalAiReviewRunStatus;
 use App\Enums\ParserBugReportStatus;
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\ScrapeRunType;
@@ -20,6 +21,7 @@ use App\Models\HistoricalAiReviewRun;
 use App\Models\Landing;
 use App\Models\ParserBugReport;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -332,6 +334,36 @@ class PhaseNineOperationsTest extends TestCase
             $this->assertTrue($event->withoutOverlapping);
             $this->assertTrue($event->onOneServer);
         }
+    }
+
+    public function test_monitor_expires_stalled_manual_review_runs(): void
+    {
+        CarbonImmutable::setTestNow('2026-07-12 12:00:00');
+        config()->set('fish.ai_review.operations.manual_run_stale_minutes', 60);
+        $payload = $this->payloadWithDiagnostic('2026-07-12', 'stalled-manual-review');
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+            'created_at' => now()->subMinutes(90),
+            'updated_at' => now()->subMinutes(90),
+        ]);
+        $review = $this->review($payload, ParserDiagnosticReviewStatus::Running);
+        $review->forceFill([
+            'created_at' => now()->subMinutes(90),
+            'updated_at' => now()->subMinutes(90),
+        ])->save();
+
+        $this->artisan('ai-reviews:monitor')
+            ->expectsOutput('Expired 1 stalled manual AI review request(s).')
+            ->assertSuccessful();
+
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertSame(ParserDiagnosticReviewStatus::Stale, $review->refresh()->status);
+        $this->assertSame('stalled_manual_run', $review->failure_category);
+        $this->assertSame(
+            'The AI review request timed out before it could finish. It is safe to start a new review.',
+            $run->failure_message,
+        );
     }
 
     public function test_historical_job_timeout_is_below_database_retry_after(): void

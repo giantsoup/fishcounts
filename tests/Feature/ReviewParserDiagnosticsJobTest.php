@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ScrapeRunType;
 use App\Jobs\CreateParserBugIssueJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -16,6 +18,7 @@ use App\Models\ScrapeSource;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use LogicException;
@@ -47,8 +50,13 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame('ai-parsing', $job->queue);
         $this->assertSame(0, $job->tries);
         $this->assertInstanceOf(RateLimited::class, $job->middleware()[0]);
+        $this->assertInstanceOf(WithoutOverlapping::class, $job->middleware()[1]);
         $this->assertLessThan(config('queue.connections.database.retry_after'), $job->timeout);
+        $this->assertGreaterThan($job->timeout, $job->uniqueFor());
         $this->assertGreaterThan(now(), $job->retryUntil());
+
+        $manualJob = new ReviewParserDiagnosticsJob(123, 456);
+        $this->assertSame('123:review-run:456', $manualJob->uniqueId());
     }
 
     public function test_duplicate_payload_jobs_are_suppressed_by_the_database_unique_lock(): void
@@ -62,6 +70,14 @@ class ReviewParserDiagnosticsJobTest extends TestCase
     public function test_it_records_a_validated_shadow_result_and_usage_without_mutating_the_parser_error(): void
     {
         [$payload, $parserError] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Queued,
+        ]);
+        $unrelatedRun = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Queued,
+        ]);
         $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($parserError->diagnostic_fingerprint) implements ParserDiagnosticReviewer
         {
             public function __construct(private readonly string $fingerprint) {}
@@ -88,7 +104,7 @@ class ReviewParserDiagnosticsJobTest extends TestCase
             }
         });
 
-        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
 
         $review = ParserDiagnosticReview::query()->sole();
         $this->assertSame(ParserDiagnosticReviewStatus::Succeeded, $review->status);
@@ -98,6 +114,30 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame(1000, $review->estimated_cost_micros);
         $this->assertModelExists($parserError);
         $this->assertNull($parserError->refresh()->resolved_at);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Completed, $run->refresh()->status);
+        $this->assertNotNull($run->started_at);
+        $this->assertNotNull($run->completed_at);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $unrelatedRun->refresh()->status);
+    }
+
+    public function test_stale_model_instances_cannot_regress_a_terminal_run(): void
+    {
+        [$payload] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Preparing,
+        ]);
+        $stalePreparingRun = $run->fresh();
+        $staleRunningRun = $run->fresh();
+
+        $run->markRunning();
+        $run->markCompleted();
+        $stalePreparingRun->markQueued();
+        $staleRunningRun->markFailed('A late failure must not overwrite completion.');
+
+        $run->refresh();
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Completed, $run->status);
+        $this->assertNull($run->failure_message);
     }
 
     public function test_validated_parser_bug_dispatches_only_the_separate_github_job(): void
@@ -142,6 +182,10 @@ class ReviewParserDiagnosticsJobTest extends TestCase
     public function test_disabled_queued_jobs_no_op_without_resolving_or_calling_the_provider(): void
     {
         [$payload] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Queued,
+        ]);
         config()->set('fish.ai_review.dispatch_enabled', false);
         $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
         {
@@ -151,10 +195,12 @@ class ReviewParserDiagnosticsJobTest extends TestCase
             }
         });
 
-        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
 
         $this->assertDatabaseEmpty('parser_diagnostic_reviews');
         $this->assertDatabaseEmpty('ai_budget_reservations');
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertSame('AI review dispatch is no longer available.', $run->failure_message);
     }
 
     public function test_budget_exhaustion_skips_the_review_without_calling_the_provider(): void
@@ -250,6 +296,10 @@ class ReviewParserDiagnosticsJobTest extends TestCase
     {
         [$payload, $parserError] = $this->payloadAndError();
         config()->set('fish.ai_review.limits.max_failure_message_length', 40);
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
         $review = ParserDiagnosticReview::query()->create([
             'raw_scrape_payload_id' => $payload->id,
             'parser_error_id' => $parserError->id,
@@ -260,12 +310,15 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         ]);
         $review->transitionTo(ParserDiagnosticReviewStatus::Running);
 
-        (new ReviewParserDiagnosticsJob($payload->id))->failed(new RuntimeException('Bearer secret-token '.str_repeat('x', 100)));
+        (new ReviewParserDiagnosticsJob($payload->id, $run->id))->failed(new RuntimeException('Bearer secret-token '.str_repeat('x', 100)));
 
         $review->refresh();
         $this->assertSame(ParserDiagnosticReviewStatus::Failed, $review->status);
         $this->assertStringNotContainsString('secret-token', $review->failure_message);
         $this->assertLessThanOrEqual(40, strlen($review->failure_message));
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertStringNotContainsString('secret-token', $run->failure_message);
+        $this->assertLessThanOrEqual(40, strlen($run->failure_message));
     }
 
     public function test_invalid_canonical_ids_fail_once_without_a_queue_level_retry(): void

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\Parsing\ExpireStaleParserDiagnosticReviewRuns;
 use App\Services\AI\AiReviewMetrics;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -12,10 +13,17 @@ use Illuminate\Support\Facades\Log;
 #[Description('Record safe operational warnings for AI parser review health')]
 class MonitorAiReviewOperationsCommand extends Command
 {
-    public function handle(AiReviewMetrics $metrics): int
-    {
+    public function handle(
+        AiReviewMetrics $metrics,
+        ExpireStaleParserDiagnosticReviewRuns $expireStaleRuns,
+    ): int {
+        $expiredRuns = $expireStaleRuns->handle();
         $snapshot = $metrics->snapshot();
         $warnings = [];
+
+        if ($expiredRuns > 0) {
+            $warnings[] = "Expired {$expiredRuns} stalled manual AI review request(s).";
+        }
 
         if ($snapshot['queue_depth'] >= (int) config('fish.ai_review.operations.queue_depth_warning')) {
             $warnings[] = 'AI parser review queue depth is above its warning threshold.';

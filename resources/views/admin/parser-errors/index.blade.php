@@ -113,14 +113,43 @@
                                 $reviewTarget = $review ? $reviewTargets->get($review->id) : null;
                                 $parserBugReport = $review?->parserBugReport;
                                 $reportOverride = $review?->reportOverride;
+                                $reviewRun = $error->rawScrapePayload?->latestParserDiagnosticReviewRun;
+                                $activeReviewRun = $reviewRun?->status->isActive() && ! $reviewRun->isStale() ? $reviewRun : null;
                             @endphp
 
                             <section class="rounded-lg border border-indigo-100 bg-indigo-50 p-4 lg:col-span-5" aria-label="AI diagnostic review">
                                 <div class="grid gap-4 lg:grid-cols-3">
                                     <div>
                                         <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">AI review</p>
-                                        @if ($review)
-                                            <p class="mt-1 text-sm font-medium text-gray-900">{{ str($review->status->value)->headline() }}</p>
+                                        @if ($activeReviewRun)
+                                            <p class="mt-1 text-sm font-medium text-gray-900">{{ str($activeReviewRun->status->value)->headline() }}</p>
+                                            <p class="text-sm text-gray-700">
+                                                @if ($activeReviewRun->status === \App\Enums\ParserDiagnosticReviewRunStatus::Preparing)
+                                                    The payload reparse is queued to prepare this diagnostic for AI review.
+                                                @elseif ($activeReviewRun->status === \App\Enums\ParserDiagnosticReviewRunStatus::Queued)
+                                                    Waiting for an AI review worker. It is safe to leave or refresh this page.
+                                                @else
+                                                    The AI review is in progress.
+                                                @endif
+                                            </p>
+                                            @if ($review?->status === \App\Enums\ParserDiagnosticReviewStatus::Failed)
+                                                <p class="mt-2 text-sm text-amber-800">The last attempt failed, and an automatic retry is still scheduled.</p>
+                                            @endif
+                                            <p class="mt-2 text-xs text-gray-600">
+                                                Requested {{ $activeReviewRun->created_at->diffForHumans() }}
+                                                @if ($activeReviewRun->requestedBy)
+                                                    by {{ $activeReviewRun->requestedBy->name }}
+                                                @endif
+                                            </p>
+                                        @elseif ($review)
+                                            <p class="mt-1 text-sm font-medium text-gray-900">
+                                                {{ $review->status === \App\Enums\ParserDiagnosticReviewStatus::Pending ? 'Queued' : str($review->status->value)->headline() }}
+                                            </p>
+                                            @if ($review->status === \App\Enums\ParserDiagnosticReviewStatus::Pending)
+                                                <p class="text-sm text-gray-700">Waiting for an AI review worker. It is safe to leave or refresh this page.</p>
+                                            @elseif ($review->status === \App\Enums\ParserDiagnosticReviewStatus::Running)
+                                                <p class="text-sm text-gray-700">The AI review is in progress.</p>
+                                            @endif
                                             <p class="text-sm text-gray-700">
                                                 {{ $review->classification ? str($review->classification->value)->headline() : 'No classification' }}
                                                 @if ($review->confidence !== null)
@@ -140,10 +169,29 @@
                                             @endif
                                         @else
                                             <p class="mt-1 text-sm text-gray-600">No AI review is available.</p>
+                                            @if ($reviewRun?->isStale())
+                                                <p class="mt-2 text-sm text-amber-800">The last AI review request appears stalled. It is safe to start a new review.</p>
+                                            @elseif ($reviewRun?->status === \App\Enums\ParserDiagnosticReviewRunStatus::Failed)
+                                                <p class="mt-2 text-sm text-red-700">The last AI review request failed: {{ $reviewRun->failure_message }}</p>
+                                            @elseif ($reviewRun?->status === \App\Enums\ParserDiagnosticReviewRunStatus::Completed)
+                                                <p class="mt-2 text-sm text-gray-700">The last request completed, but it did not produce a current AI review.</p>
+                                            @endif
                                             @if ($manualAiReviewEnabled && ! $error->resolved_at && $error->resolution_type === null && $error->raw_scrape_payload_id !== null)
-                                                <form method="POST" action="{{ route('admin.parser-errors.reviews.store', $error) }}" class="mt-3">
+                                                <form
+                                                    method="POST"
+                                                    action="{{ route('admin.parser-errors.reviews.store', $error) }}"
+                                                    class="mt-3"
+                                                    x-data="{ submitting: false }"
+                                                    x-on:submit="submitting ? $event.preventDefault() : submitting = true"
+                                                    x-bind:aria-busy="submitting"
+                                                >
                                                     @csrf
-                                                    <x-secondary-button type="submit">Run AI review</x-secondary-button>
+                                                    <x-secondary-button type="submit" x-bind:disabled="submitting">
+                                                        <span x-text="submitting ? 'Starting AI review…' : 'Run AI review'">Run AI review</span>
+                                                    </x-secondary-button>
+                                                    <template x-if="submitting">
+                                                        <p class="mt-2 text-xs font-medium text-indigo-700" aria-live="polite">Starting the review. Please keep this page open until the request is confirmed.</p>
+                                                    </template>
                                                 </form>
                                                 @if (blank($error->diagnostic_fingerprint))
                                                     <p class="mt-2 text-xs text-gray-600">This legacy error will be reparsed first to prepare it for AI review.</p>
@@ -350,7 +398,7 @@
                                             <x-secondary-button type="submit">Dismiss parser error</x-secondary-button>
                                         </form>
 
-                                        @if (! in_array($review->status, [\App\Enums\ParserDiagnosticReviewStatus::Pending, \App\Enums\ParserDiagnosticReviewStatus::Running], true) && config('fish.ai_review.enabled') && config('fish.ai_review.dispatch_enabled'))
+                                        @if (! $activeReviewRun && ! in_array($review->status, [\App\Enums\ParserDiagnosticReviewStatus::Pending, \App\Enums\ParserDiagnosticReviewStatus::Running], true) && config('fish.ai_review.enabled') && config('fish.ai_review.dispatch_enabled'))
                                             <form method="POST" action="{{ route('admin.parser-errors.reviews.retry', [$error, $review]) }}">
                                                 @csrf
                                                 <x-secondary-button type="submit">Retry review</x-secondary-button>

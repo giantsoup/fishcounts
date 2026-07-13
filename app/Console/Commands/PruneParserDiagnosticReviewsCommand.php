@@ -8,6 +8,7 @@ use App\Models\HistoricalAiReviewRun;
 use App\Models\HistoricalAiReviewRunItem;
 use App\Models\ParserBugReport;
 use App\Models\ParserDiagnosticReview;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Services\AI\AiBudgetManager;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Attributes\Description;
@@ -55,6 +56,10 @@ class PruneParserDiagnosticReviewsCommand extends Command
             ->whereNotNull('failure_message')
             ->update(['failure_message' => null]);
         $clearedFailures += HistoricalAiReviewRunItem::query()
+            ->where('updated_at', '<', $cutoff)
+            ->whereNotNull('failure_message')
+            ->update(['failure_message' => null]);
+        $clearedFailures += ParserDiagnosticReviewRun::query()
             ->where('updated_at', '<', $cutoff)
             ->whereNotNull('failure_message')
             ->update(['failure_message' => null]);

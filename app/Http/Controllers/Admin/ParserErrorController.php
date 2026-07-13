@@ -39,7 +39,9 @@ class ParserErrorController extends Controller
         ] : [];
         $errors = ParserError::query()
             ->with([
-                'rawScrapePayload',
+                $reviewAuditEnabled
+                    ? 'rawScrapePayload.latestParserDiagnosticReviewRun.requestedBy'
+                    : 'rawScrapePayload',
                 'resolver',
                 'scrapeSource',
             ])

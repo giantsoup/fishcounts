@@ -6,6 +6,7 @@ use App\DTOs\ParseRawPayloadResult;
 use App\DTOs\RawPayloadData;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Services\Parsing\ParsedReportValidator;
@@ -15,6 +16,7 @@ use App\Services\Scraping\SourceAdapterRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
+use Throwable;
 
 class ParseRawPayloadAction
 {
@@ -25,8 +27,11 @@ class ParseRawPayloadAction
         private readonly ParserReportOverrideApplier $overrideApplier,
     ) {}
 
-    public function handle(int $rawScrapePayloadId, bool $shouldDispatchDeduplication = true): ParseRawPayloadResult
-    {
+    public function handle(
+        int $rawScrapePayloadId,
+        bool $shouldDispatchDeduplication = true,
+        ?int $parserDiagnosticReviewRunId = null,
+    ): ParseRawPayloadResult {
         $payload = RawScrapePayload::query()
             ->with('scrapeSource')
             ->findOrFail($rawScrapePayloadId);
@@ -63,11 +68,25 @@ class ParseRawPayloadAction
             DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
         }
 
+        $reviewRun = $parserDiagnosticReviewRunId === null
+            ? null
+            : ParserDiagnosticReviewRun::query()
+                ->whereKey($parserDiagnosticReviewRunId)
+                ->where('raw_scrape_payload_id', $payload->id)
+                ->first();
+
         if ($diagnosticCount > 0 && (bool) config('fish.ai_review.dispatch_enabled')) {
-            rescue(
-                fn () => ReviewParserDiagnosticsJob::dispatch($payload->id)->afterCommit(),
-                report: true,
-            );
+            try {
+                $reviewRun?->markQueued();
+                ReviewParserDiagnosticsJob::dispatch($payload->id, $parserDiagnosticReviewRunId)->afterCommit();
+            } catch (Throwable $throwable) {
+                $reviewRun?->markFailed($throwable);
+                report($throwable);
+            }
+        } elseif ($reviewRun !== null && $diagnosticCount === 0) {
+            $reviewRun->markCompleted();
+        } elseif ($reviewRun !== null) {
+            $reviewRun->markFailed('AI review dispatch became unavailable after the payload was reparsed.');
         }
 
         return new ParseRawPayloadResult(

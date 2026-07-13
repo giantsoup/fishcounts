@@ -22,10 +22,11 @@ class ParserDiagnosticReviewController extends Controller
         ParserError $parserError,
         QueueParserDiagnosticReview $action,
     ): RedirectResponse {
-        $result = $action->handle($parserError);
+        $result = $action->handle($parserError, $request->user());
 
         return back()->with('status', match ($result) {
             QueueParserDiagnosticReviewResult::ExistingReview => 'An AI review is already available for this parser error.',
+            QueueParserDiagnosticReviewResult::AlreadyQueued => 'An AI review is already queued or running for this payload.',
             QueueParserDiagnosticReviewResult::ReparseQueued => 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.',
             QueueParserDiagnosticReviewResult::ReviewQueued => 'AI review queued.',
         });

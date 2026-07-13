@@ -6,6 +6,7 @@ use App\Actions\Parsing\ParseRawPayloadAction;
 use App\DTOs\ParseRawPayloadResult;
 use App\Enums\BackfillReparseRunStatus;
 use App\Enums\BackfillRunStatus;
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ScrapeRunType;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ParseRawPayloadJob;
@@ -14,6 +15,7 @@ use App\Models\BackfillReparseRun;
 use App\Models\BackfillRun;
 use App\Models\Boat;
 use App\Models\Landing;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -108,14 +110,19 @@ class ParseRawPayloadActionTest extends TestCase
     public function test_job_configuration_and_failure_behavior_remain_unchanged(): void
     {
         $payload = $this->createPayload('2026-07-01');
-        $parseJob = new ParseRawPayloadJob($payload->id);
+        $reviewRun = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Preparing,
+        ]);
+        $parseJob = new ParseRawPayloadJob($payload->id, true, $reviewRun->id);
         $backfillJob = new ReparseBackfillPayloadJob(42, $payload->id);
         $failureMessage = Str::repeat('x', 1200);
 
         $this->assertSame('parsing', $parseJob->queue);
         $this->assertSame(3, $parseJob->tries);
         $this->assertSame(120, $parseJob->timeout);
-        $this->assertSame((string) $payload->id, $parseJob->uniqueId());
+        $this->assertSame("{$payload->id}:review-run:{$reviewRun->id}", $parseJob->uniqueId());
+        $this->assertSame((string) $payload->id, (new ParseRawPayloadJob($payload->id))->uniqueId());
         $this->assertSame([30, 120, 300], $parseJob->backoff());
         $this->assertSame('parsing', $backfillJob->queue);
         $this->assertSame(3, $backfillJob->tries);
@@ -127,6 +134,7 @@ class ParseRawPayloadActionTest extends TestCase
 
         $this->assertSame(1003, Str::length($payload->refresh()->error_message));
         $this->assertStringEndsWith('...', $payload->error_message);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $reviewRun->refresh()->status);
     }
 
     public function test_normal_parsing_job_is_idempotent(): void

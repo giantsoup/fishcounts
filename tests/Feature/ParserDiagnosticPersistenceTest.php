@@ -10,12 +10,14 @@ use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParsedTripReportData;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\DTOs\RawPayloadData;
+use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticType;
 use App\Enums\ScrapeRunType;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\Landing;
+use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
@@ -41,12 +43,22 @@ class ParserDiagnosticPersistenceTest extends TestCase
         config()->set('fish.ai_review.dispatch_enabled', true);
         Queue::fake();
         $payload = $this->payload('<p>The Dolphin returned with 4 Moon Fish for 20 anglers on a Full Day trip.</p>');
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Preparing,
+        ]);
 
-        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false, $run->id);
 
         $this->assertSame(1, $result->parsedReportCount);
         $this->assertSame(1, $result->diagnosticCount);
-        Queue::assertPushed(ReviewParserDiagnosticsJob::class, fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id && $job->afterCommit === true);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $run->refresh()->status);
+        Queue::assertPushed(
+            ReviewParserDiagnosticsJob::class,
+            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id
+                && $job->parserDiagnosticReviewRunId === $run->id
+                && $job->afterCommit === true,
+        );
     }
 
     public function test_openai_outage_cannot_undo_deterministic_parsing_or_deduplication(): void

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Guarded(['id'])]
 class RawScrapePayload extends Model
@@ -42,6 +43,18 @@ class RawScrapePayload extends Model
     public function parserDiagnosticReviews(): HasMany
     {
         return $this->hasMany(ParserDiagnosticReview::class);
+    }
+
+    /** @return HasMany<ParserDiagnosticReviewRun, $this> */
+    public function parserDiagnosticReviewRuns(): HasMany
+    {
+        return $this->hasMany(ParserDiagnosticReviewRun::class);
+    }
+
+    /** @return HasOne<ParserDiagnosticReviewRun, $this> */
+    public function latestParserDiagnosticReviewRun(): HasOne
+    {
+        return $this->hasOne(ParserDiagnosticReviewRun::class)->latestOfMany();
     }
 
     /** @return HasMany<ParserError, $this> */
