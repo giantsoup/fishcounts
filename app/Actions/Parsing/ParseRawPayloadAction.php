@@ -9,9 +9,12 @@ use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Services\Parsing\ParsedReportValidator;
+use App\Services\Parsing\ParserReportOverrideApplier;
 use App\Services\Parsing\TripReportNormalizer;
 use App\Services\Scraping\SourceAdapterRegistry;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class ParseRawPayloadAction
 {
@@ -19,6 +22,7 @@ class ParseRawPayloadAction
         private readonly SourceAdapterRegistry $registry,
         private readonly TripReportNormalizer $normalizer,
         private readonly ParsedReportValidator $validator,
+        private readonly ParserReportOverrideApplier $overrideApplier,
     ) {}
 
     public function handle(int $rawScrapePayloadId, bool $shouldDispatchDeduplication = true): ParseRawPayloadResult
@@ -35,13 +39,25 @@ class ParseRawPayloadAction
             metadata: $payload->metadata ?? [],
         );
         $parsed = $adapter->parse($rawPayload);
-        $diagnostics = $this->validator->validate($payload, $rawPayload, $parsed);
-        $parsedReportCount = $this->normalizer->replaceForPayload($payload, $parsed, $diagnostics);
+        [$parsed, $parsedReportCount, $diagnosticCount] = DB::transaction(function () use ($payload, $rawPayload, $parsed): array {
+            $lockedPayload = RawScrapePayload::query()->with('scrapeSource')->lockForUpdate()->findOrFail($payload->id);
+
+            if (! hash_equals($payload->payload_hash, $lockedPayload->payload_hash)) {
+                throw new RuntimeException('The raw payload changed while it was being parsed.');
+            }
+
+            $payload = $lockedPayload;
+            $parsed = $this->overrideApplier->apply($payload, $rawPayload, $parsed);
+            $diagnostics = $this->validator->validate($payload, $rawPayload, $parsed);
+            $parsedReportCount = $this->normalizer->replaceForPayload($payload, $parsed, $diagnostics);
+            $diagnosticCount = ParserError::query()
+                ->where('raw_scrape_payload_id', $payload->id)
+                ->whereNull('resolution_type')
+                ->count();
+
+            return [$parsed, $parsedReportCount, $diagnosticCount];
+        }, attempts: 3);
         $parserVersion = $parsed->tripReports->first()?->metadata['parser'] ?? $parsed->parserVersion ?? 'unknown';
-        $diagnosticCount = ParserError::query()
-            ->where('raw_scrape_payload_id', $payload->id)
-            ->whereNull('resolution_type')
-            ->count();
 
         if ($shouldDispatchDeduplication) {
             DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());

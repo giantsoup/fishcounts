@@ -26,6 +26,7 @@ class ParserErrorController extends Controller
             ->where('action', ParserDiagnosticReviewActionType::AutomaticallyAccepted)
             ->exists();
         $githubIssuesEnabled = $humanReviewEnabled && (bool) config('fish.github_issues.enabled');
+        $reportOverridesEnabled = $humanReviewEnabled && (bool) config('fish.parsing.overrides.enabled');
         $errors = ParserError::query()
             ->with([
                 'rawScrapePayload',
@@ -33,7 +34,8 @@ class ParserErrorController extends Controller
                 'scrapeSource',
                 ...($reviewAuditEnabled ? [
                     'latestDiagnosticReview.humanActions.actor',
-                    ...($githubIssuesEnabled ? ['latestDiagnosticReview.parserBugReport'] : []),
+                    ...(($githubIssuesEnabled || $reportOverridesEnabled) ? ['latestDiagnosticReview.parserBugReport'] : []),
+                    ...($reportOverridesEnabled ? ['latestDiagnosticReview.reportOverride.parserBugReport'] : []),
                 ] : []),
             ])
             ->when(! $showAll, fn ($query) => $query->whereNull('resolved_at'))
@@ -50,6 +52,8 @@ class ParserErrorController extends Controller
             'humanReviewEnabled' => $humanReviewEnabled,
             'reviewAuditEnabled' => $reviewAuditEnabled,
             'githubIssuesEnabled' => $githubIssuesEnabled,
+            'reportOverridesEnabled' => $reportOverridesEnabled,
+            'reportOverrideSourceSlugs' => config('fish.parsing.overrides.allowed_source_slugs', []),
             'reviewTargets' => $reviewAuditEnabled ? $this->reviewTargets($errors->getCollection()) : collect(),
         ]);
     }

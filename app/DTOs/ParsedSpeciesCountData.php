@@ -9,5 +9,6 @@ final readonly class ParsedSpeciesCountData
         public int $count,
         public int $releasedCount = 0,
         public ?string $rawText = null,
+        public ?int $canonicalSpeciesId = null,
     ) {}
 }

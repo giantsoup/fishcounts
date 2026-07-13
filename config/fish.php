@@ -104,6 +104,16 @@ return [
     ],
 
     'parsing' => [
+        'overrides' => [
+            'enabled' => (bool) env('FISH_PARSER_REPORT_OVERRIDES_ENABLED', false),
+            'schema_version' => env('FISH_PARSER_REPORT_OVERRIDE_SCHEMA_VERSION', 'v1'),
+            'allowed_source_slugs' => array_values(array_filter(array_map(
+                static fn (string $slug): string => trim($slug),
+                explode(',', (string) env('FISH_PARSER_REPORT_OVERRIDE_SOURCES', '')),
+            ))),
+            'max_anglers' => 65_535,
+            'max_count' => 1_000_000,
+        ],
         'diagnostics' => [
             'suspicious_enabled' => (bool) env('FISH_SUSPICIOUS_PARSE_DIAGNOSTICS', false),
             'max_paragraph_length' => (int) env('FISH_DIAGNOSTIC_PARAGRAPH_MAX_LENGTH', 2000),

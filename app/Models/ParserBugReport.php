@@ -62,6 +62,12 @@ class ParserBugReport extends Model
         return $this->hasMany(ParserBugReportOccurrence::class);
     }
 
+    /** @return HasMany<ParserReportOverride, $this> */
+    public function reportOverrides(): HasMany
+    {
+        return $this->hasMany(ParserReportOverride::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function approver(): BelongsTo
     {

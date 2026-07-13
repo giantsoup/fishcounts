@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\NotificationDeliveryController;
 use App\Http\Controllers\Admin\ParserBugReportController;
 use App\Http\Controllers\Admin\ParserDiagnosticReviewController;
 use App\Http\Controllers\Admin\ParserErrorController;
+use App\Http\Controllers\Admin\ParserReportOverrideController;
 use App\Http\Controllers\Admin\RawPayloadController;
 use App\Http\Controllers\Admin\ScrapeRunController;
 use App\Http\Controllers\Admin\ScrapeSourceController;
@@ -91,7 +92,12 @@ Route::middleware('auth')->group(function (): void {
             Route::post('automatic-actions/{automaticAction}/reverse', [ParserDiagnosticReviewController::class, 'reverseAutomation'])
                 ->name('reverse-automation');
             Route::post('prepare-github-issue', [ParserBugReportController::class, 'prepare'])->name('prepare-github-issue');
+            Route::post('report-overrides', [ParserReportOverrideController::class, 'store'])->name('report-overrides.store');
         });
+        Route::post('parser-report-overrides/{parserReportOverride}/approve', [ParserReportOverrideController::class, 'approve'])
+            ->name('parser-report-overrides.approve');
+        Route::post('parser-report-overrides/{parserReportOverride}/disable', [ParserReportOverrideController::class, 'disable'])
+            ->name('parser-report-overrides.disable');
         Route::post('parser-bug-reports/{parserBugReport}/approve', [ParserBugReportController::class, 'approve'])
             ->name('parser-bug-reports.approve');
         Route::get('species', [SpeciesAliasController::class, 'index'])->name('species-aliases.index');

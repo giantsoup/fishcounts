@@ -21,5 +21,7 @@ final readonly class ParsedTripReportData
         public ?string $rawFishCountText,
         public array $speciesCounts,
         public array $metadata = [],
+        public ?int $canonicalBoatId = null,
+        public ?int $canonicalTripTypeId = null,
     ) {}
 }

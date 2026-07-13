@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 #[Guarded(['id'])]
@@ -155,5 +156,11 @@ class ParserDiagnosticReview extends Model
     public function humanActions(): HasMany
     {
         return $this->hasMany(ParserDiagnosticReviewAction::class);
+    }
+
+    /** @return HasOne<ParserReportOverride, $this> */
+    public function reportOverride(): HasOne
+    {
+        return $this->hasOne(ParserReportOverride::class)->latestOfMany();
     }
 }

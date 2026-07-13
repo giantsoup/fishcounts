@@ -8,11 +8,14 @@ use App\DTOs\ParserDiagnosticData;
 use App\DTOs\RawPayloadData;
 use App\Enums\ParserDiagnosticType;
 use App\Enums\SourceType;
+use App\Models\Boat;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeSource;
+use App\Models\Species;
 use App\Models\SpeciesCount;
 use App\Models\TripReport;
+use App\Models\TripType;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -74,8 +77,12 @@ class TripReportNormalizer
                 $region = $this->normalizer->region($report->regionName);
                 $landingName = $report->landingName ?? $this->landingNameFromSource($source);
                 $landing = $this->normalizer->landing($landingName, $region);
-                $boat = $this->normalizer->boat($report->boatName, $landing, $payload);
-                $tripType = $this->normalizer->tripType($report->tripTypeName, $payload);
+                $boat = $report->canonicalBoatId === null
+                    ? $this->normalizer->boat($report->boatName, $landing, $payload)
+                    : Boat::query()->whereKey($report->canonicalBoatId)->where('is_active', true)->first();
+                $tripType = $report->canonicalTripTypeId === null
+                    ? $this->normalizer->tripType($report->tripTypeName, $payload)
+                    : TripType::query()->whereKey($report->canonicalTripTypeId)->where('is_active', true)->first();
                 $dedupeKey = $this->dedupeKey($report->tripDate->toDateString(), $boat?->name ?? $report->boatName, $report->tripTypeName, $report->anglers);
 
                 if ($this->isSportfishingReportFallbackSource($source) && $this->directLandingReportExists($report->tripDate->toDateString(), $boat?->id, $tripType?->id)) {
@@ -296,7 +303,9 @@ class TripReportNormalizer
 
     private function storeSpeciesCount(RawScrapePayload $payload, TripReport $tripReport, ParsedSpeciesCountData $speciesCount): void
     {
-        $species = $this->normalizer->species($speciesCount->speciesName, $payload);
+        $species = $speciesCount->canonicalSpeciesId === null
+            ? $this->normalizer->species($speciesCount->speciesName, $payload)
+            : Species::query()->whereKey($speciesCount->canonicalSpeciesId)->where('is_active', true)->first();
 
         if ($species === null) {
             return;

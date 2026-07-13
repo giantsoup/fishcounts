@@ -13,6 +13,10 @@
                 <p class="mb-4 text-sm text-red-700">{{ session('errors')->first('review') }}</p>
             @endif
 
+            @if (session('errors')?->has('override'))
+                <p class="mb-4 text-sm text-red-700">{{ session('errors')->first('override') }}</p>
+            @endif
+
             <nav class="mb-4 flex gap-4 text-sm" aria-label="Parser error filters">
                 <a href="{{ route('admin.parser-errors.index') }}" @class(['font-semibold text-blue-700' => ! $showAll, 'text-gray-600 hover:text-gray-900' => $showAll])>Open</a>
                 <a href="{{ route('admin.parser-errors.index', ['status' => 'all']) }}" @class(['font-semibold text-blue-700' => $showAll, 'text-gray-600 hover:text-gray-900' => ! $showAll])>All</a>
@@ -108,6 +112,7 @@
                                 $review = $error->latestDiagnosticReview;
                                 $reviewTarget = $review ? $reviewTargets->get($review->id) : null;
                                 $parserBugReport = $review?->parserBugReport;
+                                $reportOverride = $review?->reportOverride;
                             @endphp
 
                             <section class="rounded-lg border border-indigo-100 bg-indigo-50 p-4 lg:col-span-5" aria-label="AI diagnostic review">
@@ -250,6 +255,63 @@
                                             </form>
                                         @else
                                             <p class="mt-1 text-sm text-gray-600">This review does not meet the validated parser-bug threshold.</p>
+                                        @endif
+                                    </div>
+                                @endif
+
+                                @if ($reportOverridesEnabled && $review && in_array($error->scrapeSource->slug, $reportOverrideSourceSlugs, true))
+                                    <div class="mt-4 border-t border-indigo-100 pt-3">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-700">Report-scoped override</p>
+
+                                        @if ($reportOverride)
+                                            <p class="mt-1 text-sm font-medium text-gray-900">
+                                                {{ str($reportOverride->status->value)->headline() }} · payload #{{ $reportOverride->raw_scrape_payload_id }} · {{ data_get($reportOverride->affected_scope, 'date') }}
+                                            </p>
+                                            <p class="mt-1 text-xs text-gray-600">
+                                                Parser {{ $reportOverride->parser_version }} · correction schema {{ $reportOverride->correction_schema_version }} · GitHub issue #{{ $reportOverride->parserBugReport->issue_number }}
+                                            </p>
+
+                                            <div class="mt-3 grid gap-3 lg:grid-cols-2">
+                                                <details class="text-sm">
+                                                    <summary class="cursor-pointer font-medium text-gray-700">Original deterministic parse</summary>
+                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ json_encode($reportOverride->original_parse, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                </details>
+                                                <details class="text-sm">
+                                                    <summary class="cursor-pointer font-medium text-gray-700">Corrected parse and affected scope</summary>
+                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ json_encode(['scope' => $reportOverride->affected_scope, 'corrected_parse' => $reportOverride->corrected_parse], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                </details>
+                                            </div>
+
+                                            @if ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Pending)
+                                                <form method="POST" action="{{ route('admin.parser-report-overrides.approve', $reportOverride) }}" class="mt-3 space-y-2">
+                                                    @csrf
+                                                    <textarea name="review_notes" rows="2" maxlength="2000" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Optional approval notes"></textarea>
+                                                    <x-primary-button type="submit">Approve override and reparse</x-primary-button>
+                                                </form>
+                                            @elseif ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Active)
+                                                <p class="mt-2 text-xs text-green-700">Approved by {{ $reportOverride->approved_by_name }} at {{ $reportOverride->approved_at?->format('n/j/Y g:i A') }}.</p>
+                                                <form method="POST" action="{{ route('admin.parser-report-overrides.disable', $reportOverride) }}" class="mt-3 space-y-2">
+                                                    @csrf
+                                                    <textarea name="disable_reason" rows="2" maxlength="1000" required class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Reason for rollback"></textarea>
+                                                    <x-secondary-button type="submit">Disable override and restore deterministic parse</x-secondary-button>
+                                                </form>
+                                            @elseif ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Invalidated)
+                                                <p class="mt-2 text-sm text-amber-800">Invalidated: {{ str($reportOverride->invalidation_reason)->headline() }}. Create a fresh reviewed proposal.</p>
+                                            @else
+                                                <p class="mt-2 text-sm text-gray-700">Disabled by {{ $reportOverride->disabled_by_name }}: {{ $reportOverride->disable_reason }}</p>
+                                            @endif
+                                        @elseif (! $error->resolved_at
+                                            && $review->status === \App\Enums\ParserDiagnosticReviewStatus::Succeeded
+                                            && filled(data_get($review->validated_result, 'corrections'))
+                                            && $parserBugReport?->issue_number
+                                            && $parserBugReport?->issue_url)
+                                            <p class="mt-1 text-sm text-gray-700">The correction will affect payload #{{ $error->raw_scrape_payload_id }} and all normalized reports for {{ $error->scrapeSource->name }} on {{ $error->target_date?->format('n/j/Y') }}.</p>
+                                            <form method="POST" action="{{ route('admin.parser-errors.reviews.report-overrides.store', [$error, $review]) }}" class="mt-2">
+                                                @csrf
+                                                <x-secondary-button type="submit">Prepare report override for approval</x-secondary-button>
+                                            </form>
+                                        @else
+                                            <p class="mt-1 text-sm text-gray-600">A successful typed correction and published deduplicated GitHub issue are required.</p>
                                         @endif
                                     </div>
                                 @endif

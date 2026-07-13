@@ -1,40 +1,40 @@
 # Phase 8 — Report-Scoped Parser Overrides
 
-**Status:** Not started  
+**Status:** Application implementation complete; manual rollout pending
 **Implementation dependency:** Phase 6 issue linkage and sustained Phase 5 shadow evidence  
 **Secret-handling rule:** Overrides contain typed parse data only, never credentials or raw HTML.
 
 ## Decisions Required Before This Phase
 
-- [ ] **Q31. May Luna eventually propose occurrence-specific report overrides?**
+- [x] **Q31. May Luna eventually propose occurrence-specific report overrides?**
   - Recommended: Yes, with human approval initially.
   - Answer: Yes, with human approval initially.
 
-- [ ] **Q32. Which fields may an override change?**
+- [x] **Q32. Which fields may an override change?**
   - Recommended: Existing boat selection, existing trip type, anglers, existing species selection, retained count, and released count. Disallow arbitrary JSON/database patches.
   - Answer: Existing boat selection, existing trip type, anglers, existing species selection, retained count, and released count. Disallow arbitrary JSON/database patches.
 
-- [ ] **Must overrides require human approval initially?**
+- [x] **Must overrides require human approval initially?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Q33. Should overrides invalidate when source paragraph, report fingerprint, or parser version changes?**
+- [x] **Q33. Should overrides invalidate when source paragraph, report fingerprint, or parser version changes?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **Q34. Must every parser-defect override link to a deduplicated GitHub issue?**
+- [x] **Q34. Must every parser-defect override link to a deduplicated GitHub issue?**
   - Recommended: Yes.
   - Answer: Yes
 
-- [ ] **May an approved override reparse and therefore alter previously normalized historical data for that payload/date?**
+- [x] **May an approved override reparse and therefore alter previously normalized historical data for that payload/date?**
   - Recommended: Yes, but show the affected scope before approval and preserve audit/rollback information.
   - Answer: Yes, but show the affected scope before approval and preserve audit/rollback information.
 
-- [ ] **Q35. Is automatic override application explicitly deferred until separate evidence and approval exist?**
+- [x] **Q35. Is automatic override application explicitly deferred until separate evidence and approval exist?**
   - Recommended: Yes; do not set an automatic threshold now.
   - Answer: Yes; do not set an automatic threshold now.
 
-- [ ] **Approved to begin Phase 8?**
+- [x] **Approved to begin Phase 8?**
   - Answer: Yes
 
 ## Objective
@@ -93,4 +93,3 @@ Disable overrides, mark affected overrides inactive, and reparse affected payloa
 ## Deliverable
 
 One pull request containing override schema, typed application layer, admin approval integration, invalidation/rollback logic, and tests.
-
