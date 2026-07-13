@@ -106,11 +106,8 @@ class ParserDiagnosticReviewResultValidatorTest extends TestCase
     {
         $schema = app(ParserDiagnosticReviewSchema::class)->schema();
         $correction = $schema['properties']['corrections']['items'];
-
-        $this->assertFalse($schema['additionalProperties']);
-        $this->assertFalse($correction['additionalProperties']);
-        $this->assertSame(['classification', 'confidence', 'rationale', 'corrections'], $schema['required']);
-        $this->assertSame([
+        $variants = $correction['anyOf'];
+        $requiredProperties = [
             'operation',
             'report_index',
             'field',
@@ -119,9 +116,41 @@ class ParserDiagnosticReviewResultValidatorTest extends TestCase
             'value',
             'retained_count',
             'released_count',
-        ], $correction['required']);
-        $this->assertContains('map_alias', $correction['properties']['operation']['enum']);
-        $this->assertNotContains('create_entity', $correction['properties']['operation']['enum']);
+        ];
+
+        $this->assertFalse($schema['additionalProperties']);
+        $this->assertSame(['classification', 'confidence', 'rationale', 'corrections'], $schema['required']);
+        $this->assertCount(9, $variants);
+
+        foreach ($variants as $variant) {
+            $this->assertFalse($variant['additionalProperties']);
+            $this->assertSame($requiredProperties, $variant['required']);
+        }
+
+        $operations = array_map(
+            fn (array $variant): string => $variant['properties']['operation']['enum'][0],
+            $variants,
+        );
+        $this->assertSame(3, count(array_filter($operations, fn (string $operation): bool => $operation === 'map_alias')));
+        $this->assertSame(3, count(array_filter($operations, fn (string $operation): bool => $operation === 'replace_entity')));
+        $this->assertNotContains('create_entity', $operations);
+
+        $anglerVariant = collect($variants)->first(
+            fn (array $variant): bool => $variant['properties']['operation']['enum'] === ['set_angler_count'],
+        );
+        $this->assertSame(['anglers'], $anglerVariant['properties']['field']['enum']);
+        $this->assertSame('null', $anglerVariant['properties']['canonical_id']['type']);
+        $this->assertSame('integer', $anglerVariant['properties']['value']['type']);
+        $this->assertSame('null', $anglerVariant['properties']['retained_count']['type']);
+
+        $speciesCountVariant = collect($variants)->first(
+            fn (array $variant): bool => $variant['properties']['operation']['enum'] === ['set_species_count'],
+        );
+        $this->assertSame(['species_count'], $speciesCountVariant['properties']['field']['enum']);
+        $this->assertSame(['species'], $speciesCountVariant['properties']['canonical_type']['enum']);
+        $this->assertSame('null', $speciesCountVariant['properties']['value']['type']);
+        $this->assertSame('integer', $speciesCountVariant['properties']['retained_count']['type']);
+        $this->assertSame('integer', $speciesCountVariant['properties']['released_count']['type']);
     }
 
     /** @param array<string, mixed> $result */

@@ -9,6 +9,7 @@ use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\Role;
 use App\Enums\ScrapeRunType;
+use App\Jobs\ParseRawPayloadJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\ParserDiagnosticReview;
@@ -89,6 +90,259 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertDontSeeText('Accept existing alias');
     }
 
+    public function test_manual_ai_review_button_is_only_shown_for_an_eligible_error_without_a_review(): void
+    {
+        [$payload, $parserError] = $this->payloadAndError();
+        $admin = User::factory()->admin()->create();
+        $route = route('admin.parser-errors.reviews.store', $parserError);
+
+        $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertSeeText('No AI review is available.')
+            ->assertSeeText('Run AI review')
+            ->assertSeeInOrder([$route, 'name="_token"', 'Run AI review'], false);
+
+        config()->set('fish.ai_review.enabled', false);
+
+        $this->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSeeText('Run AI review')
+            ->assertDontSee('action="'.$route.'"', false);
+
+        config()->set('fish.ai_review.enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', false);
+
+        $this->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSeeText('Run AI review')
+            ->assertDontSee('action="'.$route.'"', false);
+
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        config()->set('services.openai.api_key', null);
+
+        $this->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSeeText('Run AI review')
+            ->assertDontSee('action="'.$route.'"', false);
+
+        config()->set('services.openai.api_key', 'secret-provider-key');
+        $parserError->forceFill(['resolution_type' => ParserErrorResolutionType::Dismissed])->save();
+
+        $this->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSeeText('Run AI review')
+            ->assertDontSee('action="'.$route.'"', false);
+
+        $parserError->forceFill(['resolution_type' => null])->save();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $this->review($payload, $parserError, $species);
+
+        $this->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertDontSeeText('Run AI review')
+            ->assertDontSee('action="'.$route.'"', false);
+    }
+
+    public function test_admin_can_manually_queue_a_missing_ai_review_without_duplicate_dispatch(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $admin = User::factory()->admin()->create();
+        $indexRoute = route('admin.parser-errors.index');
+        $storeRoute = route('admin.parser-errors.reviews.store', $parserError);
+
+        $this->actingAs($admin)
+            ->from($indexRoute)
+            ->post($storeRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', 'AI review queued.');
+
+        $this->post($storeRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', 'AI review queued.');
+
+        Queue::assertPushedOn('ai-parsing', ReviewParserDiagnosticsJob::class);
+        Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
+        Queue::assertPushed(
+            ReviewParserDiagnosticsJob::class,
+            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id,
+        );
+    }
+
+    public function test_legacy_parser_error_without_a_fingerprint_queues_reparse_before_ai_review(): void
+    {
+        Queue::fake();
+        [, $parserError] = $this->payloadAndError();
+        $parserError->forceFill([
+            'report_fingerprint' => null,
+            'diagnostic_fingerprint' => null,
+        ])->save();
+        $admin = User::factory()->admin()->create();
+        $indexRoute = route('admin.parser-errors.index');
+        $storeRoute = route('admin.parser-errors.reviews.store', $parserError);
+
+        $this->actingAs($admin)
+            ->get($indexRoute)
+            ->assertOk()
+            ->assertSeeText('Run AI review')
+            ->assertSeeText('This legacy error will be reparsed first to prepare it for AI review.');
+
+        $this->from($indexRoute)
+            ->post($storeRoute)
+            ->assertRedirect($indexRoute)
+            ->assertSessionHas('status', 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.');
+
+        $this->post($storeRoute)
+            ->assertSessionHas('status', 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.');
+
+        Queue::assertPushedOn('parsing', ParseRawPayloadJob::class);
+        Queue::assertPushed(ParseRawPayloadJob::class, 1);
+        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+    }
+
+    public function test_existing_ai_review_is_not_manually_queued_again(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $this->review($payload, $parserError, $species);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertSessionHas('status', 'An AI review is already available for this parser error.');
+
+        Queue::assertNothingPushed();
+        $this->assertSame(1, ParserDiagnosticReview::query()->count());
+    }
+
+    public function test_detached_matching_ai_review_is_reattached_without_queueing_again(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $review = $this->review($payload, $parserError, $species);
+        $review->forceFill(['parser_error_id' => null])->save();
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertSessionHas('status', 'An AI review is already available for this parser error.');
+
+        Queue::assertNothingPushed();
+        $this->assertSame($parserError->id, $review->refresh()->parser_error_id);
+    }
+
+    public function test_stale_attached_ai_review_does_not_block_manual_recovery(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $this->review($payload, $parserError, $species);
+        $parserError->forceFill([
+            'diagnostic_fingerprint' => hash('sha256', 'replacement-diagnostic'),
+        ])->save();
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertSeeText('No AI review is available.')
+            ->assertSeeText('Run AI review')
+            ->assertDontSeeText('Legitimate Alias');
+
+        $this->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertSessionHas('status', 'AI review queued.');
+
+        Queue::assertPushed(
+            ReviewParserDiagnosticsJob::class,
+            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id,
+        );
+    }
+
+    public function test_current_ai_review_is_used_when_a_newer_stale_review_is_also_attached(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $species = Species::query()->create(['name' => 'Opaleye', 'slug' => 'opaleye']);
+        $currentReview = $this->review($payload, $parserError, $species, [
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+        $this->review($payload, $parserError, $species, [
+            'diagnostic_fingerprint' => hash('sha256', 'stale-diagnostic'),
+            'classification' => ParserDiagnosticReviewClassification::Uncertain,
+            'validated_result' => [
+                'classification' => ParserDiagnosticReviewClassification::Uncertain->value,
+                'confidence' => 0.4,
+                'rationale' => 'This review belongs to an older diagnostic.',
+                'corrections' => [],
+            ],
+            'rationale' => 'This review belongs to an older diagnostic.',
+        ]);
+        $admin = User::factory()->admin()->create();
+
+        $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk()
+            ->assertSeeText('Legitimate Alias')
+            ->assertSeeText($currentReview->rationale)
+            ->assertDontSeeText('This review belongs to an older diagnostic.')
+            ->assertDontSeeText('Run AI review');
+
+        $this->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertSessionHas('status', 'An AI review is already available for this parser error.');
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_manual_ai_review_requires_the_human_review_workflow(): void
+    {
+        Queue::fake();
+        [, $parserError] = $this->payloadAndError();
+        config()->set('fish.ai_review.human_review_enabled', false);
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertForbidden();
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_manual_ai_review_rejects_unavailable_dispatch_and_ineligible_errors(): void
+    {
+        Queue::fake();
+        [, $parserError] = $this->payloadAndError();
+        $admin = User::factory()->admin()->create();
+        $route = route('admin.parser-errors.reviews.store', $parserError);
+
+        config()->set('fish.ai_review.enabled', false);
+        $this->actingAs($admin)->post($route)->assertSessionHasErrors('review');
+
+        config()->set('fish.ai_review.enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', false);
+        $this->post($route)->assertSessionHasErrors('review');
+
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        config()->set('services.openai.api_key', null);
+        $this->post($route)->assertSessionHasErrors('review');
+
+        config()->set('services.openai.api_key', 'secret-provider-key');
+        $parserError->forceFill([
+            'resolved_at' => now(),
+            'resolution_type' => ParserErrorResolutionType::Dismissed,
+        ])->save();
+        $this->post($route)->assertSessionHasErrors('review');
+
+        $parserError->forceFill([
+            'resolved_at' => null,
+            'resolution_type' => null,
+            'raw_scrape_payload_id' => null,
+        ])->save();
+        $this->post($route)->assertSessionHasErrors('review');
+
+        Queue::assertNothingPushed();
+    }
+
     public function test_only_admins_can_view_or_act_on_human_reviews(): void
     {
         [$payload, $parserError] = $this->payloadAndError();
@@ -99,6 +353,9 @@ class ParserDiagnosticHumanReviewTest extends TestCase
         $this->actingAs($user)->get(route('admin.parser-errors.index'))->assertForbidden();
         $this->actingAs($user)
             ->post(route('admin.parser-errors.reviews.accept', [$parserError, $review]))
+            ->assertForbidden();
+        $this->actingAs($user)
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
             ->assertForbidden();
 
         $this->assertDatabaseEmpty('parser_diagnostic_review_actions');

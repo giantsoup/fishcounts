@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Parsing\ActOnParserDiagnosticReview;
+use App\Actions\Parsing\QueueParserDiagnosticReview;
 use App\Actions\Parsing\ReverseAutomatedParserDiagnosticReview;
+use App\Enums\QueueParserDiagnosticReviewResult;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\ActOnParserDiagnosticReviewRequest;
+use App\Http\Requests\Admin\QueueParserDiagnosticReviewRequest;
 use App\Http\Requests\Admin\ReverseAutomatedParserDiagnosticReviewRequest;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewAction;
@@ -14,6 +17,20 @@ use Illuminate\Http\RedirectResponse;
 
 class ParserDiagnosticReviewController extends Controller
 {
+    public function store(
+        QueueParserDiagnosticReviewRequest $request,
+        ParserError $parserError,
+        QueueParserDiagnosticReview $action,
+    ): RedirectResponse {
+        $result = $action->handle($parserError);
+
+        return back()->with('status', match ($result) {
+            QueueParserDiagnosticReviewResult::ExistingReview => 'An AI review is already available for this parser error.',
+            QueueParserDiagnosticReviewResult::ReparseQueued => 'Payload queued for reparsing. AI review will run automatically if the diagnostic is still present.',
+            QueueParserDiagnosticReviewResult::ReviewQueued => 'AI review queued.',
+        });
+    }
+
     public function accept(
         ActOnParserDiagnosticReviewRequest $request,
         ParserError $parserError,

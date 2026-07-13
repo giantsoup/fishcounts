@@ -82,38 +82,113 @@ final class ParserDiagnosticReviewSchema
     /** @return array<string, mixed> */
     private function correctionSchema(): array
     {
+        $entityCorrections = [];
+
+        foreach ([ParserCorrectionOperation::MapAlias, ParserCorrectionOperation::ReplaceEntity] as $operation) {
+            foreach ([CanonicalEntityType::Boat, CanonicalEntityType::Species, CanonicalEntityType::TripType] as $canonicalType) {
+                $entityCorrections[] = $this->correctionVariant(
+                    operation: $operation,
+                    field: match ($canonicalType) {
+                        CanonicalEntityType::Boat => ParserCorrectionField::Boat,
+                        CanonicalEntityType::Species => ParserCorrectionField::Species,
+                        CanonicalEntityType::TripType => ParserCorrectionField::TripType,
+                    },
+                    canonicalType: $canonicalType,
+                    canonicalIdSchema: ['type' => 'integer', 'minimum' => 1],
+                    valueSchema: ['type' => 'null'],
+                    retainedCountSchema: ['type' => 'null'],
+                    releasedCountSchema: ['type' => 'null'],
+                );
+            }
+        }
+
+        return [
+            'anyOf' => [
+                ...$entityCorrections,
+                $this->correctionVariant(
+                    operation: ParserCorrectionOperation::SetAnglerCount,
+                    field: ParserCorrectionField::Anglers,
+                    canonicalType: null,
+                    canonicalIdSchema: ['type' => 'null'],
+                    valueSchema: ['type' => 'integer', 'minimum' => 0],
+                    retainedCountSchema: ['type' => 'null'],
+                    releasedCountSchema: ['type' => 'null'],
+                ),
+                $this->correctionVariant(
+                    operation: ParserCorrectionOperation::SetSpeciesCount,
+                    field: ParserCorrectionField::SpeciesCount,
+                    canonicalType: CanonicalEntityType::Species,
+                    canonicalIdSchema: ['type' => 'integer', 'minimum' => 1],
+                    valueSchema: ['type' => 'null'],
+                    retainedCountSchema: ['type' => 'integer', 'minimum' => 0],
+                    releasedCountSchema: ['type' => 'integer', 'minimum' => 0],
+                ),
+                $this->correctionVariant(
+                    operation: ParserCorrectionOperation::RemoveSpeciesCount,
+                    field: ParserCorrectionField::SpeciesCount,
+                    canonicalType: CanonicalEntityType::Species,
+                    canonicalIdSchema: ['type' => 'integer', 'minimum' => 1],
+                    valueSchema: ['type' => 'null'],
+                    retainedCountSchema: ['type' => 'null'],
+                    releasedCountSchema: ['type' => 'null'],
+                ),
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $canonicalIdSchema
+     * @param  array<string, mixed>  $valueSchema
+     * @param  array<string, mixed>  $retainedCountSchema
+     * @param  array<string, mixed>  $releasedCountSchema
+     * @return array<string, mixed>
+     */
+    private function correctionVariant(
+        ParserCorrectionOperation $operation,
+        ParserCorrectionField $field,
+        ?CanonicalEntityType $canonicalType,
+        array $canonicalIdSchema,
+        array $valueSchema,
+        array $retainedCountSchema,
+        array $releasedCountSchema,
+    ): array {
         return [
             'type' => 'object',
             'additionalProperties' => false,
             'properties' => [
                 'operation' => [
                     'type' => 'string',
-                    'enum' => array_column(ParserCorrectionOperation::cases(), 'value'),
+                    'enum' => [$operation->value],
                 ],
                 'report_index' => ['type' => 'integer', 'minimum' => 0],
                 'field' => [
                     'type' => 'string',
-                    'enum' => array_column(ParserCorrectionField::cases(), 'value'),
+                    'enum' => [$field->value],
                 ],
-                'canonical_type' => [
-                    'type' => ['string', 'null'],
-                    'enum' => [...array_column(CanonicalEntityType::cases(), 'value'), null],
-                ],
-                'canonical_id' => ['type' => ['integer', 'null'], 'minimum' => 1],
-                'value' => ['type' => ['integer', 'null'], 'minimum' => 0],
-                'retained_count' => ['type' => ['integer', 'null'], 'minimum' => 0],
-                'released_count' => ['type' => ['integer', 'null'], 'minimum' => 0],
+                'canonical_type' => $canonicalType === null
+                    ? ['type' => 'null']
+                    : ['type' => 'string', 'enum' => [$canonicalType->value]],
+                'canonical_id' => $canonicalIdSchema,
+                'value' => $valueSchema,
+                'retained_count' => $retainedCountSchema,
+                'released_count' => $releasedCountSchema,
             ],
-            'required' => [
-                'operation',
-                'report_index',
-                'field',
-                'canonical_type',
-                'canonical_id',
-                'value',
-                'retained_count',
-                'released_count',
-            ],
+            'required' => $this->correctionProperties(),
+        ];
+    }
+
+    /** @return list<string> */
+    private function correctionProperties(): array
+    {
+        return [
+            'operation',
+            'report_index',
+            'field',
+            'canonical_type',
+            'canonical_id',
+            'value',
+            'retained_count',
+            'released_count',
         ];
     }
 }

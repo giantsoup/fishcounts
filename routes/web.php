@@ -83,6 +83,8 @@ Route::middleware('auth')->group(function (): void {
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');
         Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])->name('parser-errors.dismiss');
+        Route::post('parser-errors/{parserError}/reviews', [ParserDiagnosticReviewController::class, 'store'])
+            ->name('parser-errors.reviews.store');
         Route::prefix('parser-errors/{parserError}/reviews/{review}')->name('parser-errors.reviews.')->group(function (): void {
             Route::post('accept', [ParserDiagnosticReviewController::class, 'accept'])->name('accept');
             Route::post('reject', [ParserDiagnosticReviewController::class, 'reject'])->name('reject');

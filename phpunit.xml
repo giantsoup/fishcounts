@@ -26,7 +26,13 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <env name="FISH_AI_REVIEW_ENABLED" value="false" force="true"/>
+        <env name="FISH_AI_REVIEW_DISPATCH_ENABLED" value="false" force="true"/>
+        <env name="FISH_AI_REVIEW_HUMAN_WORKFLOW_ENABLED" value="false" force="true"/>
+        <env name="FISH_GITHUB_ISSUES_ENABLED" value="false" force="true"/>
+        <env name="FISH_GITHUB_ISSUES_WRITE_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="OPENAI_API_KEY" value="" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

@@ -314,6 +314,129 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertNull($review->validated_result);
     }
 
+    public function test_an_invalid_result_does_not_prevent_later_batch_results_from_succeeding(): void
+    {
+        [$payload, $firstError] = $this->payloadAndError();
+        $secondError = $firstError->replicate()->forceFill([
+            'raw_value' => 'Sun Fish',
+            'diagnostic_fingerprint' => hash('sha256', 'second-diagnostic'),
+        ]);
+        $secondError->save();
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($firstError, $secondError) implements ParserDiagnosticReviewer
+        {
+            public function __construct(
+                private readonly ParserError $firstError,
+                private readonly ParserError $secondError,
+            ) {}
+
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                return new ParserDiagnosticReviewProviderResponseData(
+                    responseId: 'resp_partial_validation',
+                    model: 'gpt-5.6-luna',
+                    results: [
+                        $this->firstError->diagnostic_fingerprint => [
+                            'classification' => 'legitimate_alias',
+                            'confidence' => 0.99,
+                            'rationale' => 'The first result references an invalid candidate.',
+                            'corrections' => [[
+                                'operation' => 'map_alias',
+                                'report_index' => 0,
+                                'field' => 'species',
+                                'canonical_type' => 'species',
+                                'canonical_id' => 999999,
+                                'value' => null,
+                                'retained_count' => null,
+                                'released_count' => null,
+                            ]],
+                        ],
+                        $this->secondError->diagnostic_fingerprint => [
+                            'classification' => 'uncertain',
+                            'confidence' => 0.4,
+                            'rationale' => 'The second result needs human review.',
+                            'corrections' => [],
+                        ],
+                    ],
+                    refused: false,
+                    refusal: null,
+                    inputTokens: 20,
+                    cachedInputTokens: 0,
+                    outputTokens: 10,
+                    reasoningTokens: 0,
+                    totalTokens: 30,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+
+        $firstReview = ParserDiagnosticReview::query()->whereBelongsTo($firstError, 'parserError')->sole();
+        $secondReview = ParserDiagnosticReview::query()->whereBelongsTo($secondError, 'parserError')->sole();
+
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $firstReview->status);
+        $this->assertSame('schema_validation', $firstReview->failure_category);
+        $this->assertSame(ParserDiagnosticReviewStatus::Succeeded, $secondReview->status);
+        $this->assertSame('resp_partial_validation', $secondReview->response_id);
+    }
+
+    public function test_a_retry_refreshes_the_provider_contract_metadata(): void
+    {
+        [$payload, $parserError] = $this->payloadAndError();
+        $review = ParserDiagnosticReview::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'payload_hash' => hash('sha256', 'old-payload'),
+            'parser_error_id' => $parserError->id,
+            'diagnostic_fingerprint' => $parserError->diagnostic_fingerprint,
+            'provider' => 'old-provider',
+            'model' => 'old-model',
+            'prompt_version' => 'v1',
+            'schema_version' => 'v1',
+        ]);
+        $review->transitionTo(ParserDiagnosticReviewStatus::Running);
+        $review->fail('Old schema failure.', 'schema_validation');
+        $review->prepareForRetry();
+
+        config()->set('fish.ai_review.provider', 'openai');
+        config()->set('fish.ai_review.model', 'gpt-current');
+        config()->set('fish.ai_review.prompt_version', 'v2');
+        config()->set('fish.ai_review.schema_version', 'v2');
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($parserError->diagnostic_fingerprint) implements ParserDiagnosticReviewer
+        {
+            public function __construct(private readonly string $fingerprint) {}
+
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                return new ParserDiagnosticReviewProviderResponseData(
+                    responseId: 'resp_current_contract',
+                    model: 'gpt-current',
+                    results: [$this->fingerprint => [
+                        'classification' => 'uncertain',
+                        'confidence' => 0.4,
+                        'rationale' => 'A human should inspect this result.',
+                        'corrections' => [],
+                    ]],
+                    refused: false,
+                    refusal: null,
+                    inputTokens: 10,
+                    cachedInputTokens: 0,
+                    outputTokens: 5,
+                    reasoningTokens: 0,
+                    totalTokens: 15,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+
+        $review->refresh();
+        $this->assertSame(ParserDiagnosticReviewStatus::Succeeded, $review->status);
+        $this->assertSame($payload->payload_hash, $review->payload_hash);
+        $this->assertSame('openai', $review->provider);
+        $this->assertSame('gpt-current', $review->model);
+        $this->assertSame('v2', $review->prompt_version);
+        $this->assertSame('v2', $review->schema_version);
+    }
+
     public function test_multiple_diagnostics_for_one_payload_are_sent_in_one_batch(): void
     {
         [$payload, $firstError] = $this->payloadAndError();

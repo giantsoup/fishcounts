@@ -43,7 +43,8 @@ final class ParserDiagnosticReviewRequestValidator
             }
 
             $seenCandidates = [];
-            $allowedTypes = $this->allowedCandidateTypes($data['field']);
+            $diagnosticType = ParserDiagnosticType::from($data['diagnostic_type']);
+            $allowedTypes = $this->allowedCandidateTypes($data['field'], $diagnosticType);
             $activeCandidateKeys = $this->activeCandidateKeys($data['candidates']);
             $payloadHash = RawScrapePayload::query()->whereKey($data['payload_id'])->value('payload_hash');
 
@@ -51,7 +52,7 @@ final class ParserDiagnosticReviewRequestValidator
                 $validator->errors()->add('payload_hash', 'The payload hash does not match the selected payload.');
             }
 
-            if (! in_array($data['field'], $this->allowedFields(ParserDiagnosticType::from($data['diagnostic_type'])), true)) {
+            if (! in_array($data['field'], $this->allowedFields($diagnosticType), true)) {
                 $validator->errors()->add('field', 'The field is not valid for this diagnostic type.');
             }
 
@@ -78,9 +79,10 @@ final class ParserDiagnosticReviewRequestValidator
     }
 
     /** @return list<string> */
-    private function allowedCandidateTypes(string $field): array
+    private function allowedCandidateTypes(string $field, ParserDiagnosticType $diagnosticType): array
     {
         return match (true) {
+            $field === 'report' && $diagnosticType === ParserDiagnosticType::UnaccountedNumericTokens => [CanonicalEntityType::Species->value],
             str_contains($field, 'species') => [CanonicalEntityType::Species->value],
             str_contains($field, 'boat') => [CanonicalEntityType::Boat->value],
             str_contains($field, 'trip_type') => [CanonicalEntityType::TripType->value],

@@ -7,6 +7,7 @@ use App\Enums\ParserErrorResolutionType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DismissParserErrorRequest;
 use App\Models\Boat;
+use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewAction;
 use App\Models\ParserError;
 use App\Models\Species;
@@ -22,26 +23,34 @@ class ParserErrorController extends Controller
     {
         $showAll = $request->string('status')->toString() === 'all';
         $humanReviewEnabled = (bool) config('fish.ai_review.human_review_enabled');
+        $manualAiReviewEnabled = $humanReviewEnabled
+            && (bool) config('fish.ai_review.enabled')
+            && (bool) config('fish.ai_review.dispatch_enabled')
+            && filled(config('services.openai.api_key'));
         $reviewAuditEnabled = $humanReviewEnabled || ParserDiagnosticReviewAction::query()
             ->where('action', ParserDiagnosticReviewActionType::AutomaticallyAccepted)
             ->exists();
         $githubIssuesEnabled = $humanReviewEnabled && (bool) config('fish.github_issues.enabled');
         $reportOverridesEnabled = $humanReviewEnabled && (bool) config('fish.parsing.overrides.enabled');
+        $reviewRelations = $reviewAuditEnabled ? [
+            'humanActions.actor',
+            ...(($githubIssuesEnabled || $reportOverridesEnabled) ? ['parserBugReport'] : []),
+            ...($reportOverridesEnabled ? ['reportOverride.parserBugReport'] : []),
+        ] : [];
         $errors = ParserError::query()
             ->with([
                 'rawScrapePayload',
                 'resolver',
                 'scrapeSource',
-                ...($reviewAuditEnabled ? [
-                    'latestDiagnosticReview.humanActions.actor',
-                    ...(($githubIssuesEnabled || $reportOverridesEnabled) ? ['latestDiagnosticReview.parserBugReport'] : []),
-                    ...($reportOverridesEnabled ? ['latestDiagnosticReview.reportOverride.parserBugReport'] : []),
-                ] : []),
             ])
             ->when(! $showAll, fn ($query) => $query->whereNull('resolved_at'))
             ->latest()
             ->paginate(25)
             ->withQueryString();
+
+        if ($reviewAuditEnabled) {
+            $this->loadCurrentDiagnosticReviewRelations($errors->getCollection(), $reviewRelations);
+        }
 
         return view('admin.parser-errors.index', [
             'errors' => $errors,
@@ -50,6 +59,7 @@ class ParserErrorController extends Controller
             'tripTypes' => TripType::query()->where('is_active', true)->orderedForDisplay()->get(),
             'showAll' => $showAll,
             'humanReviewEnabled' => $humanReviewEnabled,
+            'manualAiReviewEnabled' => $manualAiReviewEnabled,
             'reviewAuditEnabled' => $reviewAuditEnabled,
             'githubIssuesEnabled' => $githubIssuesEnabled,
             'reportOverridesEnabled' => $reportOverridesEnabled,
@@ -72,6 +82,36 @@ class ParserErrorController extends Controller
         return back()->with('status', $wasDismissed
             ? 'Parser error dismissed without creating an alias.'
             : 'Parser error was already resolved.');
+    }
+
+    /**
+     * @param  Collection<int, ParserError>  $parserErrors
+     * @param  array<int, string>  $relations
+     */
+    private function loadCurrentDiagnosticReviewRelations(Collection $parserErrors, array $relations): void
+    {
+        $parserErrorsById = $parserErrors->keyBy('id');
+        $reviewsByParserErrorId = ParserDiagnosticReview::query()
+            ->with($relations)
+            ->whereIn('parser_error_id', $parserErrors->pluck('id'))
+            ->whereIn('raw_scrape_payload_id', $parserErrors->pluck('raw_scrape_payload_id')->filter()->unique())
+            ->whereIn('diagnostic_fingerprint', $parserErrors->pluck('diagnostic_fingerprint')->filter()->unique())
+            ->latest()
+            ->get()
+            ->filter(function (ParserDiagnosticReview $review) use ($parserErrorsById): bool {
+                $parserError = $parserErrorsById->get($review->parser_error_id);
+
+                return $parserError !== null
+                    && $review->raw_scrape_payload_id === $parserError->raw_scrape_payload_id
+                    && $review->diagnostic_fingerprint === $parserError->diagnostic_fingerprint;
+            })
+            ->unique('parser_error_id')
+            ->keyBy('parser_error_id');
+
+        $parserErrors->each(fn (ParserError $parserError): ParserError => $parserError->setRelation(
+            'latestDiagnosticReview',
+            $reviewsByParserErrorId->get($parserError->id),
+        ));
     }
 
     /** @param Collection<int, ParserError> $parserErrors */

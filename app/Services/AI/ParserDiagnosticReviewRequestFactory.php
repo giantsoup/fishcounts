@@ -27,7 +27,7 @@ final class ParserDiagnosticReviewRequestFactory
             field: $parserError->raw_field ?? 'report',
             rawValue: $parserError->raw_value,
             context: $this->safeContext($parserError->context ?? []),
-            candidates: $this->candidates($parserError->raw_field ?? 'report'),
+            candidates: $this->candidates($parserError->raw_field ?? 'report', $type),
         );
     }
 
@@ -49,9 +49,10 @@ final class ParserDiagnosticReviewRequestFactory
     }
 
     /** @return list<CanonicalCandidateData> */
-    private function candidates(string $field): array
+    private function candidates(string $field, ParserDiagnosticType $diagnosticType): array
     {
         [$type, $model] = match (true) {
+            $field === 'report' && $diagnosticType === ParserDiagnosticType::UnaccountedNumericTokens => [CanonicalEntityType::Species, Species::class],
             str_contains($field, 'species') => [CanonicalEntityType::Species, Species::class],
             str_contains($field, 'boat'), $field === 'report' => [CanonicalEntityType::Boat, Boat::class],
             str_contains($field, 'trip_type') => [CanonicalEntityType::TripType, TripType::class],

@@ -146,8 +146,8 @@ return [
         'timeout_seconds' => (int) env('FISH_AI_REVIEW_TIMEOUT', 60),
         'retry_window_minutes' => (int) env('FISH_AI_REVIEW_RETRY_WINDOW_MINUTES', 15),
         'rate_limit_per_minute' => (int) env('FISH_AI_REVIEW_RATE_LIMIT_PER_MINUTE', 5),
-        'prompt_version' => env('FISH_AI_REVIEW_PROMPT_VERSION', 'v1'),
-        'schema_version' => env('FISH_AI_REVIEW_SCHEMA_VERSION', 'v1'),
+        'prompt_version' => env('FISH_AI_REVIEW_PROMPT_VERSION', 'v3'),
+        'schema_version' => env('FISH_AI_REVIEW_SCHEMA_VERSION', 'v2'),
         'limits' => [
             'max_candidates' => (int) env('FISH_AI_REVIEW_MAX_CANDIDATES', 100),
             'max_input_tokens' => (int) env('FISH_AI_REVIEW_MAX_INPUT_TOKENS', 12000),

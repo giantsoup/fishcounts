@@ -196,7 +196,14 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $automatableReviewIds = [];
             foreach ($reviews as $index => $review) {
                 $request = $requests[$review->diagnostic_fingerprint];
-                $result = $resultValidator->validate($providerResponse->results[$review->diagnostic_fingerprint], $request);
+                try {
+                    $result = $resultValidator->validate($providerResponse->results[$review->diagnostic_fingerprint], $request);
+                } catch (ValidationException|UnexpectedValueException|ValueError $throwable) {
+                    $review->fail($this->safeFailureMessage($throwable), 'schema_validation');
+
+                    continue;
+                }
+
                 $review->forceFill($this->resultAttributes($result->toArray(), $providerResponse, $index, $reviews->count(), $estimatedCost))->save();
                 $review->transitionTo(ParserDiagnosticReviewStatus::Succeeded);
                 $automatableReviewIds[] = $review->id;
@@ -267,7 +274,13 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             : [];
 
         if (in_array($review->status, [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Failed], true)) {
-            $attributes['payload_hash'] = $payload->payload_hash;
+            $attributes += [
+                'payload_hash' => $payload->payload_hash,
+                'provider' => config('fish.ai_review.provider'),
+                'model' => config('fish.ai_review.model'),
+                'prompt_version' => config('fish.ai_review.prompt_version'),
+                'schema_version' => config('fish.ai_review.schema_version'),
+            ];
         }
 
         if ($attributes !== []) {

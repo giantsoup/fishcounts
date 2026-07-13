@@ -17,6 +17,7 @@ use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Models\Species;
 use App\Services\AI\DisabledParserDiagnosticReviewer;
+use App\Services\AI\ParserDiagnosticReviewRequestFactory;
 use App\Services\AI\ParserDiagnosticReviewRequestValidator;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Database\QueryException;
@@ -170,6 +171,36 @@ class ParserDiagnosticReviewTest extends TestCase
 
         $this->expectException(ValidationException::class);
         app(ParserDiagnosticReviewRequestValidator::class)->validate($request);
+    }
+
+    public function test_report_level_numeric_diagnostics_receive_active_species_candidates(): void
+    {
+        $payload = $this->payload();
+        $parserError = $this->parserError($payload);
+        $parserError->forceFill([
+            'error_type' => 'unaccounted_numeric_tokens',
+            'raw_field' => 'report',
+            'raw_value' => '142, 72',
+            'context' => [
+                'sanitized_paragraph' => 'The Pacific Queen returned with 142 Bluefin Tuna, including 72 large fish.',
+                'evidence' => ['unaccounted_tokens' => ['142', '72']],
+            ],
+        ])->save();
+
+        $request = app(ParserDiagnosticReviewRequestFactory::class)->make($payload, $parserError);
+
+        $this->assertNotEmpty($request->candidates);
+        $this->assertSame(
+            [CanonicalEntityType::Species],
+            collect($request->candidates)->pluck('type')->unique()->values()->all(),
+        );
+        $this->assertTrue(
+            collect($request->candidates)->contains(
+                fn (CanonicalCandidateData $candidate): bool => $candidate->name === 'Bluefin Tuna',
+            ),
+        );
+        app(ParserDiagnosticReviewRequestValidator::class)->validate($request);
+        $this->addToAssertionCount(1);
     }
 
     public function test_request_validator_rejects_a_payload_hash_from_another_payload(): void

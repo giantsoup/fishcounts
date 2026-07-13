@@ -140,6 +140,15 @@
                                             @endif
                                         @else
                                             <p class="mt-1 text-sm text-gray-600">No AI review is available.</p>
+                                            @if ($manualAiReviewEnabled && ! $error->resolved_at && $error->resolution_type === null && $error->raw_scrape_payload_id !== null)
+                                                <form method="POST" action="{{ route('admin.parser-errors.reviews.store', $error) }}" class="mt-3">
+                                                    @csrf
+                                                    <x-secondary-button type="submit">Run AI review</x-secondary-button>
+                                                </form>
+                                                @if (blank($error->diagnostic_fingerprint))
+                                                    <p class="mt-2 text-xs text-gray-600">This legacy error will be reparsed first to prepare it for AI review.</p>
+                                                @endif
+                                            @endif
                                         @endif
                                     </div>
 
