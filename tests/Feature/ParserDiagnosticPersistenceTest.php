@@ -14,6 +14,7 @@ use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticType;
 use App\Enums\ScrapeRunType;
 use App\Jobs\DeduplicateTripReportsJob;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\Landing;
@@ -55,8 +56,8 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertSame(1, $result->diagnosticCount);
         $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $run->refresh()->status);
         Queue::assertPushed(
-            ReviewParserDiagnosticsJob::class,
-            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id
+            DispatchParserDiagnosticReviewBatchesJob::class,
+            fn (DispatchParserDiagnosticReviewBatchesJob $job): bool => $job->rawScrapePayloadId === $payload->id
                 && $job->parserDiagnosticReviewRunId === $run->id
                 && $job->afterCommit === true,
         );
@@ -219,7 +220,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
                 ->all(),
         );
         $this->assertDatabaseEmpty('parser_errors');
-        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+        Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
     }
 
     public function test_source_specific_evidence_detects_an_empty_result_without_a_global_threshold(): void

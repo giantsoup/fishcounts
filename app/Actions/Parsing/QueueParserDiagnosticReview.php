@@ -5,8 +5,8 @@ namespace App\Actions\Parsing;
 use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\QueueParserDiagnosticReviewResult;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ParseRawPayloadJob;
-use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
@@ -93,7 +93,7 @@ final class QueueParserDiagnosticReview
                     if ($requiresReparse) {
                         ParseRawPayloadJob::dispatch($payloadId, true, $run->id);
                     } else {
-                        ReviewParserDiagnosticsJob::dispatch($payloadId, $run->id);
+                        DispatchParserDiagnosticReviewBatchesJob::dispatch($payloadId, $run->id);
                     }
                 } catch (Throwable $throwable) {
                     $run->refresh()->markFailed($throwable);

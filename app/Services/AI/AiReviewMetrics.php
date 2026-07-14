@@ -29,7 +29,10 @@ final class AiReviewMetrics
         $oldestQueuedAt = DB::table('jobs')->where('queue', 'ai-parsing')->min('created_at');
         $oldestGitHubQueuedAt = DB::table('jobs')->where('queue', 'github-issues')->min('created_at');
         $usage = ParserDiagnosticReview::query()
-            ->where('completed_at', '>=', $since)
+            ->where(function ($query) use ($since): void {
+                $query->where('completed_at', '>=', $since)
+                    ->orWhere('failed_at', '>=', $since);
+            })
             ->selectRaw('COALESCE(SUM(total_tokens), 0) as tokens')
             ->first();
 
@@ -42,6 +45,7 @@ final class AiReviewMetrics
             'failed' => ParserDiagnosticReview::query()->where('status', ParserDiagnosticReviewStatus::Failed)->where('failed_at', '>=', $since)->count(),
             'refused' => ParserDiagnosticReview::query()->where('status', ParserDiagnosticReviewStatus::Refused)->where('completed_at', '>=', $since)->count(),
             'schema_failures' => ParserDiagnosticReview::query()->where('failure_category', 'schema_validation')->where('failed_at', '>=', $since)->count(),
+            'output_limit_failures' => ParserDiagnosticReview::query()->where('failure_category', 'output_token_limit')->where('failed_at', '>=', $since)->count(),
             'stale' => ParserDiagnosticReview::query()->where('status', ParserDiagnosticReviewStatus::Stale)->count(),
             'accepted' => (int) $actionCounts->get(ParserDiagnosticReviewActionType::Accepted->value, 0),
             'rejected' => (int) $actionCounts->get(ParserDiagnosticReviewActionType::Rejected->value, 0),

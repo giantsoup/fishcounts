@@ -10,8 +10,8 @@ use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\Role;
 use App\Enums\ScrapeRunType;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ParseRawPayloadJob;
-use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewRun;
@@ -179,11 +179,11 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertSeeText('Waiting for an AI review worker. It is safe to leave or refresh this page.')
             ->assertDontSee('action="'.$storeRoute.'"', false);
 
-        Queue::assertPushedOn('ai-parsing', ReviewParserDiagnosticsJob::class);
-        Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
+        Queue::assertPushedOn('ai-parsing', DispatchParserDiagnosticReviewBatchesJob::class);
+        Queue::assertPushed(DispatchParserDiagnosticReviewBatchesJob::class, 1);
         Queue::assertPushed(
-            ReviewParserDiagnosticsJob::class,
-            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id
+            DispatchParserDiagnosticReviewBatchesJob::class,
+            fn (DispatchParserDiagnosticReviewBatchesJob $job): bool => $job->rawScrapePayloadId === $payload->id
                 && $job->parserDiagnosticReviewRunId === $run->id,
         );
     }
@@ -229,7 +229,7 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ParseRawPayloadJob::class,
             fn (ParseRawPayloadJob $job): bool => $job->parserDiagnosticReviewRunId === $run->id,
         );
-        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+        Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
     }
 
     public function test_stalled_manual_run_is_recoverable_without_duplicate_dispatch(): void
@@ -263,10 +263,10 @@ class ParserDiagnosticHumanReviewTest extends TestCase
         $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $stalledRun->refresh()->status);
         $this->assertSame(ParserDiagnosticReviewRunStatus::Queued, $newRun->status);
         Queue::assertPushed(
-            ReviewParserDiagnosticsJob::class,
-            fn (ReviewParserDiagnosticsJob $job): bool => $job->parserDiagnosticReviewRunId === $newRun->id,
+            DispatchParserDiagnosticReviewBatchesJob::class,
+            fn (DispatchParserDiagnosticReviewBatchesJob $job): bool => $job->parserDiagnosticReviewRunId === $newRun->id,
         );
-        Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
+        Queue::assertPushed(DispatchParserDiagnosticReviewBatchesJob::class, 1);
     }
 
     public function test_dispatch_failure_is_reported_to_the_admin_and_marks_the_run_failed(): void
@@ -379,8 +379,8 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertSessionHas('status', 'AI review queued.');
 
         Queue::assertPushed(
-            ReviewParserDiagnosticsJob::class,
-            fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id,
+            DispatchParserDiagnosticReviewBatchesJob::class,
+            fn (DispatchParserDiagnosticReviewBatchesJob $job): bool => $job->rawScrapePayloadId === $payload->id,
         );
     }
 
@@ -818,8 +818,8 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             $review->humanActions()->where('action', ParserDiagnosticReviewActionType::Retried)->sole()->details,
             'previous_result.classification',
         ));
-        Queue::assertPushed(ReviewParserDiagnosticsJob::class, 1);
-        Queue::assertPushed(ReviewParserDiagnosticsJob::class, fn (ReviewParserDiagnosticsJob $job): bool => $job->rawScrapePayloadId === $payload->id);
+        Queue::assertPushed(DispatchParserDiagnosticReviewBatchesJob::class, 1);
+        Queue::assertPushed(DispatchParserDiagnosticReviewBatchesJob::class, fn (DispatchParserDiagnosticReviewBatchesJob $job): bool => $job->rawScrapePayloadId === $payload->id);
     }
 
     public function test_pending_review_cannot_be_rejected_as_a_completed_recommendation(): void

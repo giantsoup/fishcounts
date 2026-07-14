@@ -11,7 +11,7 @@ use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserDiagnosticReviewClassification;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ParserErrorResolutionType;
-use App\Jobs\ReviewParserDiagnosticsJob;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Models\Boat;
 use App\Models\BoatAlias;
 use App\Models\ParserDiagnosticReview;
@@ -150,7 +150,7 @@ class ActOnParserDiagnosticReview
 
             $this->invalidateParserBugReport->handle($review, ParserDiagnosticReviewActionType::Retried->value);
             $review->prepareForRetry();
-            DB::afterCommit(fn () => ReviewParserDiagnosticsJob::dispatch($parserError->raw_scrape_payload_id));
+            DB::afterCommit(fn () => DispatchParserDiagnosticReviewBatchesJob::dispatch($parserError->raw_scrape_payload_id));
 
             return true;
         }, attempts: 3);

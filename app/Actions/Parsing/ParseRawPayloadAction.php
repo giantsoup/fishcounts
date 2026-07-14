@@ -5,7 +5,7 @@ namespace App\Actions\Parsing;
 use App\DTOs\ParseRawPayloadResult;
 use App\DTOs\RawPayloadData;
 use App\Jobs\DeduplicateTripReportsJob;
-use App\Jobs\ReviewParserDiagnosticsJob;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -78,7 +78,7 @@ class ParseRawPayloadAction
         if ($diagnosticCount > 0 && (bool) config('fish.ai_review.dispatch_enabled')) {
             try {
                 $reviewRun?->markQueued();
-                ReviewParserDiagnosticsJob::dispatch($payload->id, $parserDiagnosticReviewRunId)->afterCommit();
+                DispatchParserDiagnosticReviewBatchesJob::dispatch($payload->id, $parserDiagnosticReviewRunId)->afterCommit();
             } catch (Throwable $throwable) {
                 $reviewRun?->markFailed($throwable);
                 report($throwable);

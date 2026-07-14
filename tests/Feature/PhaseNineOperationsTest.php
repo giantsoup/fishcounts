@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Actions\Parsing\ParseRawPayloadAction;
+use App\Contracts\AI\ParserDiagnosticReviewer;
+use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\Enums\HistoricalAiReviewRunItemStatus;
 use App\Enums\HistoricalAiReviewRunStatus;
 use App\Enums\ParserBugReportStatus;
@@ -13,7 +15,9 @@ use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Jobs\CreateParserBugIssueJob;
 use App\Jobs\DeduplicateTripReportsJob;
+use App\Jobs\FinalizeHistoricalAiReviewRunItemJob;
 use App\Jobs\ProcessHistoricalAiReviewRunItemJob;
+use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\AiBudgetPeriod;
 use App\Models\AiBudgetReservation;
 use App\Models\Boat;
@@ -30,12 +34,14 @@ use App\Models\TripReport;
 use App\Models\User;
 use App\Services\AI\AiReviewMetrics;
 use App\Services\AI\HistoricalAiReviewDispatcher;
+use App\Services\AI\HistoricalAiReviewRunItemFinalizer;
 use App\Services\Parsing\TripReportNormalizer;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -170,6 +176,111 @@ class PhaseNineOperationsTest extends TestCase
         $this->assertSame(2, $dispatcher->preview('historical', $from, $to, 10, 10_000_000)['eligible_count']);
     }
 
+    public function test_historical_preview_prices_each_bounded_provider_batch(): void
+    {
+        $payload = $this->payloadWithDiagnostic('2026-06-01', 'batch-pricing');
+        $this->addDiagnostics($payload, 8);
+        config()->set('fish.ai_review.budgets.estimated_request_cost_micros', 1_000_000);
+        config()->set('fish.ai_review.limits.max_diagnostics_per_request', 4);
+        $dispatcher = app(HistoricalAiReviewDispatcher::class);
+        $from = CarbonImmutable::parse('2026-06-01');
+        $to = CarbonImmutable::parse('2026-06-30');
+
+        $insufficientBudget = $dispatcher->preview('historical', $from, $to, 1, 2_999_999);
+        $authorizedBudget = $dispatcher->preview('historical', $from, $to, 1, 3_000_000);
+
+        $this->assertSame(1, $insufficientBudget['eligible_count']);
+        $this->assertSame(0, $insufficientBudget['planned_count']);
+        $this->assertSame(0, $insufficientBudget['estimated_max_cost_micros']);
+        $this->assertSame(1, $authorizedBudget['planned_count']);
+        $this->assertSame(3_000_000, $authorizedBudget['estimated_max_cost_micros']);
+    }
+
+    public function test_historical_item_processes_bounded_batches_with_per_request_budget_accounting(): void
+    {
+        $payload = $this->payloadWithDiagnostic('2026-06-01', 'historical-batches');
+        $this->addDiagnostics($payload, 8);
+        $run = $this->historicalRun(HistoricalAiReviewRunStatus::Running, 1);
+        $run->forceFill(['budget_micros' => 3_000_000])->save();
+        $item = $run->items()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'payload_hash' => $payload->payload_hash,
+            'item_fingerprint' => hash('sha256', 'historical-batches-item'),
+        ]);
+        config()->set('fish.ai_review.enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        config()->set('services.openai.api_key', 'test-key');
+        config()->set('fish.ai_review.budgets.estimated_request_cost_micros', 1_000_000);
+        config()->set('fish.ai_review.limits.max_diagnostics_per_request', 4);
+        Bus::fake();
+        $batchSizes = [];
+        $this->app->bind(ParserDiagnosticReviewer::class, function () use (&$batchSizes) {
+            return new class($batchSizes) implements ParserDiagnosticReviewer
+            {
+                /** @param list<int> $batchSizes */
+                public function __construct(private array &$batchSizes) {}
+
+                public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+                {
+                    $this->batchSizes[] = count($requests);
+                    $results = [];
+
+                    foreach ($requests as $request) {
+                        $results[$request->diagnosticFingerprint] = [
+                            'classification' => 'uncertain',
+                            'confidence' => 0.4,
+                            'rationale' => 'The diagnostic requires human review.',
+                            'corrections' => [],
+                        ];
+                    }
+
+                    return new ParserDiagnosticReviewProviderResponseData(
+                        responseId: 'resp_historical_batch_'.count($this->batchSizes),
+                        model: 'gpt-5.6-luna',
+                        results: $results,
+                        refused: false,
+                        refusal: null,
+                        inputTokens: 100,
+                        cachedInputTokens: 0,
+                        outputTokens: 50,
+                        reasoningTokens: 10,
+                        totalTokens: 150,
+                    );
+                }
+            };
+        });
+
+        app()->call([new ProcessHistoricalAiReviewRunItemJob($item->id), 'handle']);
+
+        $fingerprints = $payload->parserErrors()->orderBy('id')->pluck('diagnostic_fingerprint')->all();
+        $reviewJobs = collect($fingerprints)
+            ->chunk(4)
+            ->map(fn ($chunk): ReviewParserDiagnosticsJob => new ReviewParserDiagnosticsJob(
+                rawScrapePayloadId: $payload->id,
+                diagnosticFingerprints: $chunk->values()->all(),
+                finalizeParserDiagnosticReviewRun: false,
+                uniqueContext: "historical-item:{$item->id}",
+            ));
+        Bus::assertChained([
+            ...$reviewJobs,
+            new FinalizeHistoricalAiReviewRunItemJob($item->id),
+        ]);
+        $this->assertSame(HistoricalAiReviewRunItemStatus::Running, $item->refresh()->status);
+        $this->assertSame(3_000_000, $run->refresh()->estimated_spent_micros);
+
+        foreach ($reviewJobs as $reviewJob) {
+            app()->call([$reviewJob, 'handle']);
+        }
+        app()->call([new FinalizeHistoricalAiReviewRunItemJob($item->id), 'handle']);
+
+        $this->assertSame([4, 4, 1], $batchSizes);
+        $this->assertSame(HistoricalAiReviewRunItemStatus::Completed, $item->refresh()->status);
+        $this->assertSame(HistoricalAiReviewRunStatus::Completed, $run->refresh()->status);
+        $this->assertSame(3_000_000, $run->estimated_spent_micros);
+        $this->assertSame(9, ParserDiagnosticReview::query()->where('status', ParserDiagnosticReviewStatus::Succeeded)->count());
+        $this->assertSame(3, AiBudgetReservation::query()->where('status', 'settled')->count());
+    }
+
     public function test_run_can_pause_resume_and_gracefully_stop_queued_work(): void
     {
         $payload = $this->payloadWithDiagnostic('2026-06-01');
@@ -229,6 +340,29 @@ class PhaseNineOperationsTest extends TestCase
         (new ProcessHistoricalAiReviewRunItemJob($item->id))->failed(new \RuntimeException('Provider remained unavailable.'));
 
         $this->assertSame(HistoricalAiReviewRunItemStatus::Failed, $item->refresh()->status);
+        $this->assertSame(HistoricalAiReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertSame(1, $run->failed_count);
+    }
+
+    public function test_historical_finalizer_fails_an_item_when_any_review_batch_has_failed(): void
+    {
+        $payload = $this->payloadWithDiagnostic('2026-06-01', 'failed-review-batch');
+        $this->review($payload, ParserDiagnosticReviewStatus::Failed);
+        $run = $this->historicalRun(HistoricalAiReviewRunStatus::Running, 1);
+        $item = $run->items()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'payload_hash' => $payload->payload_hash,
+            'item_fingerprint' => hash('sha256', 'failed-review-batch-item'),
+            'status' => HistoricalAiReviewRunItemStatus::Running,
+        ]);
+
+        $finalizer = app(HistoricalAiReviewRunItemFinalizer::class);
+        $finalizer->complete($item->id);
+        $finalizer->complete($item->id);
+        $finalizer->fail($item->id, 'A duplicate chain callback arrived.');
+
+        $this->assertSame(HistoricalAiReviewRunItemStatus::Failed, $item->refresh()->status);
+        $this->assertSame('The AI review item ended without a reviewable result.', $item->failure_message);
         $this->assertSame(HistoricalAiReviewRunStatus::Failed, $run->refresh()->status);
         $this->assertSame(1, $run->failed_count);
     }
@@ -316,7 +450,7 @@ class PhaseNineOperationsTest extends TestCase
             ->assertOk()
             ->assertSee('AI review operations need attention')
             ->assertSee('Succeeded / failed / refused')
-            ->assertSee('Schema failures / stale total')
+            ->assertSee('Schema / output limit / stale')
             ->assertSee('GitHub queue / oldest')
             ->assertSee('GitHub issue failures are above the 24-hour warning threshold.')
             ->assertSee('monthly cap applies')
@@ -549,6 +683,7 @@ class PhaseNineOperationsTest extends TestCase
         $metrics = app(AiReviewMetrics::class)->snapshot();
         $this->assertSame(0, $metrics['failed']);
         $this->assertSame(0, $metrics['schema_failures']);
+        $this->assertSame(0, $metrics['output_limit_failures']);
         $this->assertSame(0, $metrics['tokens']);
     }
 
@@ -609,6 +744,7 @@ class PhaseNineOperationsTest extends TestCase
             'raw_field' => 'species',
             'raw_value' => 'Moon Fish',
             'message' => 'Unknown species alias.',
+            'context' => ['sanitized_paragraph' => 'Count.'],
             'diagnostic_fingerprint' => hash('sha256', 'diagnostic-'.$suffix),
         ]);
 
@@ -630,6 +766,18 @@ class PhaseNineOperationsTest extends TestCase
             'selected_count' => $selectedCount,
             'started_at' => now(),
         ]);
+    }
+
+    private function addDiagnostics(RawScrapePayload $payload, int $additionalCount): void
+    {
+        $firstError = $payload->parserErrors()->firstOrFail();
+
+        for ($index = 1; $index <= $additionalCount; $index++) {
+            $firstError->replicate()->forceFill([
+                'raw_value' => "Moon Fish {$index}",
+                'diagnostic_fingerprint' => hash('sha256', "{$payload->id}-diagnostic-{$index}"),
+            ])->save();
+        }
     }
 
     private function review(RawScrapePayload $payload, ParserDiagnosticReviewStatus $status): ParserDiagnosticReview

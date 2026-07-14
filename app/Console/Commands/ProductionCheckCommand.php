@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Enums\BookingProvider;
 use App\Enums\EnvironmentalLocationType;
 use App\Jobs\CreateParserBugIssueJob;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
+use App\Jobs\FinalizeHistoricalAiReviewRunItemJob;
 use App\Jobs\ProcessHistoricalAiReviewRunItemJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
@@ -89,15 +91,21 @@ class ProductionCheckCommand extends Command
         $budgetTimezone = (string) config('fish.ai_review.budgets.timezone');
         $retryAfter = (int) config('queue.connections.database.retry_after');
         $largestJobTimeout = max(
+            (new DispatchParserDiagnosticReviewBatchesJob(0))->timeout,
+            (new FinalizeHistoricalAiReviewRunItemJob(0))->timeout,
             (new ReviewParserDiagnosticsJob(0))->timeout,
             (new CreateParserBugIssueJob(0))->timeout,
             (new ProcessHistoricalAiReviewRunItemJob(0))->timeout,
         );
         $databaseCache = Cache::store('database')->getStore();
+        $maxDiagnosticsPerRequest = (int) config('fish.ai_review.limits.max_diagnostics_per_request');
+        $maxOutputTokens = (int) config('fish.ai_review.limits.max_output_tokens');
 
         $this->assert($dailyLimit >= 0, 'Optional daily AI budget limit is valid.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be zero or greater.', $failures);
         $this->assert($monthlyLimit > 0 && ($dailyLimit === 0 || $monthlyLimit >= $dailyLimit), 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be positive and at least any enabled daily limit.', $failures);
         $this->assert($estimatedRequestCost > 0, 'AI estimated request cost is configured.', 'FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be greater than zero.', $failures);
+        $this->assert($maxDiagnosticsPerRequest > 0, 'AI diagnostic batch size is configured.', 'FISH_AI_REVIEW_MAX_DIAGNOSTICS_PER_REQUEST must be greater than zero.', $failures);
+        $this->assert($maxOutputTokens > 0, 'AI output-token limit is configured.', 'FISH_AI_REVIEW_MAX_OUTPUT_TOKENS must be greater than zero.', $failures);
         $this->assert(in_array($budgetTimezone, DateTimeZone::listIdentifiers(), true), 'AI budget timezone is valid.', 'FISH_AI_REVIEW_BUDGET_TIMEZONE must be a valid timezone identifier.', $failures);
         $this->assert((bool) config('fish.ai_review.budgets.hard_stop'), 'AI budget hard stop is enabled.', 'AI budget hard stop must remain enabled.', $failures);
         $this->assert($databaseCache instanceof LockProvider, 'Database cache supports atomic locks.', 'The database cache store must support atomic locks for uniqueness, scheduling, and rate limiting.', $failures);

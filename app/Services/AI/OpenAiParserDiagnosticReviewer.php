@@ -5,6 +5,7 @@ namespace App\Services\AI;
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\DTOs\ParserDiagnosticReviewRequestData;
+use App\Exceptions\OpenAiIncompleteResponseException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -83,6 +84,7 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
                 'For set_species_count, use field species_count, a supplied species candidate, non-negative retained_count and released_count values, and a null value.',
                 'For remove_species_count, use field species_count and a supplied species candidate; value, retained_count, and released_count must be null.',
                 'Return an empty corrections list when no valid candidate-supported correction is warranted.',
+                'Keep each rationale to one or two concise sentences.',
             ]),
             'input' => [[
                 'role' => 'user',
@@ -134,7 +136,16 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
         $json = $response->json();
 
         if (($json['status'] ?? null) !== 'completed') {
-            throw new UnexpectedValueException('The OpenAI response did not complete successfully.');
+            throw new OpenAiIncompleteResponseException(
+                responseId: (string) ($json['id'] ?? ''),
+                model: (string) ($json['model'] ?? config('fish.ai_review.model')),
+                reason: (string) data_get($json, 'incomplete_details.reason', 'unknown'),
+                inputTokens: (int) data_get($json, 'usage.input_tokens', 0),
+                cachedInputTokens: (int) data_get($json, 'usage.input_tokens_details.cached_tokens', 0),
+                outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
+                reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
+                totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
+            );
         }
         $message = collect($json['output'] ?? [])->first(
             fn (mixed $item): bool => is_array($item) && ($item['type'] ?? null) === 'message',

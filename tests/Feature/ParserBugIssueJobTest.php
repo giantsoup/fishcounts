@@ -13,7 +13,7 @@ use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ScrapeRunType;
 use App\Enums\SourceType;
 use App\Jobs\CreateParserBugIssueJob;
-use App\Jobs\ReviewParserDiagnosticsJob;
+use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Models\ParserBugReport;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserError;
@@ -645,7 +645,7 @@ class ParserBugIssueJobTest extends TestCase
         $report = ParserBugReport::query()->sole();
         $this->assertSame(ParserBugReportStatus::Failed, $report->status);
         $this->assertStringNotContainsString('secret-token', $report->failure_message);
-        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+        Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
     }
 
     public function test_secondary_rate_limit_is_saved_and_rethrown_for_queue_retry(): void

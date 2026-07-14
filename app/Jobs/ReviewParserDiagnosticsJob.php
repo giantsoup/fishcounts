@@ -6,6 +6,7 @@ use App\Actions\Parsing\AutomateParserDiagnosticReviews;
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Exceptions\AiBudgetExceededException;
+use App\Exceptions\OpenAiIncompleteResponseException;
 use App\Models\AiBudgetReservation;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewRun;
@@ -38,9 +39,15 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 210;
 
+    /**
+     * @param  null|list<string>  $diagnosticFingerprints
+     */
     public function __construct(
         public int $rawScrapePayloadId,
         public ?int $parserDiagnosticReviewRunId = null,
+        public ?array $diagnosticFingerprints = null,
+        public bool $finalizeParserDiagnosticReviewRun = true,
+        public ?string $uniqueContext = null,
     ) {
         $this->onConnection('database');
         $this->onQueue('ai-parsing');
@@ -48,9 +55,22 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return $this->parserDiagnosticReviewRunId === null
+        $base = $this->parserDiagnosticReviewRunId === null
             ? (string) $this->rawScrapePayloadId
             : "{$this->rawScrapePayloadId}:review-run:{$this->parserDiagnosticReviewRunId}";
+
+        if ($this->uniqueContext !== null) {
+            $base .= ':context:'.hash('sha256', $this->uniqueContext);
+        }
+
+        if ($this->diagnosticFingerprints === null) {
+            return $base;
+        }
+
+        $fingerprints = $this->diagnosticFingerprints;
+        sort($fingerprints);
+
+        return $base.':batch:'.hash('sha256', implode('|', $fingerprints));
     }
 
     public function uniqueFor(): int
@@ -102,9 +122,13 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         if (! $this->enabled()) {
             $this->skip(ParserDiagnosticReview::query()
                 ->where('raw_scrape_payload_id', $this->rawScrapePayloadId)
+                ->when(
+                    $this->diagnosticFingerprints !== null,
+                    fn ($query) => $query->whereIn('diagnostic_fingerprint', $this->diagnosticFingerprints),
+                )
                 ->whereIn('status', [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Running])
                 ->get());
-            $reviewRun?->markFailed('AI review dispatch is no longer available.');
+            $this->failReviewRun('AI review dispatch is no longer available.');
 
             return;
         }
@@ -113,6 +137,8 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
         $payload = RawScrapePayload::query()->find($this->rawScrapePayloadId);
         if ($payload === null) {
+            $this->failReviewRun('The raw payload is no longer available for AI review.');
+
             return;
         }
 
@@ -120,11 +146,15 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             ->whereBelongsTo($payload, 'rawScrapePayload')
             ->whereNull('resolution_type')
             ->whereNotNull('diagnostic_fingerprint')
+            ->when(
+                $this->diagnosticFingerprints !== null,
+                fn ($query) => $query->whereIn('diagnostic_fingerprint', $this->diagnosticFingerprints),
+            )
             ->orderBy('id')
             ->get();
 
         if ($parserErrors->isEmpty()) {
-            $reviewRun?->markCompleted();
+            $this->finishReviewRun();
 
             return;
         }
@@ -157,31 +187,36 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         }
 
         if ($reviews->isEmpty()) {
-            $reviewRun?->markCompleted();
+            $this->finishReviewRun();
 
             return;
         }
 
         if (! $this->isCurrent($payload, $reviews)) {
             $this->stale($reviews);
-            $reviewRun?->markCompleted();
+            $this->finishReviewRun();
 
             return;
         }
 
         $reservation = null;
+        $estimatedCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
         try {
             if (! $this->enabled()) {
                 $this->skip($reviews);
-                $reviewRun?->markFailed('AI review dispatch is no longer available.');
+                $this->failReviewRun('AI review dispatch is no longer available.');
 
                 return;
             }
 
-            $estimatedCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
             $reservation = $budgetManager->reserve(
                 provider: (string) config('fish.ai_review.provider'),
-                reservationKey: 'parser-review-'.hash('sha256', $payload->id.'|'.$payload->payload_hash.'|'.($reviews->first()->attempts + 1)),
+                reservationKey: 'parser-review-'.hash('sha256', implode('|', [
+                    $payload->id,
+                    $payload->payload_hash,
+                    $reviews->pluck('diagnostic_fingerprint')->sort()->implode(','),
+                    $reviews->first()->attempts + 1,
+                ])),
                 estimatedCostMicros: $estimatedCost,
                 review: $reviews->first(),
             );
@@ -189,7 +224,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             if (! $this->enabled()) {
                 $budgetManager->release($reservation);
                 $this->skip($reviews);
-                $reviewRun?->markFailed('AI review dispatch is no longer available.');
+                $this->failReviewRun('AI review dispatch is no longer available.');
 
                 return;
             }
@@ -197,7 +232,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             if (! $this->isCurrent($payload, $reviews)) {
                 $budgetManager->release($reservation);
                 $this->stale($reviews);
-                $reviewRun?->markCompleted();
+                $this->finishReviewRun();
 
                 return;
             }
@@ -211,7 +246,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             if (! $this->isCurrent($payload, $reviews)) {
                 $budgetManager->settle($reservation, $estimatedCost);
                 $this->stale($reviews);
-                $reviewRun?->markCompleted();
+                $this->finishReviewRun();
 
                 return;
             }
@@ -219,7 +254,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             if ($providerResponse->refused) {
                 $this->recordRefusal($reviews, $providerResponse, $estimatedCost);
                 $budgetManager->settle($reservation, $estimatedCost);
-                $reviewRun?->markCompleted();
+                $this->finishReviewRun();
 
                 return;
             }
@@ -255,10 +290,10 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                 fn (): int => $automateParserDiagnosticReviews->handle($payload->id, $automatableReviewIds),
                 report: true,
             );
-            $reviewRun?->markCompleted();
+            $this->finishReviewRun();
         } catch (AiBudgetExceededException) {
             $this->skip($reviews, 'budget_exhausted');
-            $reviewRun?->markCompleted();
+            $this->finishReviewRun();
         } catch (Throwable $throwable) {
             if ($reservation instanceof AiBudgetReservation) {
                 if ($throwable instanceof ConnectionException) {
@@ -267,14 +302,18 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                     $budgetManager->settle($reservation, (int) config('fish.ai_review.budgets.estimated_request_cost_micros'));
                 }
             }
-            $this->failReviews($reviews, $throwable);
+            if ($throwable instanceof OpenAiIncompleteResponseException) {
+                $this->recordIncompleteFailure($reviews, $throwable, $estimatedCost);
+            } else {
+                $this->failReviews($reviews, $throwable);
+            }
 
             $shouldRetry = $throwable instanceof ConnectionException
                 || ($throwable instanceof RequestException
                     && ($throwable->response->status() === 429 || $throwable->response->serverError()));
 
             if (! $shouldRetry) {
-                $reviewRun?->markFailed($throwable);
+                $this->failReviewRun($throwable);
 
                 return;
             }
@@ -295,6 +334,10 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
         $reviews = ParserDiagnosticReview::query()
             ->where('raw_scrape_payload_id', $this->rawScrapePayloadId)
+            ->when(
+                $this->diagnosticFingerprints !== null,
+                fn ($query) => $query->whereIn('diagnostic_fingerprint', $this->diagnosticFingerprints),
+            )
             ->whereIn('status', [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Running])
             ->get();
         $this->failReviews($reviews, $throwable);
@@ -381,6 +424,29 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         }
     }
 
+    private function recordIncompleteFailure(
+        Collection $reviews,
+        OpenAiIncompleteResponseException $exception,
+        int $estimatedCost,
+    ): void {
+        $category = $exception->reason === 'max_output_tokens'
+            ? 'output_token_limit'
+            : 'provider_incomplete';
+
+        foreach ($reviews as $index => $review) {
+            if ($review->status !== ParserDiagnosticReviewStatus::Running) {
+                continue;
+            }
+
+            $review->forceFill($this->usageAttributes($exception, $index, $reviews->count()) + [
+                'response_id' => $exception->responseId !== '' ? $exception->responseId : null,
+                'model' => $exception->model,
+                'estimated_cost_micros' => $this->share($estimatedCost, $index, $reviews->count()),
+            ])->save();
+            $review->fail($this->safeFailureMessage($exception), $category);
+        }
+    }
+
     private function resultAttributes(array $result, object $response, int $index, int $count, int $estimatedCost): array
     {
         return $this->usageAttributes($response, $index, $count) + [
@@ -443,6 +509,39 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         }
     }
 
+    private function finishReviewRun(): void
+    {
+        if (! $this->finalizeParserDiagnosticReviewRun) {
+            return;
+        }
+
+        $reviewRun = $this->reviewRun();
+        if ($reviewRun === null) {
+            return;
+        }
+
+        $hasFailedReview = ParserDiagnosticReview::query()
+            ->where('raw_scrape_payload_id', $this->rawScrapePayloadId)
+            ->where('status', ParserDiagnosticReviewStatus::Failed)
+            ->whereHas('parserError', fn ($query) => $query->whereNull('resolution_type'))
+            ->exists();
+
+        if ($hasFailedReview) {
+            $reviewRun->markFailed('One or more AI review batches failed. Review the individual errors before retrying.');
+
+            return;
+        }
+
+        $reviewRun->markCompleted();
+    }
+
+    private function failReviewRun(Throwable|string $failure): void
+    {
+        if ($this->finalizeParserDiagnosticReviewRun) {
+            $this->reviewRun()?->markFailed($failure);
+        }
+    }
+
     private function safeFailureMessage(Throwable $throwable): string
     {
         $message = preg_replace('/(?:sk-[A-Za-z0-9_-]+|Bearer\s+\S+)/i', '[redacted]', $throwable->getMessage()) ?? 'AI review failed.';
@@ -452,6 +551,12 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
     private function failureCategory(Throwable $throwable): string
     {
+        if ($throwable instanceof OpenAiIncompleteResponseException) {
+            return $throwable->reason === 'max_output_tokens'
+                ? 'output_token_limit'
+                : 'provider_incomplete';
+        }
+
         if ($throwable instanceof ValidationException || $throwable instanceof ValueError || $throwable instanceof UnexpectedValueException) {
             return 'schema_validation';
         }

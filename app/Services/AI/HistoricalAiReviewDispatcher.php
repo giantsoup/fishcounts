@@ -6,9 +6,11 @@ use App\Enums\HistoricalAiReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Jobs\ProcessHistoricalAiReviewRunItemJob;
 use App\Models\HistoricalAiReviewRun;
+use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -17,15 +19,12 @@ final class HistoricalAiReviewDispatcher
     /** @return array{eligible_count: int, planned_count: int, estimated_max_cost_micros: int} */
     public function preview(string $scope, CarbonImmutable $from, CarbonImmutable $to, int $maxItems, int $budgetMicros): array
     {
-        $estimatedItemCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
-        $eligibleCount = $this->query($scope, $from, $to)->count();
-        $budgetBound = intdiv($budgetMicros, max(1, $estimatedItemCost));
-        $plannedCount = min($eligibleCount, $maxItems, $budgetBound);
+        $plan = $this->plan($scope, $from, $to, $maxItems, $budgetMicros);
 
         return [
-            'eligible_count' => $eligibleCount,
-            'planned_count' => $plannedCount,
-            'estimated_max_cost_micros' => $plannedCount * $estimatedItemCost,
+            'eligible_count' => $plan['eligible_count'],
+            'planned_count' => $plan['payloads']->count(),
+            'estimated_max_cost_micros' => $plan['estimated_max_cost_micros'],
         ];
     }
 
@@ -37,10 +36,8 @@ final class HistoricalAiReviewDispatcher
         int $budgetMicros,
         string $authorizationReference,
     ): HistoricalAiReviewRun {
-        $preview = $this->preview($scope, $from, $to, $maxItems, $budgetMicros);
-        $payloads = $this->query($scope, $from, $to)
-            ->limit($preview['planned_count'])
-            ->get(['id', 'payload_hash']);
+        $plan = $this->plan($scope, $from, $to, $maxItems, $budgetMicros);
+        $payloads = $plan['payloads'];
         $selectedCount = $payloads->count();
         $selectionFingerprint = hash('sha256', implode('|', [
             $scope,
@@ -134,6 +131,55 @@ final class HistoricalAiReviewDispatcher
         return $dispatched;
     }
 
+    /**
+     * @return array{
+     *     eligible_count: int,
+     *     payloads: Collection<int, RawScrapePayload>,
+     *     estimated_max_cost_micros: int
+     * }
+     */
+    private function plan(string $scope, CarbonImmutable $from, CarbonImmutable $to, int $maxItems, int $budgetMicros): array
+    {
+        $query = $this->query($scope, $from, $to);
+        $eligibleCount = (clone $query)->count();
+        $candidates = $query->limit($maxItems)->get(['id', 'payload_hash']);
+        $diagnosticCounts = ParserError::query()
+            ->whereIn('raw_scrape_payload_id', $candidates->modelKeys())
+            ->whereNull('resolution_type')
+            ->whereNotNull('diagnostic_fingerprint')
+            ->where(function (Builder $query): void {
+                $query->whereDoesntHave('diagnosticReviews')
+                    ->orWhereHas('diagnosticReviews', fn (Builder $query): Builder => $query->whereIn('status', $this->retryableStatuses()));
+            })
+            ->select('raw_scrape_payload_id')
+            ->selectRaw('COUNT(DISTINCT diagnostic_fingerprint) as aggregate')
+            ->groupBy('raw_scrape_payload_id')
+            ->pluck('aggregate', 'raw_scrape_payload_id');
+        $estimatedRequestCost = max(1, (int) config('fish.ai_review.budgets.estimated_request_cost_micros'));
+        $batchSize = max(1, (int) config('fish.ai_review.limits.max_diagnostics_per_request'));
+        $plannedCount = 0;
+        $estimatedMaximumCost = 0;
+
+        foreach ($candidates as $candidate) {
+            $diagnosticCount = (int) $diagnosticCounts->get($candidate->id, 0);
+            $batchCount = intdiv(max(1, $diagnosticCount) + $batchSize - 1, $batchSize);
+            $candidateCost = $batchCount * $estimatedRequestCost;
+
+            if ($estimatedMaximumCost + $candidateCost > $budgetMicros) {
+                break;
+            }
+
+            $estimatedMaximumCost += $candidateCost;
+            $plannedCount++;
+        }
+
+        return [
+            'eligible_count' => $eligibleCount,
+            'payloads' => $candidates->take($plannedCount)->values(),
+            'estimated_max_cost_micros' => $estimatedMaximumCost,
+        ];
+    }
+
     private function query(string $scope, CarbonImmutable $from, CarbonImmutable $to): Builder
     {
         $query = RawScrapePayload::query()
@@ -150,12 +196,7 @@ final class HistoricalAiReviewDispatcher
         }
 
         if (in_array($scope, ['unresolved', 'historical'], true)) {
-            $retryableStatuses = [
-                ParserDiagnosticReviewStatus::Failed,
-                ParserDiagnosticReviewStatus::Refused,
-                ParserDiagnosticReviewStatus::Stale,
-                ParserDiagnosticReviewStatus::Skipped,
-            ];
+            $retryableStatuses = $this->retryableStatuses();
             $query->whereHas('parserErrors', fn (Builder $query): Builder => $query
                 ->whereNull('resolution_type')
                 ->whereNotNull('diagnostic_fingerprint')
@@ -166,5 +207,16 @@ final class HistoricalAiReviewDispatcher
         }
 
         return $query->orderBy('target_date')->orderBy('id');
+    }
+
+    /** @return list<ParserDiagnosticReviewStatus> */
+    private function retryableStatuses(): array
+    {
+        return [
+            ParserDiagnosticReviewStatus::Failed,
+            ParserDiagnosticReviewStatus::Refused,
+            ParserDiagnosticReviewStatus::Stale,
+            ParserDiagnosticReviewStatus::Skipped,
+        ];
     }
 }

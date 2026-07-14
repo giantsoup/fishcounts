@@ -7,6 +7,7 @@ use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ScrapeRunType;
+use App\Exceptions\OpenAiIncompleteResponseException;
 use App\Jobs\CreateParserBugIssueJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
@@ -57,6 +58,21 @@ class ReviewParserDiagnosticsJobTest extends TestCase
 
         $manualJob = new ReviewParserDiagnosticsJob(123, 456);
         $this->assertSame('123:review-run:456', $manualJob->uniqueId());
+
+        $fingerprints = [hash('sha256', 'first'), hash('sha256', 'second')];
+        $automaticBatch = new ReviewParserDiagnosticsJob(123, diagnosticFingerprints: $fingerprints);
+        $firstHistoricalBatch = new ReviewParserDiagnosticsJob(
+            123,
+            diagnosticFingerprints: $fingerprints,
+            uniqueContext: 'historical-item:1',
+        );
+        $secondHistoricalBatch = new ReviewParserDiagnosticsJob(
+            123,
+            diagnosticFingerprints: $fingerprints,
+            uniqueContext: 'historical-item:2',
+        );
+        $this->assertNotSame($automaticBatch->uniqueId(), $firstHistoricalBatch->uniqueId());
+        $this->assertNotSame($firstHistoricalBatch->uniqueId(), $secondHistoricalBatch->uniqueId());
     }
 
     public function test_duplicate_payload_jobs_are_suppressed_by_the_database_unique_lock(): void
@@ -430,6 +446,129 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame('schema_validation', $firstReview->failure_category);
         $this->assertSame(ParserDiagnosticReviewStatus::Succeeded, $secondReview->status);
         $this->assertSame('resp_partial_validation', $secondReview->response_id);
+    }
+
+    public function test_an_incomplete_response_records_provider_metadata_without_a_queue_retry(): void
+    {
+        [$payload] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new OpenAiIncompleteResponseException(
+                    responseId: 'resp_incomplete',
+                    model: 'gpt-5.6-luna-2026-07-01',
+                    reason: 'max_output_tokens',
+                    inputTokens: 120,
+                    cachedInputTokens: 20,
+                    outputTokens: 16000,
+                    reasoningTokens: 15000,
+                    totalTokens: 16120,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
+
+        $review = ParserDiagnosticReview::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $review->status);
+        $this->assertSame('output_token_limit', $review->failure_category);
+        $this->assertSame('resp_incomplete', $review->response_id);
+        $this->assertSame('gpt-5.6-luna-2026-07-01', $review->model);
+        $this->assertSame(120, $review->input_tokens);
+        $this->assertSame(20, $review->cached_input_tokens);
+        $this->assertSame(16000, $review->output_tokens);
+        $this->assertSame(15000, $review->reasoning_tokens);
+        $this->assertSame(16120, $review->total_tokens);
+        $this->assertSame(1000, $review->estimated_cost_micros);
+        $this->assertSame(1, $review->attempts);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertDatabaseHas('ai_budget_reservations', [
+            'status' => 'settled',
+            'actual_micros' => 1000,
+        ]);
+    }
+
+    public function test_a_failed_final_batch_does_not_discard_a_successful_earlier_batch(): void
+    {
+        [$payload, $firstError] = $this->payloadAndError();
+        $secondError = $firstError->replicate()->forceFill([
+            'raw_value' => 'Sun Fish',
+            'diagnostic_fingerprint' => hash('sha256', 'second-batch-diagnostic'),
+        ]);
+        $secondError->save();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($firstError, $secondError) implements ParserDiagnosticReviewer
+        {
+            public function __construct(
+                private readonly ParserError $firstError,
+                private readonly ParserError $secondError,
+            ) {}
+
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                $fingerprint = $requests[0]->diagnosticFingerprint;
+                if ($fingerprint === $this->secondError->diagnostic_fingerprint) {
+                    throw new OpenAiIncompleteResponseException(
+                        responseId: 'resp_second_incomplete',
+                        model: 'gpt-5.6-luna',
+                        reason: 'max_output_tokens',
+                        inputTokens: 40,
+                        cachedInputTokens: 0,
+                        outputTokens: 16000,
+                        reasoningTokens: 15000,
+                        totalTokens: 16040,
+                    );
+                }
+
+                return new ParserDiagnosticReviewProviderResponseData(
+                    responseId: 'resp_first_success',
+                    model: 'gpt-5.6-luna',
+                    results: [$this->firstError->diagnostic_fingerprint => [
+                        'classification' => 'uncertain',
+                        'confidence' => 0.4,
+                        'rationale' => 'The first batch succeeded.',
+                        'corrections' => [],
+                    ]],
+                    refused: false,
+                    refusal: null,
+                    inputTokens: 30,
+                    cachedInputTokens: 0,
+                    outputTokens: 20,
+                    reasoningTokens: 5,
+                    totalTokens: 50,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob(
+            $payload->id,
+            $run->id,
+            [$firstError->diagnostic_fingerprint],
+            false,
+        ), 'handle']);
+        app()->call([new ReviewParserDiagnosticsJob(
+            $payload->id,
+            $run->id,
+            [$secondError->diagnostic_fingerprint],
+            true,
+        ), 'handle']);
+
+        $firstReview = ParserDiagnosticReview::query()->whereBelongsTo($firstError, 'parserError')->sole();
+        $secondReview = ParserDiagnosticReview::query()->whereBelongsTo($secondError, 'parserError')->sole();
+        $this->assertSame(ParserDiagnosticReviewStatus::Succeeded, $firstReview->status);
+        $this->assertSame('resp_first_success', $firstReview->response_id);
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $secondReview->status);
+        $this->assertSame('output_token_limit', $secondReview->failure_category);
+        $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
+        $this->assertDatabaseCount('ai_budget_reservations', 2);
     }
 
     public function test_a_retry_refreshes_the_provider_contract_metadata(): void

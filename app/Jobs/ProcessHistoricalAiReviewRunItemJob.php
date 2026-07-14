@@ -2,24 +2,19 @@
 
 namespace App\Jobs;
 
-use App\Actions\Parsing\AutomateParserDiagnosticReviews;
-use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Enums\HistoricalAiReviewRunItemStatus;
 use App\Enums\HistoricalAiReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Models\HistoricalAiReviewRun;
 use App\Models\HistoricalAiReviewRunItem;
-use App\Services\AI\AiBudgetManager;
-use App\Services\AI\ParserDiagnosticReviewRequestFactory;
-use App\Services\AI\ParserDiagnosticReviewRequestValidator;
-use App\Services\AI\ParserDiagnosticReviewResultValidator;
+use App\Services\AI\HistoricalAiReviewRunItemFinalizer;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
@@ -28,7 +23,7 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
 
     public int $tries = 3;
 
-    public int $timeout = 220;
+    public int $timeout = 30;
 
     public function __construct(public int $historicalAiReviewRunItemId)
     {
@@ -46,26 +41,14 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
         return cache()->store('database');
     }
 
-    /** @return array<int, object> */
-    public function middleware(): array
-    {
-        return [(new RateLimited('ai-parser-reviews'))->releaseAfter(60)];
-    }
-
     /** @return array<int, int> */
     public function backoff(): array
     {
         return [30, 120, 300];
     }
 
-    public function handle(
-        ParserDiagnosticReviewer $reviewer,
-        ParserDiagnosticReviewRequestFactory $requestFactory,
-        ParserDiagnosticReviewRequestValidator $requestValidator,
-        ParserDiagnosticReviewResultValidator $resultValidator,
-        AiBudgetManager $budgetManager,
-        AutomateParserDiagnosticReviews $automateParserDiagnosticReviews,
-    ): void {
+    public function handle(HistoricalAiReviewRunItemFinalizer $finalizer): void
+    {
         $item = HistoricalAiReviewRunItem::query()->with(['run', 'rawScrapePayload'])->find($this->historicalAiReviewRunItemId);
 
         if ($item === null
@@ -90,26 +73,32 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
         }
 
         if ($item->rawScrapePayload === null || ! hash_equals($item->payload_hash, $item->rawScrapePayload->payload_hash)) {
-            $this->markFailed('The selected payload is unavailable or changed.');
+            $finalizer->fail($this->historicalAiReviewRunItemId, 'The selected payload is unavailable or changed.');
 
             return;
         }
 
-        if (! $this->hasEligibleWork($item)) {
-            $this->markCompletedWithoutAttempt($item);
+        $diagnosticFingerprints = $this->eligibleDiagnosticFingerprints($item);
+
+        if ($diagnosticFingerprints->isEmpty()) {
+            $finalizer->complete($this->historicalAiReviewRunItemId);
 
             return;
         }
 
         $currentEstimatedCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
+        $chunks = $diagnosticFingerprints
+            ->chunk(max(1, (int) config('fish.ai_review.limits.max_diagnostics_per_request')))
+            ->values();
+        $estimatedAttemptCost = $currentEstimatedCost * $chunks->count();
 
         if ($currentEstimatedCost <= 0 || $currentEstimatedCost > $item->run->estimated_item_cost_micros) {
-            $this->markFailed('The configured AI request estimate exceeds this run’s authorized per-item amount.');
+            $finalizer->fail($this->historicalAiReviewRunItemId, 'The configured AI request estimate exceeds this run’s authorized per-request amount.');
 
             return;
         }
 
-        $startedItem = $this->startAttempt($item);
+        $startedItem = $this->startAttempt($item, $estimatedAttemptCost);
 
         if ($startedItem === null) {
             return;
@@ -119,6 +108,7 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
 
         $item->rawScrapePayload->parserDiagnosticReviews()
             ->whereHas('parserError', fn ($query) => $query->whereNull('resolution_type'))
+            ->whereIn('diagnostic_fingerprint', $diagnosticFingerprints)
             ->whereIn('status', [
                 ParserDiagnosticReviewStatus::Failed,
                 ParserDiagnosticReviewStatus::Refused,
@@ -128,82 +118,35 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
             ->get()
             ->each->prepareForRetry();
 
-        $reviewJob = new ReviewParserDiagnosticsJob($item->raw_scrape_payload_id);
-        $reviewJob->handle(
-            $reviewer,
-            $requestFactory,
-            $requestValidator,
-            $resultValidator,
-            $budgetManager,
-            $automateParserDiagnosticReviews,
-        );
+        $jobs = $chunks->map(fn (Collection $chunk): ReviewParserDiagnosticsJob => new ReviewParserDiagnosticsJob(
+            rawScrapePayloadId: $item->raw_scrape_payload_id,
+            diagnosticFingerprints: $chunk->values()->all(),
+            finalizeParserDiagnosticReviewRun: false,
+            uniqueContext: "historical-item:{$item->id}",
+        ))
+            ->push(new FinalizeHistoricalAiReviewRunItemJob($item->id));
+        $historicalAiReviewRunItemId = $item->id;
 
-        $terminalFailure = $item->rawScrapePayload->parserDiagnosticReviews()
-            ->whereHas('parserError', fn ($query) => $query->whereNull('resolution_type'))
-            ->whereIn('status', [
-                ParserDiagnosticReviewStatus::Failed,
-                ParserDiagnosticReviewStatus::Stale,
-                ParserDiagnosticReviewStatus::Skipped,
-            ])
-            ->exists();
-
-        if ($terminalFailure) {
-            $this->markFailed('The AI review item ended without a reviewable result.');
-
-            return;
-        }
-
-        DB::transaction(function () use ($item): void {
-            $lockedItem = HistoricalAiReviewRunItem::query()->lockForUpdate()->findOrFail($item->id);
-
-            if ($lockedItem->status !== HistoricalAiReviewRunItemStatus::Running) {
-                return;
-            }
-
-            $lockedItem->forceFill([
-                'status' => HistoricalAiReviewRunItemStatus::Completed,
-                'completed_at' => now(),
-            ])->save();
-
-            $run = HistoricalAiReviewRun::query()->lockForUpdate()->findOrFail($lockedItem->historical_ai_review_run_id);
-            $run->completed_count++;
-            $this->completeRunIfFinished($run);
-            $run->save();
-        }, attempts: 3);
+        Bus::chain($jobs->all())
+            ->catch(static function (Throwable $throwable) use ($historicalAiReviewRunItemId): void {
+                app(HistoricalAiReviewRunItemFinalizer::class)->fail($historicalAiReviewRunItemId, $throwable);
+            })
+            ->onConnection('database')
+            ->onQueue('ai-parsing')
+            ->dispatch();
     }
 
     public function failed(?Throwable $throwable): void
     {
-        $this->markFailed($throwable?->getMessage() ?? 'Historical AI review item failed.');
+        app(HistoricalAiReviewRunItemFinalizer::class)->fail(
+            $this->historicalAiReviewRunItemId,
+            $throwable ?? 'Historical AI review item failed.',
+        );
     }
 
-    private function markFailed(string $message): void
+    private function startAttempt(HistoricalAiReviewRunItem $item, int $estimatedAttemptCost): ?HistoricalAiReviewRunItem
     {
-        $message = preg_replace('/(?:sk-[A-Za-z0-9_-]+|Bearer\s+\S+)/i', '[redacted]', $message) ?? 'Historical AI review item failed.';
-
-        DB::transaction(function () use ($message): void {
-            $item = HistoricalAiReviewRunItem::query()->lockForUpdate()->find($this->historicalAiReviewRunItemId);
-
-            if ($item === null || in_array($item->status, [HistoricalAiReviewRunItemStatus::Completed, HistoricalAiReviewRunItemStatus::Failed], true)) {
-                return;
-            }
-
-            $item->forceFill([
-                'status' => HistoricalAiReviewRunItemStatus::Failed,
-                'failure_message' => Str::limit($message, 1000, ''),
-                'completed_at' => now(),
-            ])->save();
-
-            $run = HistoricalAiReviewRun::query()->lockForUpdate()->findOrFail($item->historical_ai_review_run_id);
-            $run->failed_count++;
-            $this->completeRunIfFinished($run);
-            $run->save();
-        }, attempts: 3);
-    }
-
-    private function startAttempt(HistoricalAiReviewRunItem $item): ?HistoricalAiReviewRunItem
-    {
-        return DB::transaction(function () use ($item): ?HistoricalAiReviewRunItem {
+        return DB::transaction(function () use ($item, $estimatedAttemptCost): ?HistoricalAiReviewRunItem {
             $lockedItem = HistoricalAiReviewRunItem::query()->lockForUpdate()->findOrFail($item->id);
             $run = HistoricalAiReviewRun::query()->lockForUpdate()->findOrFail($lockedItem->historical_ai_review_run_id);
 
@@ -212,7 +155,7 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
                 return null;
             }
 
-            if ($run->estimated_spent_micros + $run->estimated_item_cost_micros > $run->budget_micros) {
+            if ($run->estimated_spent_micros + $estimatedAttemptCost > $run->budget_micros) {
                 $lockedItem->forceFill([
                     'status' => HistoricalAiReviewRunItemStatus::Failed,
                     'failure_message' => 'The historical run hard budget was exhausted before another provider attempt.',
@@ -231,14 +174,15 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
                 'started_at' => now(),
                 'failure_message' => null,
             ])->save();
-            $run->estimated_spent_micros += $run->estimated_item_cost_micros;
+            $run->estimated_spent_micros += $estimatedAttemptCost;
             $run->save();
 
             return $lockedItem->refresh();
         }, attempts: 3);
     }
 
-    private function hasEligibleWork(HistoricalAiReviewRunItem $item): bool
+    /** @return Collection<int, string> */
+    private function eligibleDiagnosticFingerprints(HistoricalAiReviewRunItem $item): Collection
     {
         return $item->rawScrapePayload->parserErrors()
             ->whereNull('resolution_type')
@@ -252,28 +196,10 @@ class ProcessHistoricalAiReviewRunItemJob implements ShouldBeUnique, ShouldQueue
                         ParserDiagnosticReviewStatus::Skipped,
                     ]));
             })
-            ->exists();
-    }
-
-    private function markCompletedWithoutAttempt(HistoricalAiReviewRunItem $item): void
-    {
-        DB::transaction(function () use ($item): void {
-            $lockedItem = HistoricalAiReviewRunItem::query()->lockForUpdate()->findOrFail($item->id);
-            $run = HistoricalAiReviewRun::query()->lockForUpdate()->findOrFail($lockedItem->historical_ai_review_run_id);
-
-            if ($run->status !== HistoricalAiReviewRunStatus::Running
-                || in_array($lockedItem->status, [HistoricalAiReviewRunItemStatus::Completed, HistoricalAiReviewRunItemStatus::Failed], true)) {
-                return;
-            }
-
-            $lockedItem->forceFill([
-                'status' => HistoricalAiReviewRunItemStatus::Completed,
-                'completed_at' => now(),
-            ])->save();
-            $run->completed_count++;
-            $this->completeRunIfFinished($run);
-            $run->save();
-        }, attempts: 3);
+            ->orderBy('id')
+            ->pluck('diagnostic_fingerprint')
+            ->unique()
+            ->values();
     }
 
     private function completeRunIfFinished(HistoricalAiReviewRun $run): void
