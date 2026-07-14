@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\DTOs\ParsedReportValidationData;
 use App\DTOs\RawPayloadData;
+use App\Services\Parsing\Rules\FractionalTripConflictRule;
 use App\Services\Parsing\SourceSpecificFishCountParser;
 use Carbon\CarbonImmutable;
 use Tests\TestCase;
@@ -85,6 +87,52 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(8, $report->speciesCounts[0]->count);
         $this->assertSame('Yellowtail', $report->speciesCounts[1]->speciesName);
         $this->assertSame(74, $report->speciesCounts[1]->count);
+    }
+
+    public function test_fishermans_landing_parser_preserves_three_quarter_day_trip_type(): void
+    {
+        $paragraph = 'The Sea Watch local 3/4 Day trip finished with 12 Yellowtail, 85 Barracuda and 25 Calico Bass for 28 anglers.';
+        $payload = new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: "<p>{$paragraph}</p>",
+        );
+        $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
+        $report = $parsed->tripReports->first();
+
+        $this->assertCount(1, $parsed->tripReports);
+        $this->assertSame('The Sea Watch local', $report->boatName);
+        $this->assertSame('Fisherman\'s Landing', $report->landingName);
+        $this->assertSame('3/4 Day', $report->tripTypeName);
+        $this->assertSame(28, $report->anglers);
+        $this->assertSame(
+            [
+                ['species' => 'Yellowtail', 'retained' => 12, 'released' => 0],
+                ['species' => 'Barracuda', 'retained' => 85, 'released' => 0],
+                ['species' => 'Calico Bass', 'retained' => 25, 'released' => 0],
+            ],
+            collect($report->speciesCounts)
+                ->map(fn ($count): array => [
+                    'species' => $count->speciesName,
+                    'retained' => $count->count,
+                    'released' => $count->releasedCount,
+                ])
+                ->all(),
+        );
+
+        $diagnostics = app(FractionalTripConflictRule::class)->inspect(new ParsedReportValidationData(
+            payload: $payload,
+            parsed: $parsed,
+            report: $report,
+            reportIndex: 0,
+            parserVersion: $parsed->parserVersion ?? '',
+            format: $parsed->format ?? '',
+            sourceIdentifier: 'paragraph:0',
+            sanitizedParagraph: $paragraph,
+        ));
+
+        $this->assertSame([], $diagnostics);
     }
 
     public function test_landing_source_parser_handles_called_in_narrative_without_trip_duration_noise(): void
