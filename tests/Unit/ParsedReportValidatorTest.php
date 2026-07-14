@@ -158,6 +158,68 @@ class ParsedReportValidatorTest extends TestCase
         $this->assertSame([], $rule->inspect($this->data($clean, $paragraph)));
     }
 
+    public function test_numeric_and_source_span_rules_accept_parenthetical_released_counts(): void
+    {
+        $report = $this->report(
+            anglers: 53,
+            species: 'Calico Bass',
+            retained: 8,
+            released: 60,
+            rawText: '8 Calico Bass, 60 Calico Bass Released',
+        );
+        $paragraph = 'The Dolphin AM trip had 8 Calico Bass (60 released) for 53 anglers.';
+        $data = $this->data($report, $paragraph);
+
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($data));
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($data));
+
+        $commaParagraph = 'The Dolphin PM trip had 8 Calico Bass, (60 released) for 53 anglers.';
+        $commaData = $this->data($report, $commaParagraph);
+
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($commaData));
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($commaData));
+    }
+
+    public function test_numeric_and_source_span_rules_accept_a_follow_up_release_sentence(): void
+    {
+        $report = $this->report(
+            anglers: 38,
+            species: 'Calico Bass',
+            retained: 26,
+            released: 100,
+            rawText: '26 Calico Bass, 100 Calico Bass Released',
+        );
+        $data = $this->data($report, 'The Sea Watch caught 26 Calico Bass. 100 were released for 38 anglers.');
+
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($data));
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($data));
+    }
+
+    public function test_numeric_and_source_span_rules_accept_normalized_typos_and_limits_notation(): void
+    {
+        $typoReport = $this->report(
+            anglers: 35,
+            species: 'Calico Bass',
+            retained: 20,
+            released: 50,
+            rawText: '20 Calico Bass, 50 Calico Bass Released',
+        );
+        $typoData = $this->data($typoReport, 'The Dolphin PM trip had 20 Cakico Bass (50 released) for 35 anglers.');
+        $limitsReport = $this->report(
+            tripType: '3 Day',
+            anglers: 16,
+            species: 'Bluefin Tuna',
+            retained: 96,
+            rawText: '96 Bluefin Tuna',
+        );
+        $limitsData = $this->data($limitsReport, 'The Pegasus returned with LIMITS (96) of Bluefin Tuna (up to 160 lbs.) for 16 anglers on a 3 day trip.');
+
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($typoData));
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($typoData));
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($limitsData));
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($limitsData));
+    }
+
     private function data(
         ?ParsedTripReportData $report,
         string $paragraph,

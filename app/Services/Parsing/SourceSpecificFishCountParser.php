@@ -294,7 +294,7 @@ class SourceSpecificFishCountParser
     /** @return Collection<int, ParsedTripReportData> */
     private function parseSeaforthListItems(RawPayloadData $payload, string $parserVersion): Collection
     {
-        preg_match_all('/<li\b[^>]*>(?<item>.*?)<\/li>/is', $payload->body, $matches);
+        preg_match_all('/<li\b[^>]*>(?<item>.*?)(?:<\/li>|(?=<li\b|<\/ul>|\z))/is', $payload->body, $matches);
 
         return collect($matches['item'] ?? [])
             ->flatMap(function (string $itemHtml) use ($payload, $parserVersion): Collection {
@@ -361,13 +361,13 @@ class SourceSpecificFishCountParser
         $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half\s+Day|Full\s+Day\s+Coronado\s+Islands|Full\s+Day|Overnight|Twilight';
         $returnPhrase = '(?:also\s+)?(?:returned|ended)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
         $statusPhrase = '(?:(?:just\s+)?checked\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
-        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:local\s+|reverse\s+)?';
-        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned)(?:\s+from\s+their)?\s+)?';
+        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+a\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
+        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned)(?:\s+from\s+their)?\s+)?';
 
         return '/(?:^|(?<=[.!?])\s+)The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\'s)?\s+(?:'
             .$statusPhrase.'(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
             .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
-            .')(?:with|wth)\b/i';
+            .')(?:with|wth|caught)\b/i';
     }
 
     private function normalizeSeaforthTripType(string $tripType, ?string $period): string
@@ -389,7 +389,7 @@ class SourceSpecificFishCountParser
 
     private function firstNarrativeSentence(string $text): string
     {
-        $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z])/', $text, 2);
+        $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z]|\d+\s+of\s+the\b)/', $text, 2);
 
         return $sentences[0] ?? $text;
     }

@@ -15,12 +15,15 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             return [];
         }
 
+        $remaining = $this->sourceText($data);
         $remaining = preg_replace([
             '/\b\d{4}-\d{2}-\d{2}\b/',
+            '/\([^)]*(?:lbs?|pounds?)\b[^)]*\)/i',
             '/\b\d+(?:\.\d+|\/\d+)?\s*(?:day|hour)s?\b/i',
+            '/\bday\s+\d+\b/i',
             '/\b\d+(?:\.\d+)?\s*(?:lb|lbs|pound|pounds|oz)\b/i',
             '/\b\d+(?:\s+(?:anglers?|people|passengers?|boats?|trips?)|[\s-]+packs?)\b/i',
-        ], ' ', $data->sanitizedParagraph) ?? $data->sanitizedParagraph;
+        ], ' ', $remaining) ?? $remaining;
 
         foreach ([$data->report->boatName, $data->report->landingName, $data->report->tripTypeName] as $value) {
             if (is_string($value) && $value !== '') {
@@ -38,6 +41,26 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
         }
 
         foreach ($data->report->speciesCounts as $speciesCount) {
+            $remaining = preg_replace(
+                '/\b\d+\s+'.preg_quote($speciesCount->speciesName, '/').'\.\s*\d+\s+were\s+released\b/iu',
+                ' ',
+                $remaining,
+            ) ?? $remaining;
+            $remaining = preg_replace(
+                '/\blimits\s*\(\s*'.preg_quote((string) $speciesCount->count, '/').'\s*\)\s+of\s+'.preg_quote($speciesCount->speciesName, '/').'\b/iu',
+                ' ',
+                $remaining,
+            ) ?? $remaining;
+            $remaining = preg_replace(
+                '/\b\d+\s+'.preg_quote($speciesCount->speciesName, '/').'\s*,?\s*\(\s*\d+\s+released\s*\)/iu',
+                ' ',
+                $remaining,
+            ) ?? $remaining;
+            $remaining = preg_replace(
+                '/\b\d+\s+'.preg_quote($speciesCount->speciesName, '/').'\s*\(\s*released\s*\)/iu',
+                ' ',
+                $remaining,
+            ) ?? $remaining;
             $remaining = preg_replace(
                 '/\b\d+\s+'.preg_quote($speciesCount->speciesName, '/').'(?:\s+Released)?\b/iu',
                 ' ',
@@ -63,5 +86,14 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             message: 'Source paragraph contains numeric tokens not represented by extracted fields.',
             evidence: ['unaccounted_tokens' => $tokens],
         )];
+    }
+
+    private function sourceText(ParsedReportValidationData $data): string
+    {
+        $sourceText = $data->format === 'narrative-list-item' && $data->report?->rawFishCountText !== null
+            ? $data->report->rawFishCountText
+            : $data->sanitizedParagraph;
+
+        return preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
     }
 }

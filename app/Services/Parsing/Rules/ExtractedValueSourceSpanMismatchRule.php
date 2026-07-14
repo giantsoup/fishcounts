@@ -15,9 +15,10 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
             return [];
         }
 
+        $sourceText = $this->sourceText($data);
         $findings = [];
 
-        if ($data->report->anglers !== null && preg_match_all('/(?<count>\d+)\s+(?:anglers?|people|passengers?)\b/i', $data->sanitizedParagraph, $matches)) {
+        if ($data->report->anglers !== null && preg_match_all('/(?<count>\d+)\s+(?:anglers?|people|passengers?)\b/i', $sourceText, $matches)) {
             $sourceAnglers = array_map('intval', $matches['count']);
 
             if (! in_array($data->report->anglers, $sourceAnglers, true)) {
@@ -34,10 +35,26 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
         $speciesMismatches = [];
 
         foreach ($data->report->speciesCounts as $speciesCount) {
+            $sentenceReleasedPattern = '/(?<retained>\d+)\s+'.preg_quote($speciesCount->speciesName, '/').'\.\s*(?<released>\d+)\s+were\s+released\b/iu';
+            preg_match_all($sentenceReleasedPattern, $sourceText, $sentenceReleasedMatches, PREG_SET_ORDER);
+            $remainingSourceText = preg_replace($sentenceReleasedPattern, ' ', $sourceText) ?? $sourceText;
+            $limitsPattern = '/\blimits\s*\(\s*(?<retained>\d+)\s*\)\s+of\s+'.preg_quote($speciesCount->speciesName, '/').'\b/iu';
+            preg_match_all($limitsPattern, $remainingSourceText, $limitsMatches, PREG_SET_ORDER);
+            $remainingSourceText = preg_replace($limitsPattern, ' ', $remainingSourceText) ?? $remainingSourceText;
+            $parentheticalPattern = '/(?<retained>\d+)\s+'.preg_quote($speciesCount->speciesName, '/').'\s*,?\s*\(\s*(?<released>\d+)\s+released\s*\)/iu';
+            preg_match_all($parentheticalPattern, $remainingSourceText, $parentheticalMatches, PREG_SET_ORDER);
+            $remainingSourceText = preg_replace($parentheticalPattern, ' ', $remainingSourceText) ?? $remainingSourceText;
+            $releasedOnlyPattern = '/(?<released>\d+)\s+'.preg_quote($speciesCount->speciesName, '/').'\s*\(\s*released\s*\)/iu';
+            preg_match_all($releasedOnlyPattern, $remainingSourceText, $releasedOnlyMatches, PREG_SET_ORDER);
+            $remainingSourceText = preg_replace($releasedOnlyPattern, ' ', $remainingSourceText) ?? $remainingSourceText;
             $pattern = '/(?<count>\d+)\s+'.preg_quote($speciesCount->speciesName, '/').'(?<released>\s+Released)?\b/iu';
-            preg_match_all($pattern, $data->sanitizedParagraph, $matches, PREG_SET_ORDER);
-            $retained = 0;
-            $released = 0;
+            preg_match_all($pattern, $remainingSourceText, $matches, PREG_SET_ORDER);
+            $retained = array_sum(array_map(fn (array $match): int => (int) $match['retained'], $sentenceReleasedMatches));
+            $retained += array_sum(array_map(fn (array $match): int => (int) $match['retained'], $limitsMatches));
+            $retained += array_sum(array_map(fn (array $match): int => (int) $match['retained'], $parentheticalMatches));
+            $released = array_sum(array_map(fn (array $match): int => (int) $match['released'], $sentenceReleasedMatches));
+            $released += array_sum(array_map(fn (array $match): int => (int) $match['released'], $parentheticalMatches));
+            $released += array_sum(array_map(fn (array $match): int => (int) $match['released'], $releasedOnlyMatches));
 
             foreach ($matches as $match) {
                 if (($match['released'] ?? '') !== '') {
@@ -47,7 +64,7 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
                 }
             }
 
-            if ($matches === [] || $retained !== $speciesCount->count || $released !== $speciesCount->releasedCount) {
+            if (($matches === [] && $sentenceReleasedMatches === [] && $limitsMatches === [] && $parentheticalMatches === [] && $releasedOnlyMatches === []) || $retained !== $speciesCount->count || $released !== $speciesCount->releasedCount) {
                 $speciesMismatches[] = [
                     'species' => $speciesCount->speciesName,
                     'extracted_retained' => $speciesCount->count,
@@ -69,5 +86,14 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
         }
 
         return $findings;
+    }
+
+    private function sourceText(ParsedReportValidationData $data): string
+    {
+        $sourceText = $data->format === 'narrative-list-item' && $data->report?->rawFishCountText !== null
+            ? $data->report->rawFishCountText
+            : $data->sanitizedParagraph;
+
+        return preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
     }
 }

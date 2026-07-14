@@ -311,6 +311,40 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(['Yellowtail', 'Bluefin Tuna'], collect($secondPacificQueen->speciesCounts)->pluck('speciesName')->all());
     }
 
+    public function test_fishermans_landing_parser_handles_recent_production_narrative_variants(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: <<<'HTML'
+                <p>The <strong>Dolphin</strong> PM trip had 29 Rockfish, 20 Cakico Bass (50 released), 27 Sandbass, 9 Sheephead, 5 Sculpin, and 8 Bonito for 35 anglers.</p>
+                <p>The <strong>Islander</strong> called in with 105 Bluefin and 40 Yellowtail for 24 anglers on a three day trip.</p>
+                <p>The <strong>Fortune</strong> called in with 44 Bluefin Tuna (up to 130 lbs.) for 17 anglers on a reverse 1.5 day trip.</p>
+                <p>The <strong>Liberty</strong> just called in with 70 Bluefin Tuna (up to 200lbs) for their 2.5 day for 24 anglers.</p>
+                <p>The <strong>Pegasus</strong> returned this morning with LIMITS (96) of Bluefin Tuna (up to 160 lbs.) 6 Yellowtail, 1 Yellowfin, and 1 Dorado for 16 anglers on a 3 day trip.</p>
+                <p>The <strong>Constitution</strong> is returning this morning with 110 Bluefin Tuna (up to 200 lbs.) 22 Yellowtail, and 2 Dorado for 20 anglers on a 3 day trip.</p>
+                <p>The <strong>Dolphin</strong> 1/2 Day AM caught 41 Rockfish, 40 Calico Bass Released, 26 Calico Bass, 7 Sand Bass, 7 Barracuda, 4 Sheephead, 4 Sculpin, and 1 Yellowtail for 54 anglers.</p>
+                HTML,
+        ));
+
+        $this->assertSame(
+            ['Dolphin', 'Islander', 'Fortune', 'Liberty', 'Pegasus', 'Constitution', 'The Dolphin'],
+            $parsed->tripReports->pluck('boatName')->all(),
+        );
+        $this->assertCount(7, $parsed->tripReports);
+        $this->assertSame('3 Day', $parsed->tripReports->get(1)->tripTypeName);
+        $this->assertSame(['Bluefin', 'Yellowtail'], collect($parsed->tripReports->get(1)->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame('1.5 Day', $parsed->tripReports->get(2)->tripTypeName);
+        $this->assertSame('2.5 Day', $parsed->tripReports->get(3)->tripTypeName);
+        $this->assertSame(96, $parsed->tripReports->get(4)->speciesCounts[0]->count);
+        $this->assertSame('Bluefin Tuna', $parsed->tripReports->get(4)->speciesCounts[0]->speciesName);
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail', 'Dorado'], collect($parsed->tripReports->get(5)->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame('1/2 Day AM', $parsed->tripReports->get(6)->tripTypeName);
+        $this->assertSame('Calico Bass', $parsed->tripReports->first()->speciesCounts[1]->speciesName);
+        $this->assertSame(50, $parsed->tripReports->first()->speciesCounts[1]->releasedCount);
+    }
+
     public function test_landing_source_parser_infers_half_day_trip_type_from_am_pm_trip_narrative(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
@@ -418,6 +452,50 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Polaris Supreme', $polarisSupreme->boatName);
         $this->assertSame('3 Day', $polarisSupreme->tripTypeName);
         $this->assertSame(['Bluefin Tuna', 'Yellowtail'], collect($polarisSupreme->speciesCounts)->pluck('speciesName')->all());
+    }
+
+    public function test_seaforth_parser_handles_recent_production_list_item_variants(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'seaforth_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.seaforthlanding.com/fishcounts.php?date=2026-07-12',
+            body: <<<'HTML'
+                <ul>
+                    <li>The <em>Pacific Voyager</em> finished up their 3 Day with 69 Bluefin, 1 Yellowfin and 32 Yellowtail! 28 of the Bluefin were in the 100-160lb class.</li>
+                    <li>The <em>San Diego</em> finished up their Full Day to the Coronado Islands with 52 Yellowtail for their 22 anglers.</li>
+                    <li>The <em>Sea Watch</em> Coronado islands Full Day finished up with 5 Yellowtail, 5 Calico bass, 40 Rockfish and 50 Whitefish for 10 anglers.</li>
+                    <li>The <em>Voyager</em> on a full day charter returned with 6 Yellowtail, 43 Barracuda, 14 Bonito, 35 Calico Bass, 3 Sheephead, 1 Rockfish, 1 Whitefish.</li>
+                    <li>The <em>El Gato Dos</em> on a Full Day Offshore charter caught 12 Dorado and 17 Yellowtail for 6 anglers</li>
+                    <li>The <em>Sea Watch</em> Twilight trip finished with 3 Yellowtail, 26 Calico Bass (100 released), 136 Barracuda, 21 Bonito, 10 Rockfish for 38 anglers.
+                </ul>
+                HTML,
+        ));
+
+        $this->assertSame(
+            ['Pacific Voyager', 'San Diego', 'Sea Watch', 'Voyager', 'El Gato Dos', 'Sea Watch'],
+            $parsed->tripReports->pluck('boatName')->all(),
+        );
+        $this->assertCount(6, $parsed->tripReports);
+        $this->assertSame(['3 Day', 'Full Day', 'Full Day', 'Full Day', 'Full Day', 'Twilight'], $parsed->tripReports->pluck('tripTypeName')->all());
+        $this->assertSame(['Bluefin', 'Yellowfin', 'Yellowtail'], collect($parsed->tripReports->first()->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame(['Dorado', 'Yellowtail'], collect($parsed->tripReports->get(4)->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame(100, $parsed->tripReports->last()->speciesCounts[1]->releasedCount);
+    }
+
+    public function test_seaforth_parser_recovers_an_unclosed_final_list_item_at_end_of_document(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'seaforth_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.seaforthlanding.com/fishcounts.php?date=2026-07-12',
+            body: '<ul><li>The <em>Sea Watch</em> Twilight trip finished with 26 Calico Bass. 100 were released.',
+        ));
+
+        $this->assertCount(1, $parsed->tripReports);
+        $this->assertSame('Sea Watch', $parsed->tripReports->first()->boatName);
+        $this->assertSame(26, $parsed->tripReports->first()->speciesCounts[0]->count);
+        $this->assertSame(100, $parsed->tripReports->first()->speciesCounts[0]->releasedCount);
     }
 
     public function test_seaforth_source_parser_handles_returned_full_day_six_pack_report(): void

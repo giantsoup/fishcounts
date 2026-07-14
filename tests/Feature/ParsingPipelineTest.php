@@ -57,6 +57,28 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame(6, $whiteSeaBass->releasedCount);
     }
 
+    public function test_parser_attributes_a_parenthetical_released_count_after_a_comma(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin PM trip caught 39 Calico Bass, (100 Released), 57 Bonito for 46 anglers.',
+        );
+
+        $this->assertSame(['Calico Bass', 'Bonito'], $counts->pluck('speciesName')->all());
+        $this->assertSame(39, $counts->first()->count);
+        $this->assertSame(100, $counts->first()->releasedCount);
+    }
+
+    public function test_parser_attributes_a_released_count_from_a_follow_up_sentence(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Sea Watch caught 26 Calico Bass. 100 were released.',
+        );
+
+        $this->assertSame(['Calico Bass'], $counts->pluck('speciesName')->all());
+        $this->assertSame(26, $counts->first()->count);
+        $this->assertSame(100, $counts->first()->releasedCount);
+    }
+
     public function test_parser_removes_trip_context_after_a_species_count(): void
     {
         $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
@@ -116,6 +138,26 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame(['Bluefin Tuna'], $twoAndHalfDay->pluck('speciesName')->all());
         $this->assertSame(25, $twoAndHalfDay->first()->count);
         $this->assertSame(['Bluefin Tuna'], $threeAndHalfDay->pluck('speciesName')->all());
+    }
+
+    public function test_parser_removes_duration_before_a_trailing_angler_count(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Liberty just called in with 70 Bluefin Tuna (up to 200lbs) for their 2.5 day for 24 anglers.',
+        );
+
+        $this->assertSame(['Bluefin Tuna'], $counts->pluck('speciesName')->all());
+        $this->assertSame(70, $counts->first()->count);
+    }
+
+    public function test_parser_removes_day_progress_context_after_a_species_count(): void
+    {
+        $counts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Constitution just called in with 30 Bluefin Tuna (up to 60 lbs.) for Day 1 of a 3 day trip, with 20 anglers.',
+        );
+
+        $this->assertSame(['Bluefin Tuna'], $counts->pluck('speciesName')->all());
+        $this->assertSame(30, $counts->first()->count);
     }
 
     public function test_reparse_replaces_stale_errors_and_persists_confirmed_counts_and_trip_types(): void

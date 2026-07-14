@@ -33,6 +33,8 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Polaris Supreme finished their',
         'Polaris Supreme returned this morning from their',
         'San Diego wrapped up today',
+        'Sea Watch Coronado islands',
+        'The Constitution is returning this morning with 110 Bluefin Tuna (up to 200 lbs.) 22 Yellowtail, and 2 Dorado for',
         'The Dolphin (AM) caught 51 Calico Bass (released 100), 26 Bonito, 32 Rockfish, 6 Sheephead, and 5 Sandbass for',
         'The Dolphin (AM) trip caught 32 Calico Bass and 50 Released, 6 Sandbass, 30 Rockfish, 5 Sheephead and 1 White Seabass for',
         'The Dolphin (PM) trip caught 37 Rockfish, 2 Sculpin, 6 Sheephead, 4 Sandbass, 2 Calico (Kelp) Bass, and 1 Halibut for',
@@ -44,12 +46,15 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Tomahawk just',
         'Tribute finished up their reverse',
         'Tribute returned this afternoon from a reverse',
+        'Voyager on a',
         'Voyager returned this evening from a',
         'Voyager returned today from a',
         'Wednesday San Diego',
     ];
 
     private const CORRECTED_RAW_VALUES = [
+        '2 Day Am',
+        '2 Day Pm',
         '3/4 Day Local',
         '4 Day',
         '6 Hour',
@@ -57,6 +62,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Baracuda',
         'Baracuda On Their Fullday Trip',
         'Bleufin Tuna',
+        'Bluefin Tuna For Day',
         'Bluefin Amd',
         'Bluefin For Their',
         'Bluefin Tuna Along',
@@ -65,6 +71,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Bonito On Their Full Day Trip With',
         'Bontio',
         'C Alico Bass',
+        'Cakico Bass',
         'Cabazon',
         'Day Private Charter',
         'Day Today With',
@@ -82,6 +89,8 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Ling Cod',
         'Lingcod Ona Full Day Trip',
         'Lings',
+        'Of A',
+        'Of The Bluefin Were In The Class',
         'Of Their',
         'Oz Sinker And Live Bait',
         'Pounds',
@@ -92,6 +101,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Sculpin For Their',
         'Vermilliion Reds',
         'Yellowtail For Their',
+        'Yellowtail On A Three Day Trip',
         'Yelowtail',
     ];
 

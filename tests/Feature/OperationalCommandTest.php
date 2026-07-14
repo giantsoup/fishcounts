@@ -123,6 +123,8 @@ class OperationalCommandTest extends TestCase
         $correctedBoatPayload = $this->payload('2026-01-07');
         $compactFullDayPayload = $this->payload('2026-01-08');
         $resolvedPayload = $this->payload('2026-01-09');
+        $recentCorrectionPayload = $this->payload('2026-01-10');
+        $tripTypeCorrectionPayload = $this->payload('2026-01-11');
 
         ParserError::query()->create([
             'raw_scrape_payload_id' => $correctedPayload->id,
@@ -152,6 +154,33 @@ class OperationalCommandTest extends TestCase
             'message' => 'Unknown trip_type alias [5 Day].',
         ]);
         ParserError::query()->create([
+            'raw_scrape_payload_id' => $recentCorrectionPayload->id,
+            'scrape_source_id' => $recentCorrectionPayload->scrape_source_id,
+            'target_date' => $recentCorrectionPayload->target_date,
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Cakico Bass',
+            'message' => 'Unknown species alias [Cakico Bass].',
+        ]);
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $recentCorrectionPayload->id,
+            'scrape_source_id' => $recentCorrectionPayload->scrape_source_id,
+            'target_date' => $recentCorrectionPayload->target_date,
+            'error_type' => 'unknown_trip_type_alias',
+            'raw_field' => 'trip_type',
+            'raw_value' => '2 Day Pm',
+            'message' => 'Unknown trip_type alias [2 Day Pm].',
+        ]);
+        ParserError::query()->create([
+            'raw_scrape_payload_id' => $tripTypeCorrectionPayload->id,
+            'scrape_source_id' => $tripTypeCorrectionPayload->scrape_source_id,
+            'target_date' => $tripTypeCorrectionPayload->target_date,
+            'error_type' => 'unknown_trip_type_alias',
+            'raw_field' => 'trip_type',
+            'raw_value' => '2 Day Am',
+            'message' => 'Unknown trip_type alias [2 Day Am].',
+        ]);
+        ParserError::query()->create([
             'raw_scrape_payload_id' => $resolvedPayload->id,
             'scrape_source_id' => $resolvedPayload->scrape_source_id,
             'target_date' => $resolvedPayload->target_date,
@@ -165,7 +194,7 @@ class OperationalCommandTest extends TestCase
             'source_id' => $correctedBoatPayload->scrape_source_id,
             'raw_scrape_payload_id' => $correctedBoatPayload->id,
             'trip_date' => $correctedBoatPayload->target_date,
-            'raw_boat_name' => 'Lucky B caught 10 Yellowtail for',
+            'raw_boat_name' => 'Voyager on a',
             'dedupe_key' => 'known-malformed-boat-name',
         ]);
 
@@ -174,8 +203,11 @@ class OperationalCommandTest extends TestCase
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedPayload->id);
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $correctedBoatPayload->id);
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $compactFullDayPayload->id);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $recentCorrectionPayload->id);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $tripTypeCorrectionPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $ambiguousPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $resolvedPayload->id);
+        Queue::assertPushedTimes(ParseRawPayloadJob::class, 5);
     }
 
     public function test_score_backfill_command_queues_score_jobs_for_range(): void
