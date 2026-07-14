@@ -28,6 +28,15 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             }
         }
 
+        if ($data->format === 'structured-table' && $data->report->anglers !== null) {
+            $remaining = preg_replace(
+                '/\|\s*'.preg_quote((string) $data->report->anglers, '/').'\s*\|/u',
+                '| |',
+                $remaining,
+                1,
+            ) ?? $remaining;
+        }
+
         foreach ($data->report->speciesCounts as $speciesCount) {
             $remaining = preg_replace(
                 '/\b\d+\s+'.preg_quote($speciesCount->speciesName, '/').'(?:\s+Released)?\b/iu',

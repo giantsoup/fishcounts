@@ -84,10 +84,18 @@ class ParsedReportValidatorTest extends TestCase
         $unaccounted = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 anglers | 4 Rockfish | code 99'));
         $validFraction = $rule->inspect($this->data($this->report(tripType: '3/4 Day'), 'Dolphin | 3/4 Day | 20 anglers | 4 Rockfish'));
         $validDecimal = $rule->inspect($this->data($this->report(tripType: '1.5 Day'), 'Dolphin | 1.5 Day | 20 anglers | 4 Rockfish at 12 lbs'));
+        $validStructuredRow = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish |', format: 'structured-table'));
+        $unparsedStructuredCount = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish, 20 Dorado |', format: 'structured-table'));
+        $duplicateStructuredToken = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish | 20 |', format: 'structured-table'));
+        $narrativeBareToken = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 anglers | 4 Rockfish | 20 |'));
 
         $this->assertSame(['99'], $unaccounted[0]->evidence['unaccounted_tokens']);
         $this->assertSame([], $validFraction);
         $this->assertSame([], $validDecimal);
+        $this->assertSame([], $validStructuredRow);
+        $this->assertSame(['20'], $unparsedStructuredCount[0]->evidence['unaccounted_tokens']);
+        $this->assertSame(['20'], $duplicateStructuredToken[0]->evidence['unaccounted_tokens']);
+        $this->assertSame(['20'], $narrativeBareToken[0]->evidence['unaccounted_tokens']);
     }
 
     public function test_low_result_rule_requires_source_specific_missing_report_evidence(): void
@@ -151,6 +159,7 @@ class ParsedReportValidatorTest extends TestCase
         string $paragraph,
         ?ParsedFishCountCollection $parsed = null,
         string $sourceKey = 'fishermans_landing',
+        string $format = 'narrative',
     ): ParsedReportValidationData {
         $payload = new RawPayloadData(
             sourceKey: $sourceKey,
@@ -158,7 +167,7 @@ class ParsedReportValidatorTest extends TestCase
             url: 'https://www.fishermanslanding.com/fishcounts.php?token=secret',
             body: "<p>{$paragraph}</p>",
         );
-        $parsed ??= new ParsedFishCountCollection(collect(array_filter([$report])), 'source-v2', 'narrative');
+        $parsed ??= new ParsedFishCountCollection(collect(array_filter([$report])), 'source-v2', $format);
 
         return new ParsedReportValidationData(
             payload: $payload,
@@ -166,7 +175,7 @@ class ParsedReportValidatorTest extends TestCase
             report: $report,
             reportIndex: $report === null ? null : 0,
             parserVersion: 'source-v2',
-            format: 'narrative',
+            format: $format,
             sourceIdentifier: null,
             sanitizedParagraph: $paragraph,
         );

@@ -7,6 +7,7 @@ use App\DTOs\RawPayloadData;
 use App\Services\Parsing\DiagnosticContextFactory;
 use App\Services\Parsing\Rules\ExtractedValueSourceSpanMismatchRule;
 use App\Services\Parsing\Rules\FractionalTripConflictRule;
+use App\Services\Parsing\Rules\UnaccountedNumericTokensRule;
 use App\Services\Parsing\SourceSpecificFishCountParser;
 use Carbon\CarbonImmutable;
 use Tests\TestCase;
@@ -115,7 +116,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(0, $nautilus->speciesCounts[0]->releasedCount);
 
         $paragraph = app(DiagnosticContextFactory::class)->paragraphForReport($payload, $nautilus);
-        $diagnostics = app(ExtractedValueSourceSpanMismatchRule::class)->inspect(new ParsedReportValidationData(
+        $validationData = new ParsedReportValidationData(
             payload: $payload,
             parsed: $parsed,
             report: $nautilus,
@@ -124,10 +125,11 @@ class SourceAdapterFixtureTest extends TestCase
             format: $parsed->format ?? '',
             sourceIdentifier: null,
             sanitizedParagraph: $paragraph,
-        ));
+        );
 
         $this->assertSame('Nautilus | 1.5 Day | 5 | 1 Bluefin Tuna |', $paragraph);
-        $this->assertSame([], $diagnostics);
+        $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($validationData));
+        $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($validationData));
     }
 
     public function test_landing_source_parser_handles_narrative_report_fixture(): void
