@@ -116,17 +116,73 @@ class ParserBugReportAdminTest extends TestCase
         $this->assertNotNull($report->occurrences()->sole()->invalidated_at);
     }
 
-    public function test_stale_or_tampered_preview_cannot_be_approved(): void
+    public function test_stale_approved_preview_is_refreshed_before_reapproval(): void
     {
+        Queue::fake();
         [$parserError, $review] = $this->review();
         $report = $this->reportForReview($review);
-        $report->update(['body' => $report->body.' stale']);
+        $currentBody = $report->body;
+        $previousApprover = User::factory()->admin()->create();
+        $nextApprover = User::factory()->admin()->create();
+        $report->forceFill([
+            'status' => 'pending',
+            'body' => 'Legacy parser-bug issue template.',
+            'approved_at' => now()->subMinute(),
+            'approved_by_user_id' => $previousApprover->id,
+            'approved_by_name' => $previousApprover->name,
+            'approved_by_email' => $previousApprover->email,
+            'failure_message' => 'Previous failure.',
+        ])->save();
 
-        $this->actingAs(User::factory()->admin()->create())
+        $this->actingAs($nextApprover)
             ->post(route('admin.parser-bug-reports.approve', $report))
             ->assertSessionHasErrors('review');
 
-        $this->assertNull($report->refresh()->approved_at);
+        $report->refresh();
+        $this->assertSame('preview', $report->status->value);
+        $this->assertSame($currentBody, $report->body);
+        $this->assertNull($report->approved_at);
+        $this->assertNull($report->approved_by_user_id);
+        $this->assertNull($report->approved_by_name);
+        $this->assertNull($report->approved_by_email);
+        $this->assertNull($report->failure_message);
+        Queue::assertNothingPushed();
+
+        $this->actingAs($nextApprover)
+            ->post(route('admin.parser-bug-reports.approve', $report))
+            ->assertSessionHasNoErrors();
+
+        $report->refresh();
+        $this->assertSame('pending', $report->status->value);
+        $this->assertSame($nextApprover->id, $report->approved_by_user_id);
+        Queue::assertPushed(CreateParserBugIssueJob::class, 1);
+    }
+
+    public function test_stale_automatic_report_refreshes_and_queues_in_one_action(): void
+    {
+        Queue::fake();
+        [$parserError, $review] = $this->review();
+        $report = $this->reportForReview($review);
+        $currentBody = $report->body;
+        $admin = User::factory()->admin()->create();
+        $report->forceFill([
+            'status' => 'failed',
+            'requires_approval' => false,
+            'body' => 'Legacy parser-bug issue template.',
+            'failure_message' => 'Previous failure.',
+        ])->save();
+
+        $this->actingAs($admin)
+            ->post(route('admin.parser-bug-reports.approve', $report))
+            ->assertSessionHasNoErrors();
+
+        $report->refresh();
+        $this->assertSame('pending', $report->status->value);
+        $this->assertSame($currentBody, $report->body);
+        $this->assertFalse($report->requires_approval);
+        $this->assertSame($admin->id, $report->approved_by_user_id);
+        $this->assertNull($report->failure_message);
+        Queue::assertPushed(CreateParserBugIssueJob::class, 1);
     }
 
     public function test_retry_invalidates_the_previous_attempt_preview_and_clears_its_current_link(): void

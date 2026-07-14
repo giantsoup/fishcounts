@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Actions\Parsing\RefreshParserBugReportSnapshot;
 use App\Contracts\IssueTracking\IssueTracker;
 use App\DTOs\ParserBugIssueCandidateData;
 use App\DTOs\ParserBugIssueData;
@@ -63,8 +64,11 @@ class CreateParserBugIssueJob implements ShouldBeUnique, ShouldQueue
         return now()->addMinutes((int) config('fish.github_issues.retry_window_minutes'));
     }
 
-    public function handle(ParserBugIssueCandidateFactory $candidateFactory, IssueTracker $issueTracker): void
-    {
+    public function handle(
+        ParserBugIssueCandidateFactory $candidateFactory,
+        IssueTracker $issueTracker,
+        RefreshParserBugReportSnapshot $refreshSnapshot,
+    ): void {
         if (! config('fish.github_issues.enabled')) {
             return;
         }
@@ -82,7 +86,7 @@ class CreateParserBugIssueJob implements ShouldBeUnique, ShouldQueue
 
         $report = Cache::store('database')->lock('parser-bug-preview-allocation', 30)->block(
             5,
-            fn (): ParserBugReport => $this->storeCandidate($review, $candidate),
+            fn (): ParserBugReport => $this->storeCandidate($review, $candidate, $refreshSnapshot),
         );
 
         Cache::store('database')->lock('parser-bug-report-'.$candidate->signature, 180)->block(
@@ -152,9 +156,12 @@ class CreateParserBugIssueJob implements ShouldBeUnique, ShouldQueue
         }
     }
 
-    private function storeCandidate(ParserDiagnosticReview $review, ParserBugIssueCandidateData $candidate): ParserBugReport
-    {
-        return DB::transaction(function () use ($review, $candidate): ParserBugReport {
+    private function storeCandidate(
+        ParserDiagnosticReview $review,
+        ParserBugIssueCandidateData $candidate,
+        RefreshParserBugReportSnapshot $refreshSnapshot,
+    ): ParserBugReport {
+        return DB::transaction(function () use ($review, $candidate, $refreshSnapshot): ParserBugReport {
             $lockedReview = ParserDiagnosticReview::query()->lockForUpdate()->findOrFail($review->id);
             $report = ParserBugReport::query()
                 ->where('signature', $candidate->signature)
@@ -213,6 +220,8 @@ class CreateParserBugIssueJob implements ShouldBeUnique, ShouldQueue
                     'failure_message' => null,
                 ])->save();
             }
+
+            $refreshSnapshot->handle($report, $lockedReview, $candidate);
 
             if ($lockedReview->parser_bug_report_id !== $report->id) {
                 $lockedReview->forceFill(['parser_bug_report_id' => $report->id])->save();

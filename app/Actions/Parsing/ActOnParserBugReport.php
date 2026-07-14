@@ -14,7 +14,10 @@ use Illuminate\Validation\ValidationException;
 
 final class ActOnParserBugReport
 {
-    public function __construct(private readonly ParserBugIssueCandidateFactory $candidateFactory) {}
+    public function __construct(
+        private readonly ParserBugIssueCandidateFactory $candidateFactory,
+        private readonly RefreshParserBugReportSnapshot $refreshSnapshot,
+    ) {}
 
     public function prepare(ParserError $parserError, ParserDiagnosticReview $review): void
     {
@@ -27,14 +30,16 @@ final class ActOnParserBugReport
 
     public function approve(ParserBugReport $parserBugReport, User $actor): bool
     {
-        return DB::transaction(function () use ($parserBugReport, $actor): bool {
+        $approved = DB::transaction(function () use ($parserBugReport, $actor): ?bool {
             $report = ParserBugReport::query()->lockForUpdate()->findOrFail($parserBugReport->id);
 
             if ($report->issue_number !== null) {
                 return false;
             }
 
-            $this->validateCurrentPreview($report);
+            if ($this->validateCurrentPreview($report) && $report->requires_approval) {
+                return null;
+            }
 
             $report->forceFill([
                 'status' => ParserBugReportStatus::Pending,
@@ -52,9 +57,17 @@ final class ActOnParserBugReport
 
             return true;
         }, attempts: 3);
+
+        if ($approved === null) {
+            throw ValidationException::withMessages([
+                'review' => 'This parser-bug preview was refreshed to the current issue template. Review it before approving again.',
+            ]);
+        }
+
+        return $approved;
     }
 
-    private function validateCurrentPreview(ParserBugReport $report): void
+    private function validateCurrentPreview(ParserBugReport $report): bool
     {
         $review = ParserDiagnosticReview::query()->lockForUpdate()->find($report->parser_diagnostic_review_id);
 
@@ -71,11 +84,17 @@ final class ActOnParserBugReport
         }
 
         $candidate = $this->candidateFactory->make($review);
+        if ($this->refreshSnapshot->handle($report, $review, $candidate)) {
+            return true;
+        }
+
         if ($candidate->signature !== $report->signature
             || $candidate->title !== $report->title
             || ! hash_equals($candidate->body, $report->body)
             || $candidate->labels !== $report->labels) {
             throw ValidationException::withMessages(['review' => 'This parser-bug preview no longer matches the current validated review.']);
         }
+
+        return false;
     }
 }

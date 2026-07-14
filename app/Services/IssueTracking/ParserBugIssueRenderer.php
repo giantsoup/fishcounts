@@ -45,9 +45,11 @@ final class ParserBugIssueRenderer
         $evidence = $this->json($context['evidence'] ?? []);
         $field = $this->safeText($parserError->raw_field ?? 'report');
         $diagnosticType = $this->safeText($parserError->error_type);
+        $repository = Str::of((string) config('fish.github_issues.repository'))->trim('/')->toString();
 
         $body = view('github.parser-bug-issue', [
             'signature' => $signature,
+            'repository' => $repository,
             'sourceSlug' => $sourceSlug,
             'sourceUrl' => $sourceUrl,
             'parserVersion' => $parserVersion,

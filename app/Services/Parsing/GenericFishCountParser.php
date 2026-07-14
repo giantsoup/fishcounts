@@ -167,7 +167,7 @@ class GenericFishCountParser
             return '1/2 Day '.Str::upper($matches['period']);
         }
 
-        if (preg_match('/\b(?<trip>\d+(?:\.\d+)?\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight|Twiligiht|Twlight)\b/i', $line, $matches)) {
+        if (preg_match('/\b(?<trip>(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight|Twiligiht|Twlight)\b/i', $line, $matches)) {
             return $this->normalizeTripType($matches['trip']);
         }
 
