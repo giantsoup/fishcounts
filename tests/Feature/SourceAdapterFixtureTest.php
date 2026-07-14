@@ -420,6 +420,33 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(['Bluefin Tuna', 'Yellowtail'], collect($polarisSupreme->speciesCounts)->pluck('speciesName')->all());
     }
 
+    public function test_seaforth_source_parser_handles_returned_full_day_six_pack_report(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'seaforth_landing',
+            targetDate: CarbonImmutable::parse('2026-07-13'),
+            url: 'https://www.seaforthlanding.com/fishcounts.php?date=2026-07-13',
+            body: <<<'HTML'
+                <ul>
+                    <li>The <em>El Gato Dos</em> returned on a full day 6 pack charter with 5 anglers and they reported 10 Dorado, and 4 Yellowtail.</li>
+                    <li>The <em>Tribute</em> finished up their 1.5 Day with 9 Yellowtail.</li>
+                </ul>
+            HTML,
+        ));
+
+        $report = $parsed->tripReports->first();
+
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('El Gato Dos', $report->boatName);
+        $this->assertSame('Full Day', $report->tripTypeName);
+        $this->assertSame(5, $report->anglers);
+        $this->assertSame(['Dorado', 'Yellowtail'], collect($report->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame([10, 4], collect($report->speciesCounts)->pluck('count')->all());
+        $this->assertSame('narrative-list-item', $report->metadata['format']);
+        $this->assertSame('Tribute', $parsed->tripReports->get(1)->boatName);
+        $this->assertSame(9, $parsed->tripReports->get(1)->speciesCounts[0]->count);
+    }
+
     public function test_seaforth_source_parser_keeps_each_list_item_with_its_own_boat_and_counts(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(

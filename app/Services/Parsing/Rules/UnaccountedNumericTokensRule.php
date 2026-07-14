@@ -19,7 +19,7 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             '/\b\d{4}-\d{2}-\d{2}\b/',
             '/\b\d+(?:\.\d+|\/\d+)?\s*(?:day|hour)s?\b/i',
             '/\b\d+(?:\.\d+)?\s*(?:lb|lbs|pound|pounds|oz)\b/i',
-            '/\b\d+\s+(?:anglers?|people|passengers?|boats?|trips?)\b/i',
+            '/\b\d+(?:\s+(?:anglers?|people|passengers?|boats?|trips?)|[\s-]+packs?)\b/i',
         ], ' ', $data->sanitizedParagraph) ?? $data->sanitizedParagraph;
 
         foreach ([$data->report->boatName, $data->report->landingName, $data->report->tripTypeName] as $value) {

@@ -84,6 +84,8 @@ class ParsedReportValidatorTest extends TestCase
         $unaccounted = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 anglers | 4 Rockfish | code 99'));
         $validFraction = $rule->inspect($this->data($this->report(tripType: '3/4 Day'), 'Dolphin | 3/4 Day | 20 anglers | 4 Rockfish'));
         $validDecimal = $rule->inspect($this->data($this->report(tripType: '1.5 Day'), 'Dolphin | 1.5 Day | 20 anglers | 4 Rockfish at 12 lbs'));
+        $validPackCapacity = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day 6 pack charter | 20 anglers | 4 Rockfish'));
+        $validHyphenatedPackCapacity = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day 6-pack charter | 20 anglers | 4 Rockfish'));
         $validStructuredRow = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish |', format: 'structured-table'));
         $unparsedStructuredCount = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish, 20 Dorado |', format: 'structured-table'));
         $duplicateStructuredToken = $rule->inspect($this->data($this->report(), 'Dolphin | Full Day | 20 | 4 Rockfish | 20 |', format: 'structured-table'));
@@ -92,6 +94,8 @@ class ParsedReportValidatorTest extends TestCase
         $this->assertSame(['99'], $unaccounted[0]->evidence['unaccounted_tokens']);
         $this->assertSame([], $validFraction);
         $this->assertSame([], $validDecimal);
+        $this->assertSame([], $validPackCapacity);
+        $this->assertSame([], $validHyphenatedPackCapacity);
         $this->assertSame([], $validStructuredRow);
         $this->assertSame(['20'], $unparsedStructuredCount[0]->evidence['unaccounted_tokens']);
         $this->assertSame(['20'], $duplicateStructuredToken[0]->evidence['unaccounted_tokens']);

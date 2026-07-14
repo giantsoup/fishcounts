@@ -22,6 +22,7 @@ use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
+use App\Models\TripReport;
 use App\Services\Parsing\DiagnosticContextFactory;
 use App\Services\Parsing\ParsedReportValidator;
 use App\Services\Parsing\TripReportNormalizer;
@@ -187,6 +188,40 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertDatabaseEmpty('parser_errors');
     }
 
+    public function test_seaforth_six_pack_report_is_parsed_without_diagnostics_or_ai_review(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', true);
+        $body = '<ul><li>The <em>El Gato Dos</em> returned on a full day 6 pack charter with 5 anglers and they reported 10 Dorado, and 4 Yellowtail.</li></ul>';
+        $payload = $this->payload(
+            body: $body,
+            sourceSlug: 'seaforth_landing',
+            landingSlug: 'seaforth-sportfishing',
+            boatName: 'El Gato Dos',
+        );
+        Queue::fake();
+
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+        $report = TripReport::query()
+            ->with(['boat', 'speciesCounts.species'])
+            ->where('raw_scrape_payload_id', $payload->id)
+            ->firstOrFail();
+
+        $this->assertSame(1, $result->parsedReportCount);
+        $this->assertSame(0, $result->diagnosticCount);
+        $this->assertSame('El Gato Dos', $report->boat->name);
+        $this->assertSame(5, $report->anglers);
+        $this->assertSame(
+            ['Dorado' => 10, 'Yellowtail' => 4],
+            $report->speciesCounts
+                ->mapWithKeys(fn ($count): array => [$count->species->name => $count->count])
+                ->sortKeys()
+                ->all(),
+        );
+        $this->assertDatabaseEmpty('parser_errors');
+        Queue::assertNotPushed(ReviewParserDiagnosticsJob::class);
+    }
+
     public function test_source_specific_evidence_detects_an_empty_result_without_a_global_threshold(): void
     {
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
@@ -335,14 +370,18 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertNotSame($first->diagnosticFingerprint, $paragraphChanged->diagnosticFingerprint);
     }
 
-    private function payload(string $body): RawScrapePayload
-    {
+    private function payload(
+        string $body,
+        string $sourceSlug = 'fishermans_landing',
+        string $landingSlug = 'fishermans-landing',
+        string $boatName = 'Dolphin',
+    ): RawScrapePayload {
         $this->seed(DatabaseSeeder::class);
-        $source = ScrapeSource::query()->where('slug', 'fishermans_landing')->firstOrFail();
-        $landing = Landing::query()->where('slug', 'fishermans-landing')->firstOrFail();
+        $source = ScrapeSource::query()->where('slug', $sourceSlug)->firstOrFail();
+        $landing = Landing::query()->where('slug', $landingSlug)->firstOrFail();
         Boat::query()->firstOrCreate(
-            ['slug' => 'dolphin'],
-            ['landing_id' => $landing->id, 'name' => 'Dolphin'],
+            ['slug' => Str::slug($boatName)],
+            ['landing_id' => $landing->id, 'name' => $boatName],
         );
         $run = ScrapeRun::query()->create([
             'scrape_source_id' => $source->id,
@@ -354,7 +393,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
             'scrape_run_id' => $run->id,
             'scrape_source_id' => $source->id,
             'target_date' => '2026-07-12',
-            'url' => 'https://www.fishermanslanding.com/fishcounts.php?date=2026-07-12',
+            'url' => "{$source->base_url}/fishcounts.php?date=2026-07-12",
             'payload' => $body,
             'payload_hash' => hash('sha256', $body),
             'fetched_at' => now(),
