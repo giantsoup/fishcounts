@@ -68,6 +68,68 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(25, $report->speciesCounts[0]->releasedCount);
     }
 
+    public function test_hm_landing_diagnostics_do_not_match_partial_numeric_species_counts_to_another_row(): void
+    {
+        $payload = new RawPayloadData(
+            sourceKey: 'hm_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
+            body: <<<'HTML'
+                <table>
+                    <tr><th>Boat</th><th>Trip Type</th><th></th><th>Fish Count</th></tr>
+                    <tr><td>Excalibur</td><td>3 Day</td><td>28</td><td>200 Rockfish, 115 Red Rockfish, 91 Bluefin Tuna, 17 Dorado, 17 Yellowtail, 15 Sheephead, 1 Yellowfin Tuna</td></tr>
+                    <tr><td>Nautilus</td><td>1.5 Day</td><td>5</td><td>1 Bluefin Tuna</td></tr>
+                </table>
+            HTML,
+        );
+        $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
+        $excalibur = $parsed->tripReports->first();
+        $nautilus = $parsed->tripReports->get(1);
+
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('Excalibur', $excalibur->boatName);
+        $this->assertSame(
+            [
+                ['species' => 'Rockfish', 'retained' => 200, 'released' => 0],
+                ['species' => 'Red Rockfish', 'retained' => 115, 'released' => 0],
+                ['species' => 'Bluefin Tuna', 'retained' => 91, 'released' => 0],
+                ['species' => 'Dorado', 'retained' => 17, 'released' => 0],
+                ['species' => 'Yellowtail', 'retained' => 17, 'released' => 0],
+                ['species' => 'Sheephead', 'retained' => 15, 'released' => 0],
+                ['species' => 'Yellowfin Tuna', 'retained' => 1, 'released' => 0],
+            ],
+            collect($excalibur->speciesCounts)
+                ->map(fn ($count): array => [
+                    'species' => $count->speciesName,
+                    'retained' => $count->count,
+                    'released' => $count->releasedCount,
+                ])
+                ->all(),
+        );
+        $this->assertSame('Nautilus', $nautilus->boatName);
+        $this->assertSame('H&M Landing', $nautilus->landingName);
+        $this->assertSame('1.5 Day', $nautilus->tripTypeName);
+        $this->assertSame(5, $nautilus->anglers);
+        $this->assertSame('Bluefin Tuna', $nautilus->speciesCounts[0]->speciesName);
+        $this->assertSame(1, $nautilus->speciesCounts[0]->count);
+        $this->assertSame(0, $nautilus->speciesCounts[0]->releasedCount);
+
+        $paragraph = app(DiagnosticContextFactory::class)->paragraphForReport($payload, $nautilus);
+        $diagnostics = app(ExtractedValueSourceSpanMismatchRule::class)->inspect(new ParsedReportValidationData(
+            payload: $payload,
+            parsed: $parsed,
+            report: $nautilus,
+            reportIndex: 1,
+            parserVersion: $parsed->parserVersion ?? '',
+            format: $parsed->format ?? '',
+            sourceIdentifier: null,
+            sanitizedParagraph: $paragraph,
+        ));
+
+        $this->assertSame('Nautilus | 1.5 Day | 5 | 1 Bluefin Tuna |', $paragraph);
+        $this->assertSame([], $diagnostics);
+    }
+
     public function test_landing_source_parser_handles_narrative_report_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
