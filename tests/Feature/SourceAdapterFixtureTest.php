@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\DTOs\ParsedReportValidationData;
 use App\DTOs\RawPayloadData;
+use App\Services\Parsing\DiagnosticContextFactory;
+use App\Services\Parsing\Rules\ExtractedValueSourceSpanMismatchRule;
 use App\Services\Parsing\Rules\FractionalTripConflictRule;
 use App\Services\Parsing\SourceSpecificFishCountParser;
 use Carbon\CarbonImmutable;
@@ -616,5 +618,66 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Southern Cal', $southernCal->boatName);
         $this->assertSame('Oceanside Sea Center', $southernCal->landingName);
         $this->assertSame(['Dolphin', 'Southern Cal'], $parsed->tripReports->pluck('boatName')->all());
+    }
+
+    public function test_sportfishing_report_party_boat_diagnostics_match_counts_to_the_correct_source_row(): void
+    {
+        $payload = new RawPayloadData(
+            sourceKey: 'sportfishingreport_landing_pages',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.sportfishingreport.com/dock_totals/boats.php?date=2026-07-12',
+            body: <<<'HTML'
+                <div class='panel' style='background-color: #C9E5F5'>
+                    <h2 class='text-center'>San Diego Fish Counts</h2>
+                    <div style='background-color: #FFFFFF; padding: 10px; border-top: 1px solid #dedede;'>
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><a href="/charter_boats/constitution.php"><b>Constitution</b></a><br><a href="/landings/fishermans-landing.php">Fisherman's Landing</a><br>San Diego, CA</div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3">20 Anglers</div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3">3 Day Trip</div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3">&nbsp;</div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5">110 Bluefin Tuna</div>
+                        </div>
+                    </div>
+                    <div style='background-color: #E0F0F9; padding: 10px; border-top: 1px solid #dedede;'>
+                        <div class="row">
+                            <div class="col-xs-12 col-md-4"><a href="/charter_boats/sea-adventure-80.php"><b>Sea Adventure 80</b></a><br><a href="/landings/hm-landing.php">H&amp;M Landing</a><br>San Diego, CA</div>
+                            <div class="col-xs-3 col-xs-offset-1 col-md-2 col-md-offset-0 col-md-push-3">27 Anglers</div>
+                            <div class="col-xs-3 col-md-2 col-md-push-3">2 Day Trip</div>
+                            <div class="col-xs-3 col-md-1 col-md-push-3">&nbsp;</div>
+                            <div class="col-xs-11 col-xs-offset-1 col-md-3 col-md-offset-0 col-md-pull-5">10 Bluefin Tuna</div>
+                        </div>
+                    </div>
+                </div>
+            HTML,
+        );
+        $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
+        $constitution = $parsed->tripReports->first();
+        $seaAdventure = $parsed->tripReports->get(1);
+
+        $this->assertCount(2, $parsed->tripReports);
+        $this->assertSame('Constitution', $constitution->boatName);
+        $this->assertSame(110, $constitution->speciesCounts[0]->count);
+        $this->assertSame('Sea Adventure 80', $seaAdventure->boatName);
+        $this->assertSame('H&M Landing', $seaAdventure->landingName);
+        $this->assertSame('2 Day', $seaAdventure->tripTypeName);
+        $this->assertSame(27, $seaAdventure->anglers);
+        $this->assertSame('Bluefin Tuna', $seaAdventure->speciesCounts[0]->speciesName);
+        $this->assertSame(10, $seaAdventure->speciesCounts[0]->count);
+        $this->assertSame(0, $seaAdventure->speciesCounts[0]->releasedCount);
+
+        $paragraph = app(DiagnosticContextFactory::class)->paragraphForReport($payload, $seaAdventure);
+        $diagnostics = app(ExtractedValueSourceSpanMismatchRule::class)->inspect(new ParsedReportValidationData(
+            payload: $payload,
+            parsed: $parsed,
+            report: $seaAdventure,
+            reportIndex: 28,
+            parserVersion: $parsed->parserVersion ?? '',
+            format: $parsed->format ?? '',
+            sourceIdentifier: null,
+            sanitizedParagraph: $paragraph,
+        ));
+
+        $this->assertSame('10 Bluefin Tuna |', $paragraph);
+        $this->assertSame([], $diagnostics);
     }
 }

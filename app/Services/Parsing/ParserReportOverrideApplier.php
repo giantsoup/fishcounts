@@ -102,7 +102,7 @@ final class ParserReportOverrideApplier
 
         $parserVersion = (string) ($report->metadata['parser'] ?? $parsed->parserVersion ?? 'unknown');
         $format = (string) ($report->metadata['format'] ?? $parsed->format ?? 'unknown');
-        $paragraph = $this->contextFactory->paragraphForReport($rawPayload, $report, $reportIndex);
+        $paragraph = $this->contextFactory->paragraphForReport($rawPayload, $report);
         $data = new ParsedReportValidationData(
             payload: $rawPayload,
             parsed: $parsed,

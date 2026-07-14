@@ -50,7 +50,7 @@ class ParsedReportValidator
                 parserVersion: $parserVersion,
                 format: $format,
                 sourceIdentifier: isset($report->metadata['source_trip_identifier']) ? (string) $report->metadata['source_trip_identifier'] : null,
-                sanitizedParagraph: $this->contextFactory->paragraphForReport($payload, $report, $index),
+                sanitizedParagraph: $this->contextFactory->paragraphForReport($payload, $report),
             );
 
             foreach ($this->enabledRules() as $rule) {
@@ -136,9 +136,9 @@ class ParsedReportValidator
         return $paragraphs
             ->reject(function (string $paragraph) use ($parsed): bool {
                 return $parsed->tripReports->contains(function ($report) use ($paragraph): bool {
-                    $rawCounts = Str::of($report->rawFishCountText ?? '')->squish()->toString();
+                    $rawCounts = $this->contextFactory->sanitizeDiagnosticText($report->rawFishCountText ?? '');
 
-                    return $rawCounts !== '' && Str::contains($paragraph, $rawCounts, true);
+                    return $rawCounts !== '' && $this->contextFactory->containsSourceSpan($paragraph, $rawCounts);
                 });
             })
             ->map(function (string $paragraph, int $index) use ($payload, $parsed, $paragraphs, $evidenceStrategy): ParsedReportValidationData {

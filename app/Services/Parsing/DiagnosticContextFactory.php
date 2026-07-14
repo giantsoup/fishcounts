@@ -14,14 +14,27 @@ class DiagnosticContextFactory
         return $this->sanitizeText($text);
     }
 
-    public function paragraphForReport(RawPayloadData $payload, ParsedTripReportData $report, int $reportIndex = 0): string
+    public function containsSourceSpan(string $paragraph, string $sourceSpan): bool
+    {
+        if ($sourceSpan === '') {
+            return false;
+        }
+
+        $pattern = '/(?<![\p{L}\p{N}])'.preg_quote($sourceSpan, '/').'(?![\p{L}\p{N}])/iu';
+
+        return preg_match($pattern, $paragraph) === 1;
+    }
+
+    public function paragraphForReport(RawPayloadData $payload, ParsedTripReportData $report): string
     {
         $paragraphs = $this->fishCountParagraphs($payload);
         $rawCounts = $this->sanitizeText($report->rawFishCountText ?? '');
         $matchingParagraphs = collect($paragraphs)->filter(
-            fn (string $paragraph): bool => $rawCounts !== '' && Str::contains($paragraph, $rawCounts, true),
+            fn (string $paragraph): bool => $rawCounts !== '' && $this->containsSourceSpan($paragraph, $rawCounts),
         )->values();
-        $matchingParagraph = $matchingParagraphs->get($reportIndex) ?? $matchingParagraphs->first();
+        $matchingParagraph = $matchingParagraphs
+            ->sortByDesc(fn (string $paragraph): int => $this->reportIdentityMatchScore($paragraph, $report))
+            ->first();
 
         if (is_string($matchingParagraph)) {
             return $matchingParagraph;
@@ -86,6 +99,28 @@ class DiagnosticContextFactory
         $maximumLength = max(1, (int) config('fish.parsing.diagnostics.max_paragraph_length', 2000));
 
         return Str::substr($value, 0, $maximumLength);
+    }
+
+    private function reportIdentityMatchScore(string $paragraph, ParsedTripReportData $report): int
+    {
+        $score = 0;
+
+        foreach ([
+            [$report->boatName, 4],
+            [$report->landingName, 2],
+            [$report->tripTypeName, 1],
+        ] as [$identity, $weight]) {
+            if (is_string($identity) && $identity !== '' && $this->containsSourceSpan($paragraph, $identity)) {
+                $score += $weight;
+            }
+        }
+
+        if ($report->anglers !== null) {
+            $anglerPattern = '/(?<!\d)'.preg_quote((string) $report->anglers, '/').'\s+(?:anglers?|people|passengers?)\b/i';
+            $score += preg_match($anglerPattern, $paragraph) === 1 ? 3 : 0;
+        }
+
+        return $score;
     }
 
     private function sanitizeUrl(string $url): string

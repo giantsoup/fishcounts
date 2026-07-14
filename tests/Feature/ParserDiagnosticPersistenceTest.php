@@ -220,6 +220,29 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertSame([], app(ParsedReportValidator::class)->validate($storedPayload, $paragraphWithoutSpeciesEvidence, $parsed));
     }
 
+    public function test_source_specific_evidence_does_not_treat_a_partial_numeric_span_as_a_parsed_report(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $body = '<p>The Constitution returned with 110 Bluefin Tuna for 20 anglers on a 3 Day trip.</p>';
+        $storedPayload = $this->payload($body);
+        $rawPayload = $this->rawPayloadData($storedPayload);
+        $report = $this->report(species: 'Bluefin Tuna', retained: 10, rawText: '10 Bluefin Tuna');
+        $parsed = new ParsedFishCountCollection(
+            collect([$report]),
+            'source-specific-fishermans_landing-v2',
+            'narrative',
+        );
+
+        $diagnostics = app(ParsedReportValidator::class)->validate($storedPayload, $rawPayload, $parsed);
+
+        $this->assertCount(1, $diagnostics);
+        $this->assertSame(ParserDiagnosticType::EmptyOrUnexpectedlySmallResultSet, $diagnostics[0]->type);
+        $this->assertSame(
+            'The Constitution returned with 110 Bluefin Tuna for 20 anglers on a 3 Day trip.',
+            $diagnostics[0]->context['sanitized_paragraph'],
+        );
+    }
+
     public function test_context_is_sanitized_bounded_utf8_safe_and_contains_only_review_provenance(): void
     {
         config()->set('fish.parsing.diagnostics.max_paragraph_length', 80);
@@ -258,6 +281,25 @@ class ParserDiagnosticPersistenceTest extends TestCase
             'source', 'date', 'url', 'parser_version', 'format', 'report_index', 'source_identifier',
             'sanitized_paragraph', 'extracted_fields', 'evidence',
         ], array_keys($context));
+    }
+
+    public function test_context_uses_report_identity_to_disambiguate_duplicate_count_spans(): void
+    {
+        $factory = app(DiagnosticContextFactory::class);
+        $payload = new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php?date=2026-07-12',
+            body: implode('', [
+                '<p>Dolphin | 20 anglers | Full Day | 4 Rockfish</p>',
+                '<p>Sea Watch | 30 anglers | Full Day | 4 Rockfish</p>',
+            ]),
+        );
+        $report = $this->report(boat: 'Sea Watch', anglers: 30);
+
+        $paragraph = $factory->paragraphForReport($payload, $report);
+
+        $this->assertSame('Sea Watch | 30 anglers | Full Day | 4 Rockfish', $paragraph);
     }
 
     public function test_fingerprints_are_stable_and_invalidate_for_parser_or_paragraph_changes(): void
@@ -335,15 +377,17 @@ class ParserDiagnosticPersistenceTest extends TestCase
         int $retained = 4,
         string $rawText = '4 Rockfish',
         array $metadata = ['parser' => 'parser-v1'],
+        string $boat = 'Dolphin',
+        int $anglers = 20,
     ): ParsedTripReportData {
         return new ParsedTripReportData(
             sourceKey: 'fishermans_landing',
             tripDate: CarbonImmutable::parse('2026-07-12'),
             regionName: 'San Diego',
             landingName: "Fisherman's Landing",
-            boatName: 'Dolphin',
+            boatName: $boat,
             tripTypeName: 'Full Day',
-            anglers: 20,
+            anglers: $anglers,
             rawFishCountText: $rawText,
             speciesCounts: [new ParsedSpeciesCountData($species, $retained, 0, $rawText)],
             metadata: $metadata,
