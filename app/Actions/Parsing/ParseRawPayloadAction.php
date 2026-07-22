@@ -2,8 +2,8 @@
 
 namespace App\Actions\Parsing;
 
+use App\DTOs\ParseRawPayloadOptions;
 use App\DTOs\ParseRawPayloadResult;
-use App\DTOs\RawPayloadData;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Models\ParserDiagnosticReviewRun;
@@ -11,9 +11,8 @@ use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Services\Parsing\ParsedReportValidator;
 use App\Services\Parsing\ParserReportOverrideApplier;
+use App\Services\Parsing\RawPayloadEvaluator;
 use App\Services\Parsing\TripReportNormalizer;
-use App\Services\Scraping\SourceAdapterRegistry;
-use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Throwable;
@@ -21,7 +20,7 @@ use Throwable;
 class ParseRawPayloadAction
 {
     public function __construct(
-        private readonly SourceAdapterRegistry $registry,
+        private readonly RawPayloadEvaluator $evaluator,
         private readonly TripReportNormalizer $normalizer,
         private readonly ParsedReportValidator $validator,
         private readonly ParserReportOverrideApplier $overrideApplier,
@@ -32,18 +31,18 @@ class ParseRawPayloadAction
         bool $shouldDispatchDeduplication = true,
         ?int $parserDiagnosticReviewRunId = null,
     ): ParseRawPayloadResult {
-        $payload = RawScrapePayload::query()
-            ->with('scrapeSource')
-            ->findOrFail($rawScrapePayloadId);
-        $adapter = $this->registry->forSource($payload->scrapeSource);
-        $rawPayload = new RawPayloadData(
-            sourceKey: $payload->scrapeSource->slug,
-            targetDate: CarbonImmutable::parse($payload->target_date),
-            url: $payload->url,
-            body: $payload->payload,
-            metadata: $payload->metadata ?? [],
+        return $this->handleWithOptions(
+            $rawScrapePayloadId,
+            new ParseRawPayloadOptions(
+                dispatchDeduplication: $shouldDispatchDeduplication,
+                parserDiagnosticReviewRunId: $parserDiagnosticReviewRunId,
+            ),
         );
-        $parsed = $adapter->parse($rawPayload);
+    }
+
+    public function handleWithOptions(int $rawScrapePayloadId, ParseRawPayloadOptions $options): ParseRawPayloadResult
+    {
+        [$payload, $rawPayload, $parsed] = $this->evaluator->evaluate($rawScrapePayloadId);
         [$parsed, $parsedReportCount, $diagnosticCount] = DB::transaction(function () use ($payload, $rawPayload, $parsed): array {
             $lockedPayload = RawScrapePayload::query()->with('scrapeSource')->lockForUpdate()->findOrFail($payload->id);
 
@@ -64,28 +63,28 @@ class ParseRawPayloadAction
         }, attempts: 3);
         $parserVersion = $parsed->tripReports->first()?->metadata['parser'] ?? $parsed->parserVersion ?? 'unknown';
 
-        if ($shouldDispatchDeduplication) {
-            DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString());
+        if ($options->dispatchDeduplication) {
+            DeduplicateTripReportsJob::dispatch($payload->target_date->toDateString())->afterCommit();
         }
 
-        $reviewRun = $parserDiagnosticReviewRunId === null
+        $reviewRun = $options->parserDiagnosticReviewRunId === null
             ? null
             : ParserDiagnosticReviewRun::query()
-                ->whereKey($parserDiagnosticReviewRunId)
+                ->whereKey($options->parserDiagnosticReviewRunId)
                 ->where('raw_scrape_payload_id', $payload->id)
                 ->first();
 
-        if ($diagnosticCount > 0 && (bool) config('fish.ai_review.dispatch_enabled')) {
+        if ($options->dispatchDiagnosticReviews && $diagnosticCount > 0 && (bool) config('fish.ai_review.dispatch_enabled')) {
             try {
                 $reviewRun?->markQueued();
-                DispatchParserDiagnosticReviewBatchesJob::dispatch($payload->id, $parserDiagnosticReviewRunId)->afterCommit();
+                DispatchParserDiagnosticReviewBatchesJob::dispatch($payload->id, $options->parserDiagnosticReviewRunId)->afterCommit();
             } catch (Throwable $throwable) {
                 $reviewRun?->markFailed($throwable);
                 report($throwable);
             }
-        } elseif ($reviewRun !== null && $diagnosticCount === 0) {
+        } elseif ($options->dispatchDiagnosticReviews && $reviewRun !== null && $diagnosticCount === 0) {
             $reviewRun->markCompleted();
-        } elseif ($reviewRun !== null) {
+        } elseif ($options->dispatchDiagnosticReviews && $reviewRun !== null) {
             $reviewRun->markFailed('AI review dispatch became unavailable after the payload was reparsed.');
         }
 
@@ -94,7 +93,7 @@ class ParseRawPayloadAction
             parserVersion: $parserVersion,
             parsedReportCount: $parsedReportCount,
             diagnosticCount: $diagnosticCount,
-            shouldDispatchDeduplication: $shouldDispatchDeduplication,
+            shouldDispatchDeduplication: $options->dispatchDeduplication,
         );
     }
 }

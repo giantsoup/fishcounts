@@ -318,7 +318,10 @@ class CountsAndScoresIndexTest extends TestCase
             ]);
         }
 
-        $response = $this->actingAs($user)->get(route('scores.index'));
+        $response = $this->actingAs($user)->get(route('scores.index', [
+            'from' => '06/01/2026',
+            'to' => '06/30/2026',
+        ]));
 
         $response->assertOk();
 

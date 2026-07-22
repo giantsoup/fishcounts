@@ -8,6 +8,7 @@ use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParsedTripReportData;
 use App\DTOs\RawPayloadData;
 use App\Enums\ParserDiagnosticType;
+use App\Services\Parsing\GenericFishCountParser;
 use App\Services\Parsing\Rules\EmptyOrUnexpectedlySmallResultSetRule;
 use App\Services\Parsing\Rules\ExcessiveNameLengthRule;
 use App\Services\Parsing\Rules\ExtractedValueSourceSpanMismatchRule;
@@ -218,6 +219,60 @@ class ParsedReportValidatorTest extends TestCase
         $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($typoData));
         $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($limitsData));
         $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($limitsData));
+    }
+
+    public function test_numeric_and_source_span_rules_accept_production_count_grammar(): void
+    {
+        $paragraphs = [
+            'The Pegasus called in with 32 Bluefin Tuna (80lbs - 150lbs) and 1 @ 200lbs and 4 Yellowfin Tuna for 19 anglers on their 2 day trip.',
+            'The Dolphin caught 44 Calico (Kelp) Bass and released 70, 19 Rockfish for 22 anglers.',
+            'The Dolphin caught limits of Calico (Kelp) Bass for 22 anglers, so 105 kept in total, and 200 released, 20 Barracuda.',
+            'The Lucky B caught Limits of Yellowfin Tuna (15), 6 Yellowtail for 3 anglers.',
+            'The Pacific Queen returned with 31 Bluefin Tuna (70 to 170), and 1 20lbs Yellowtail for 29 anglers.',
+        ];
+
+        foreach ($paragraphs as $paragraph) {
+            $payload = new RawPayloadData(
+                sourceKey: 'fishermans_landing',
+                targetDate: CarbonImmutable::parse('2026-07-12'),
+                url: 'https://www.fishermanslanding.com/fishcounts.php',
+                body: "<p>{$paragraph}</p>",
+            );
+            $parsed = app(GenericFishCountParser::class)->parse($payload);
+            $report = $parsed->tripReports->first();
+            $data = new ParsedReportValidationData(
+                payload: $payload,
+                parsed: $parsed,
+                report: $report,
+                reportIndex: 0,
+                parserVersion: $parsed->parserVersion ?? '',
+                format: $parsed->format ?? '',
+                sourceIdentifier: null,
+                sanitizedParagraph: $paragraph,
+            );
+
+            $this->assertNotNull($report, $paragraph);
+            $this->assertSame([], app(UnaccountedNumericTokensRule::class)->inspect($data), $paragraph);
+            $this->assertSame([], app(ExtractedValueSourceSpanMismatchRule::class)->inspect($data), $paragraph);
+        }
+    }
+
+    public function test_source_span_rule_still_detects_an_incorrect_normalized_total(): void
+    {
+        $paragraph = 'The Pegasus called in with 32 Bluefin Tuna (80lbs - 150lbs) and 1 @ 200lbs for 19 anglers on their 2 day trip.';
+        $incorrectReport = $this->report(
+            tripType: '2 Day',
+            anglers: 19,
+            species: 'Bluefin Tuna',
+            retained: 32,
+            rawText: '32 Bluefin Tuna',
+        );
+        $data = $this->data($incorrectReport, $paragraph);
+
+        $sourceSpanFindings = app(ExtractedValueSourceSpanMismatchRule::class)->inspect($data);
+
+        $this->assertCount(1, $sourceSpanFindings);
+        $this->assertSame(33, $sourceSpanFindings[0]->evidence['mismatches'][0]['source_retained']);
     }
 
     private function data(

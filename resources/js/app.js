@@ -128,7 +128,7 @@ const initializeDates = (root = document) => {
     });
 };
 
-const updateBackfillPollStatus = (status, message, isActive) => {
+const updateProgressPollStatus = (status, message, isActive) => {
     if (! status) {
         return;
     }
@@ -139,20 +139,23 @@ const updateBackfillPollStatus = (status, message, isActive) => {
     `;
 };
 
-const initializeBackfillPolling = (root = document) => {
-    root.querySelectorAll('[data-backfill-poll]').forEach((panel) => {
-        if (panel.dataset.enhanced === 'true' || panel.dataset.backfillPollActive !== 'true') {
+const initializeProgressPolling = (root = document) => {
+    root.querySelectorAll('[data-progress-poll]').forEach((panel) => {
+        if (panel.dataset.enhanced === 'true' || panel.dataset.progressPollActive !== 'true') {
             return;
         }
 
-        const target = panel.querySelector('[data-backfill-poll-target]');
-        const status = panel.querySelector('[data-backfill-poll-status]');
-        const url = panel.dataset.backfillPollUrl;
-        const interval = Number.parseInt(panel.dataset.backfillPollInterval || '5000', 10);
-        const activeKey = panel.dataset.backfillPollActiveKey || 'has_active_backfills';
-        const activeMessage = panel.dataset.backfillPollActiveMessage || 'Live updates enabled';
-        const completeMessage = panel.dataset.backfillPollCompleteMessage || 'Live updates complete';
-        const pausedMessage = panel.dataset.backfillPollPausedMessage || 'Live updates paused';
+        const target = panel.querySelector('[data-progress-poll-target]');
+        const status = panel.querySelector('[data-progress-poll-status]');
+        const url = panel.dataset.progressPollUrl;
+        const interval = Number.parseInt(panel.dataset.progressPollInterval || '5000', 10);
+        const activeKey = panel.dataset.progressPollActiveKey || 'has_active_backfills';
+        const visibleKey = panel.dataset.progressPollVisibleKey;
+        const activeMessage = panel.dataset.progressPollActiveMessage || 'Live updates enabled';
+        const completeMessage = panel.dataset.progressPollCompleteMessage || 'Live updates complete';
+        const pausedMessage = panel.dataset.progressPollPausedMessage || 'Live updates paused';
+        const controlsSelector = panel.dataset.progressPollControls;
+        const controlsEnabledKey = panel.dataset.progressPollControlsEnabledKey;
 
         if (! target || ! url) {
             return;
@@ -170,7 +173,7 @@ const initializeBackfillPolling = (root = document) => {
             }
         };
 
-        const refreshBackfills = async () => {
+        const refreshProgress = async () => {
             if (isRefreshing) {
                 return;
             }
@@ -187,37 +190,49 @@ const initializeBackfillPolling = (root = document) => {
                 });
 
                 if (! response.ok) {
-                    throw new Error('Unable to refresh backfills.');
+                    throw new Error('Unable to refresh progress.');
                 }
 
                 const data = await response.json();
 
                 target.innerHTML = data.html;
+                initializeFormControls(target);
 
                 if (data[activeKey]) {
-                    updateBackfillPollStatus(status, activeMessage, true);
+                    updateProgressPollStatus(status, activeMessage, true);
 
                     return;
                 }
 
-                updateBackfillPollStatus(status, completeMessage, false);
+                updateProgressPollStatus(status, completeMessage, false);
+
+                if (controlsSelector) {
+                    document.querySelectorAll(controlsSelector).forEach((control) => {
+                        control.disabled = controlsEnabledKey ? ! data[controlsEnabledKey] : false;
+                    });
+                }
+
                 stopPolling();
+
+                if (visibleKey && data[visibleKey] === false) {
+                    panel.remove();
+                }
             } catch (error) {
-                updateBackfillPollStatus(status, pausedMessage, false);
+                updateProgressPollStatus(status, pausedMessage, false);
                 stopPolling();
             } finally {
                 isRefreshing = false;
             }
         };
 
-        timerId = window.setInterval(refreshBackfills, Number.isNaN(interval) ? 5000 : interval);
+        timerId = window.setInterval(refreshProgress, Number.isNaN(interval) ? 5000 : interval);
     });
 };
 
 const initializeFormControls = (root = document) => {
     initializeSelects(root);
     initializeDates(root);
-    initializeBackfillPolling(root);
+    initializeProgressPolling(root);
 };
 
 if (document.readyState === 'loading') {

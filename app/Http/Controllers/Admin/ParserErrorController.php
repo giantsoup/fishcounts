@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserErrorResolutionType;
+use App\Enums\ParserReparseRunStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DismissParserErrorRequest;
 use App\Models\Boat;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewAction;
 use App\Models\ParserError;
+use App\Models\ParserReparseRun;
 use App\Models\Species;
 use App\Models\TripType;
 use Illuminate\Contracts\View\View;
@@ -45,10 +47,22 @@ class ParserErrorController extends Controller
                 'resolver',
                 'scrapeSource',
             ])
-            ->when(! $showAll, fn ($query) => $query->whereNull('resolved_at'))
+            ->when(! $showAll, fn ($query) => $query->open())
             ->latest()
             ->paginate(25)
             ->withQueryString();
+        $latestReparseRun = ParserReparseRun::query()->with('requester')->latest('id')->first();
+
+        if ($latestReparseRun?->status === ParserReparseRunStatus::Succeeded) {
+            $latestReparseRun = null;
+        }
+        $openErrors = ParserError::query()->open();
+        $errorCounts = ParserError::query()
+            ->toBase()
+            ->selectRaw('count(*) as total_count')
+            ->selectRaw('count(case when resolved_at is null and resolution_type is null then 1 end) as open_count')
+            ->first();
+        $openErrorCount = (int) $errorCounts->open_count;
 
         if ($reviewAuditEnabled) {
             $this->loadCurrentDiagnosticReviewRelations($errors->getCollection(), $reviewRelations);
@@ -67,6 +81,13 @@ class ParserErrorController extends Controller
             'reportOverridesEnabled' => $reportOverridesEnabled,
             'reportOverrideSourceSlugs' => config('fish.parsing.overrides.allowed_source_slugs', []),
             'reviewTargets' => $reviewAuditEnabled ? $this->reviewTargets($errors->getCollection()) : collect(),
+            'latestReparseRun' => $latestReparseRun,
+            'hasActiveReparseRun' => $latestReparseRun?->status->isActive() ?? false,
+            'openErrorCount' => $openErrorCount,
+            'allErrorCount' => (int) $errorCounts->total_count,
+            'reparseOpenErrorCount' => $openErrorCount,
+            'reparsePayloadCount' => (clone $openErrors)->whereNotNull('raw_scrape_payload_id')->distinct()->count('raw_scrape_payload_id'),
+            'reparseDateCount' => (clone $openErrors)->whereNotNull('raw_scrape_payload_id')->distinct()->count('target_date'),
         ]);
     }
 

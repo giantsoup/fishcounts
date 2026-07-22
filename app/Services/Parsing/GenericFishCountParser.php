@@ -11,9 +11,15 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
+    private const string PARSER_VERSION = 'generic-line-v3';
+
+    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
+
     public function parse(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $text = html_entity_decode(strip_tags($payload->body, "\n"), ENT_QUOTES | ENT_HTML5);
+        $text = Str::of(html_entity_decode(strip_tags($payload->body, "\n"), ENT_QUOTES | ENT_HTML5))
+            ->replace("\u{00A0}", ' ')
+            ->toString();
         $lines = collect(preg_split('/\R+/', $text) ?: [])
             ->map(fn (string $line): string => trim(preg_replace('/\s+/', ' ', $line) ?? ''))
             ->filter()
@@ -24,10 +30,10 @@ class GenericFishCountParser
             ->filter()
             ->values();
 
-        return new ParsedFishCountCollection($reports, 'generic-line-v2', 'narrative');
+        return new ParsedFishCountCollection($reports, self::PARSER_VERSION, 'narrative');
     }
 
-    public function parseLine(RawPayloadData $payload, string $line, string $parserVersion = 'generic-line-v2'): ?ParsedTripReportData
+    public function parseLine(RawPayloadData $payload, string $line, string $parserVersion = self::PARSER_VERSION): ?ParsedTripReportData
     {
         if ($this->isAggregateLine($line)) {
             return null;
@@ -63,6 +69,8 @@ class GenericFishCountParser
     /** @return Collection<int, ParsedSpeciesCountData> */
     public function parseSpeciesCounts(string $line): Collection
     {
+        $line = $this->sourceGrammar->normalize($line);
+
         $line = preg_replace_callback(
             '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)\.\s*(?<released>\d+)\s+were\s+released\b/i',
             fn (array $matches): string => "{$matches['retained']} {$matches['species']}, {$matches['released']} {$matches['species']} Released",
@@ -95,21 +103,26 @@ class GenericFishCountParser
             ->replaceMatches('/\bCakico\s+Bass\b/i', 'Calico Bass')
             ->replaceMatches('/\([^)]*(?:lbs?|pounds?)\b[^)]*\)/i', '')
             ->replaceMatches('/\bMisc\.\s+/i', 'Misc ')
+            ->replaceMatches('/\bwith\s+fish\s+up\s+to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\ball\s+over\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\bfrom\s+\d+\s*(?:lbs?|pounds?)\s+(?:to|-)\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\b(?:from|at|over)\s+(?:\d+\s*(?:-|to|\x{2013})\s*\d+|up to\s+\d+|\d+)\s*(?:lbs?|pounds?)\b/iu', '')
             ->replaceMatches('/\b(?:up to\s+)?\d+\s*(?:-|to|\x{2013})\s*\d+\s*(?:lbs?|pounds?)\b/iu', '')
             ->replaceMatches('/\bup to\s+\d+\s*(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/\(\s*(?:up\s+to\s+)?\d+\s*(?:-|to|\x{2013})\s*\d+\s*\)/iu', '')
+            ->replaceMatches('/\(\s*up\s+to\s+\d+\s*\)/i', '')
             ->replaceMatches('/\b\d+(?:\/\d+)?\s*oz\b/i', '')
             ->replaceMatches('/\b(?:one|two|three|four)\s+day\b/i', fn (array $matches): string => $this->numericWordTripDuration($matches[0]))
-            ->replaceMatches('/\bfor\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day)\s+(?:trip|charter),?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
+            ->replaceMatches('/\bfor\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day)\s+(?:trip|charter),?\s+(?:for|with)\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
-            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+aboard)?/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:reverse\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+aboard)?/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
             ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s*day|overnight|twilight)\s+(?:trip|charter)\b(?:\s+(?:for|with)\s+\d+\s+(?:anglers?|people|passengers?))?/i', '')
             ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:(?:trip|charter)\s+|today\s+)?(?:with|wth)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s*(?:trip|charter)?\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
+            ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+their\s+\d+(?:\.\d+)?\s*(?:day\s+)?charter\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+)?\d+\s+(?:anglers?|people|passengers?)\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?(?:reverse\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
             ->replaceMatches('/\b\d+\s+(?:anglers?|people|passengers?)\s+(?:returned\s+with|caught|landed|had)\b/i', '')
@@ -202,7 +215,8 @@ class GenericFishCountParser
 
         foreach ([
             '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:AM|PM)\s+\d+\s+(?:anglers?|people|passengers?)\b/i',
-            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:also\s+)?(?:just\s+)?(?:caught|returned|is\s+returning|had|has|finished(?:\s+up)?|ended|called\s+in|checked\s+in)\b/i',
+            '/^(?<boat>(?:The\s+)?[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|returned|landed|finished)\b/i',
+            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:also\s+)?(?:just\s+)?(?:caught|returned|came\s+back|is\s+returning|had|has|finished(?:\s+up)?|ended|called\s+in|checked\s+in)\b/i',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
             if (preg_match($pattern, $line, $matches)) {

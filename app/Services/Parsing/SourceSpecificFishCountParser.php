@@ -29,17 +29,17 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v2");
+        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v3");
     }
 
     private function parseReportFeedPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v2");
+        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v3");
     }
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v2';
+        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v3';
         $panelHtml = $this->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
@@ -151,7 +151,7 @@ class SourceSpecificFishCountParser
                         anglers: $report->anglers,
                         rawFishCountText: $report->rawFishCountText,
                         speciesCounts: $report->speciesCounts,
-                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v2']),
+                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v3']),
                     );
                 }),
             $parserVersion,
@@ -319,7 +319,7 @@ class SourceSpecificFishCountParser
                     ->map(function (array $match, int $index) use ($matches, $line, $payload, $parserVersion): ?ParsedTripReportData {
                         $startOffset = $match[0][1];
                         $endOffset = $matches[$index + 1][0][1] ?? strlen($line);
-                        $reportText = Str::of($this->firstNarrativeSentence(substr($line, $startOffset, $endOffset - $startOffset)))
+                        $reportText = Str::of($this->fishCountNarrativeText(substr($line, $startOffset, $endOffset - $startOffset)))
                             ->replaceMatches('/\s+(?=The\s+[A-Z])/', ' ')
                             ->squish()
                             ->toString();
@@ -338,10 +338,10 @@ class SourceSpecificFishCountParser
                             tripDate: $payload->targetDate,
                             regionName: 'San Diego',
                             landingName: 'Seaforth Sportfishing',
-                            boatName: Str::of($match['boat'][0])->squish()->toString(),
+                            boatName: $this->normalizeSeaforthBoatName($match['boat'][0]),
                             tripTypeName: $this->normalizeSeaforthTripType(
-                                $match['trip'][0] ?? $match['trip_alt'][0],
-                                $match['period'][0] ?? null,
+                                $match['trip'][0] ?? $match['trip_alt'][0] ?? $match['trip_charter'][0],
+                                $match['period_status'][0] ?? $match['period'][0] ?? $match['period_after'][0] ?? null,
                             ),
                             anglers: $this->anglerCountFromNarrative($reportText),
                             rawFishCountText: $reportText,
@@ -359,15 +359,16 @@ class SourceSpecificFishCountParser
     private function seaforthListItemPattern(): string
     {
         $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half\s+Day|Full\s+Day\s+Coronado\s+Islands|Full\s+Day|Overnight|Twilight';
-        $returnPhrase = '(?:also\s+)?(?:returned|ended)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
-        $statusPhrase = '(?:(?:just\s+)?checked\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
-        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+a\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
-        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned)(?:\s+from\s+their)?\s+)?';
+        $returnPhrase = '(?:also\s+)?(?:returned|ended|arrived)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
+        $statusPhrase = '(?:(?:just\s+)?checked\s+in\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
+        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+(?:a|the|their)\s+)?(?:(?<period_after>AM|PM)\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
+        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned|ended)(?:\s+from\s+their)?\s+)?';
 
         return '/(?:^|(?<=[.!?])\s+)The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\'s)?\s+(?:'
-            .$statusPhrase.'(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
+            .$statusPhrase.'(?:(?<period_status>AM|PM)\s+)?(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
             .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
-            .')(?:with|wth|caught)\b/i';
+            .'|charter\s+group(?:\s+today)?\s+went\s+offshore\s+for\s+their\s+(?<trip_charter>'.$tripPattern.')\s+trip\s+and\s+returned\s+'
+            .')(?:with|wth|caught|landed)\b/i';
     }
 
     private function normalizeSeaforthTripType(string $tripType, ?string $period): string
@@ -387,11 +388,28 @@ class SourceSpecificFishCountParser
             : $normalized;
     }
 
-    private function firstNarrativeSentence(string $text): string
+    private function fishCountNarrativeText(string $text): string
     {
-        $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z]|\d+\s+of\s+the\b)/', $text, 2);
+        $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z]|\d+\s+of\s+the\b)/', $text) ?: [];
+        $fishCountText = array_shift($sentences) ?? $text;
 
-        return $sentences[0] ?? $text;
+        foreach ($sentences as $sentence) {
+            if (preg_match('/^(?:They\s+)?also\s+(?:reported|had)\b/i', $sentence) !== 1) {
+                break;
+            }
+
+            $fishCountText .= ' '.$sentence;
+        }
+
+        return $fishCountText;
+    }
+
+    private function normalizeSeaforthBoatName(string $boatName): string
+    {
+        return Str::of($boatName)
+            ->replaceMatches('/\'s\s+charter\s+group$/i', '')
+            ->squish()
+            ->toString();
     }
 
     private function anglerCountFromNarrative(string $text): ?int

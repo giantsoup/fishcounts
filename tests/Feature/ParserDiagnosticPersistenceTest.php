@@ -338,6 +338,25 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertSame('Sea Watch | 30 anglers | Full Day | 4 Rockfish', $paragraph);
     }
 
+    public function test_context_prefers_the_exact_count_span_when_identity_fields_are_unavailable(): void
+    {
+        $factory = app(DiagnosticContextFactory::class);
+        $payload = new RawPayloadData(
+            sourceKey: 'sportfishingreport_landing_pages',
+            targetDate: CarbonImmutable::parse('2026-07-12'),
+            url: 'https://www.sportfishingreport.com/dock_totals/boats.php',
+            body: implode('', [
+                '<p>18 Bluefin Tuna, 24 Yellowtail, 3 Dorado, 1 Yellowfin Tuna</p>',
+                '<p>18 Bluefin Tuna</p>',
+            ]),
+        );
+        $report = $this->report(rawText: '18 Bluefin Tuna', species: 'Bluefin Tuna', retained: 18);
+
+        $paragraph = $factory->paragraphForReport($payload, $report);
+
+        $this->assertSame('18 Bluefin Tuna', $paragraph);
+    }
+
     public function test_fingerprints_are_stable_and_invalidate_for_parser_or_paragraph_changes(): void
     {
         config()->set('fish.parsing.diagnostics.suspicious_enabled', false);

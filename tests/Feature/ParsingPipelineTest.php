@@ -160,6 +160,82 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame(30, $counts->first()->count);
     }
 
+    public function test_parser_handles_production_limit_count_placements(): void
+    {
+        $cases = [
+            ['The Pacific Dawn called in with LIMITS (96) of Bluefin Tuna and 1 Yellowfin Tuna.', 'Bluefin Tuna', 96],
+            ['The Pegasus returned with LIMITS (76) Bluefin Tuna (80lbs - 150lbs) and 1 @ 200lbs.', 'Bluefin Tuna', 77],
+            ['The Aztec finished with limits of nice quality Bluefin(90), 5 Dorado.', 'Bluefin', 90],
+            ['The Lucky B caught Limits of Yellowfin Tuna (15), 6 Yellowtail.', 'Yellowfin Tuna', 15],
+            ['The Pacific Dawn called in with 26 Dorado (limits), 15 Yellowtail.', 'Dorado', 26],
+            ['The Fortune called in with 40 (limits) of Bluefin for 10 anglers.', 'Bluefin', 40],
+        ];
+
+        foreach ($cases as [$line, $speciesName, $expectedCount]) {
+            $count = app(GenericFishCountParser::class)
+                ->parseSpeciesCounts($line)
+                ->firstWhere('speciesName', $speciesName);
+
+            $this->assertNotNull($count, $line);
+            $this->assertSame($expectedCount, $count->count, $line);
+        }
+    }
+
+    public function test_parser_handles_production_release_and_weight_annotations(): void
+    {
+        $releasedCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin caught 44 Calico (Kelp) Bass and released 70, 7 Barracuda and released 75.',
+        );
+        $limitCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin caught limits of Calico (Kelp) Bass for 22 anglers, so 105 kept in total, and 200 released, 20 Barracuda.',
+        );
+        $weightCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Pacific Queen returned with 31 Bluefin Tuna (70 to 170), and 1 20lbs Yellowtail.',
+        );
+
+        $this->assertSame(['Calico Bass', 'Barracuda'], $releasedCounts->pluck('speciesName')->all());
+        $this->assertSame([44, 7], $releasedCounts->pluck('count')->all());
+        $this->assertSame([70, 75], $releasedCounts->pluck('releasedCount')->all());
+        $this->assertSame(105, $limitCounts->first()->count);
+        $this->assertSame(200, $limitCounts->first()->releasedCount);
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], $weightCounts->pluck('speciesName')->all());
+        $this->assertSame([31, 1], $weightCounts->pluck('count')->all());
+    }
+
+    public function test_parser_keeps_release_and_weight_annotations_with_named_species_separate(): void
+    {
+        $releasedCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin caught 2 Bluefin Tuna and released 1 Yellowtail for 10 anglers.',
+        );
+        $weightCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin caught 2 Bluefin Tuna (80lbs) and 1 @ 200lbs Yellowtail.',
+        );
+
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], $releasedCounts->pluck('speciesName')->all());
+        $this->assertSame([2, 0], $releasedCounts->pluck('count')->all());
+        $this->assertSame([0, 1], $releasedCounts->pluck('releasedCount')->all());
+        $this->assertSame(['Bluefin Tuna', 'Yellowtail'], $weightCounts->pluck('speciesName')->all());
+        $this->assertSame([2, 1], $weightCounts->pluck('count')->all());
+    }
+
+    public function test_generic_parser_normalizes_non_breaking_spaces_in_narrative_reports(): void
+    {
+        $parsed = app(GenericFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-18'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: '<p>The <strong>Dolphin</strong> 1/2 Day PM caught 84 Rockfish and 2 Yellowtail&nbsp;for 56&nbsp;anglers.</p>',
+        ));
+
+        $report = $parsed->tripReports->first();
+
+        $this->assertCount(1, $parsed->tripReports);
+        $this->assertSame('The Dolphin', $report->boatName);
+        $this->assertSame('1/2 Day PM', $report->tripTypeName);
+        $this->assertSame(56, $report->anglers);
+        $this->assertSame(['Rockfish', 'Yellowtail'], collect($report->speciesCounts)->pluck('speciesName')->all());
+    }
+
     public function test_reparse_replaces_stale_errors_and_persists_confirmed_counts_and_trip_types(): void
     {
         $this->seed([

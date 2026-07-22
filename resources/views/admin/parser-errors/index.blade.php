@@ -1,6 +1,16 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800">Parser errors</h2>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" x-data>
+            <h2 class="font-semibold text-xl text-gray-800">Parser errors</h2>
+            <x-primary-button
+                id="parser-reparse-button"
+                type="button"
+                :disabled="$hasActiveReparseRun || $reparseOpenErrorCount === 0"
+                x-on:click.prevent="$dispatch('open-modal', 'confirm-parser-reparse')"
+            >
+                Reparse open errors
+            </x-primary-button>
+        </div>
     </x-slot>
 
     <div class="py-8">
@@ -17,9 +27,48 @@
                 <p class="mb-4 text-sm text-red-700">{{ session('errors')->first('override') }}</p>
             @endif
 
+            @if ($latestReparseRun)
+                <div
+                    class="mb-5 space-y-2"
+                    data-progress-poll
+                    data-progress-poll-active="{{ $hasActiveReparseRun ? 'true' : 'false' }}"
+                    data-progress-poll-active-key="has_active_reparse"
+                    data-progress-poll-visible-key="show_reparse_run"
+                    data-progress-poll-active-message="Reparse running"
+                    data-progress-poll-complete-message="Reparse complete"
+                    data-progress-poll-paused-message="Reparse updates paused"
+                    data-progress-poll-controls="#parser-reparse-button"
+                    data-progress-poll-controls-enabled-key="can_start_reparse"
+                    data-progress-poll-interval="2000"
+                    data-progress-poll-url="{{ route('admin.parser-errors.reparse-runs.poll', $latestReparseRun) }}"
+                >
+                    <div class="flex items-center gap-2 text-xs text-gray-500" data-progress-poll-status>
+                        <span @class(['h-2 w-2 rounded-full', 'bg-blue-600' => $hasActiveReparseRun, 'bg-gray-300' => ! $hasActiveReparseRun])></span>
+                        <span>{{ $hasActiveReparseRun ? 'Reparse running' : 'Reparse idle' }}</span>
+                    </div>
+                    <div data-progress-poll-target>
+                        @include('admin.parser-errors._reparse-run', ['latestReparseRun' => $latestReparseRun])
+                    </div>
+                </div>
+            @endif
+
             <nav class="mb-4 flex gap-4 text-sm" aria-label="Parser error filters">
-                <a href="{{ route('admin.parser-errors.index') }}" @class(['font-semibold text-blue-700' => ! $showAll, 'text-gray-600 hover:text-gray-900' => $showAll])>Open</a>
-                <a href="{{ route('admin.parser-errors.index', ['status' => 'all']) }}" @class(['font-semibold text-blue-700' => $showAll, 'text-gray-600 hover:text-gray-900' => ! $showAll])>All</a>
+                <a
+                    href="{{ route('admin.parser-errors.index') }}"
+                    aria-label="Open parser errors: {{ Number::format($openErrorCount) }}"
+                    @class(['inline-flex items-center gap-1.5 font-semibold text-blue-700' => ! $showAll, 'inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900' => $showAll])
+                >
+                    Open
+                    <span aria-hidden="true" @class(['inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-xs font-semibold', 'bg-blue-100 text-blue-800' => ! $showAll, 'bg-gray-100 text-gray-600' => $showAll])>{{ Number::format($openErrorCount) }}</span>
+                </a>
+                <a
+                    href="{{ route('admin.parser-errors.index', ['status' => 'all']) }}"
+                    aria-label="All parser errors: {{ Number::format($allErrorCount) }}"
+                    @class(['inline-flex items-center gap-1.5 font-semibold text-blue-700' => $showAll, 'inline-flex items-center gap-1.5 text-gray-600 hover:text-gray-900' => ! $showAll])
+                >
+                    All
+                    <span aria-hidden="true" @class(['inline-flex min-w-6 justify-center rounded-full px-2 py-0.5 text-xs font-semibold', 'bg-blue-100 text-blue-800' => $showAll, 'bg-gray-100 text-gray-600' => ! $showAll])>{{ Number::format($allErrorCount) }}</span>
+                </a>
             </nav>
 
             @forelse ($errors as $error)
@@ -422,4 +471,27 @@
             {{ $errors->links() }}
         </div>
     </div>
+
+    <x-modal name="confirm-parser-reparse" focusable>
+        <form method="POST" action="{{ route('admin.parser-errors.reparse-runs.store') }}" class="p-6" x-data="{ submitting: false }" x-on:submit="submitting ? $event.preventDefault() : submitting = true">
+            @csrf
+            <h2 class="text-lg font-semibold text-gray-900">Reparse all open parser errors?</h2>
+            <p class="mt-2 text-sm text-gray-600">
+                This will reevaluate {{ $reparsePayloadCount }} affected saved payload(s) across {{ $reparseDateCount }} date(s) behind {{ $reparseOpenErrorCount }} open error(s). The newest payload for each affected source and date is also included when needed.
+            </p>
+            <ul class="mt-4 list-disc space-y-2 ps-5 text-sm text-gray-700">
+                <li>No sources will be scraped.</li>
+                <li>Canonical aliases will not be created or dismissed. Legitimate alias errors will remain open.</li>
+                <li>Parser-version changes may invalidate stale report overrides before the payload is evaluated.</li>
+            </ul>
+            <p class="mt-4 text-sm text-gray-600">The newest payload for every affected source and date will remain authoritative.</p>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <x-secondary-button type="button" x-on:click="$dispatch('close')" x-bind:disabled="submitting">Cancel</x-secondary-button>
+                <x-primary-button type="submit" x-bind:disabled="submitting">
+                    <span x-text="submitting ? 'Queueing…' : 'Queue reparse'">Queue reparse</span>
+                </x-primary-button>
+            </div>
+        </form>
+    </x-modal>
 </x-app-layout>

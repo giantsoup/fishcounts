@@ -44,7 +44,7 @@ class ParseRawPayloadActionTest extends TestCase
 
         $this->assertInstanceOf(ParseRawPayloadResult::class, $firstResult);
         $this->assertSame($payload->id, $firstResult->rawScrapePayloadId);
-        $this->assertSame('source-specific-fishermans_landing-v2', $firstResult->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v3', $firstResult->parserVersion);
         $this->assertSame(1, $firstResult->parsedReportCount);
         $this->assertSame(
             ParserError::query()->where('raw_scrape_payload_id', $payload->id)->whereNull('resolution_type')->count(),
@@ -100,7 +100,7 @@ class ParseRawPayloadActionTest extends TestCase
             $normalReport->speciesCounts()->orderBy('species_id')->pluck('count', 'species_id')->all(),
             $backfillReport->speciesCounts()->orderBy('species_id')->pluck('count', 'species_id')->all(),
         );
-        $this->assertSame('source-specific-fishermans_landing-v2', $normalPayload->refresh()->parser_version);
+        $this->assertSame('source-specific-fishermans_landing-v3', $normalPayload->refresh()->parser_version);
         $this->assertSame($normalPayload->parser_version, $backfillPayload->refresh()->parser_version);
         $this->assertSame(1, $reparseRun->refresh()->completed_payloads);
         $this->assertSame(BackfillReparseRunStatus::Succeeded, $reparseRun->status);

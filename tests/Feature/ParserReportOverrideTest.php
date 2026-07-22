@@ -546,7 +546,7 @@ class ParserReportOverrideTest extends TestCase
                 'source' => $source->slug,
                 'url' => $payload->url,
                 'report_index' => 0,
-                'parser_version' => 'source-specific-fishermans_landing-v2',
+                'parser_version' => 'source-specific-fishermans_landing-v3',
                 'sanitized_paragraph' => 'Dolphin Full Day 20 anglers 40 Yellowtail',
                 'extracted_fields' => [
                     'boat' => 'Dolphin',

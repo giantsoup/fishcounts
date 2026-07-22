@@ -6,9 +6,12 @@ use App\Contracts\Parsing\ParsedReportDiagnosticRule;
 use App\DTOs\ParsedReportValidationData;
 use App\DTOs\ParserDiagnosticFindingData;
 use App\Enums\ParserDiagnosticType;
+use App\Services\Parsing\SourceFishCountGrammar;
 
 class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
 {
+    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
+
     public function inspect(ParsedReportValidationData $data): array
     {
         if ($data->report === null || $data->sanitizedParagraph === '') {
@@ -94,6 +97,8 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
             ? $data->report->rawFishCountText
             : $data->sanitizedParagraph;
 
-        return preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
+        $sourceText = preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
+
+        return $this->sourceGrammar->normalize($sourceText);
     }
 }

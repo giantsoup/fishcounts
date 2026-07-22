@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\NotificationDeliveryController;
 use App\Http\Controllers\Admin\ParserBugReportController;
 use App\Http\Controllers\Admin\ParserDiagnosticReviewController;
 use App\Http\Controllers\Admin\ParserErrorController;
+use App\Http\Controllers\Admin\ParserReparseRunController;
 use App\Http\Controllers\Admin\ParserReportOverrideController;
 use App\Http\Controllers\Admin\RawPayloadController;
 use App\Http\Controllers\Admin\ScrapeRunController;
@@ -82,6 +83,15 @@ Route::middleware('auth')->group(function (): void {
         Route::get('raw-payloads/{rawScrapePayload}', RawPayloadController::class)->name('raw-payloads.show');
         Route::post('raw-payloads/{rawScrapePayload}/reparse', [RawPayloadController::class, 'reparse'])->name('raw-payloads.reparse');
         Route::get('parser-errors', ParserErrorController::class)->name('parser-errors.index');
+        Route::post('parser-errors/reparse-runs', [ParserReparseRunController::class, 'store'])
+            ->middleware('throttle:3,1')
+            ->name('parser-errors.reparse-runs.store');
+        Route::get('parser-errors/reparse-runs/{parserReparseRun}/poll', [ParserReparseRunController::class, 'poll'])
+            ->middleware('throttle:60,1')
+            ->name('parser-errors.reparse-runs.poll');
+        Route::post('parser-errors/reparse-runs/{parserReparseRun}/retry', [ParserReparseRunController::class, 'retry'])
+            ->middleware('throttle:3,1')
+            ->name('parser-errors.reparse-runs.retry');
         Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])->name('parser-errors.dismiss');
         Route::post('parser-errors/{parserError}/reviews', [ParserDiagnosticReviewController::class, 'store'])
             ->name('parser-errors.reviews.store');

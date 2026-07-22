@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\DTOs\ParsedReportValidationData;
+use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\RawPayloadData;
 use App\Services\Parsing\DiagnosticContextFactory;
 use App\Services\Parsing\Rules\ExtractedValueSourceSpanMismatchRule;
@@ -35,7 +36,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('Full Day', $report->tripTypeName);
         $this->assertSame(20, $report->anglers);
-        $this->assertSame('source-specific-fishermans_landing-v2', $report->metadata['parser']);
+        $this->assertSame('source-specific-fishermans_landing-v3', $report->metadata['parser']);
         $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
         $this->assertSame(40, $report->speciesCounts[0]->count);
         $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
@@ -597,6 +598,61 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(['Yellowtail', 'Calico Bass', 'Bonito', 'Rockfish', 'Barracuda', 'Sculpin', 'Sheephead'], collect($seaWatch->speciesCounts)->pluck('speciesName')->all());
     }
 
+    public function test_seaforth_parser_handles_current_production_status_phrases(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'seaforth_landing',
+            targetDate: CarbonImmutable::parse('2026-07-21'),
+            url: 'https://www.seaforthlanding.com/fishcounts.php?date=2026-07-21',
+            body: <<<'HTML'
+                <ul>
+                    <li>The <em>Pacific Voyager</em> on their 2 Day trip finished up with 36 Yellowtail.</li>
+                    <li>The <em>Tribute</em> checked in from day 2 of their 3 day trip with 1 Yellowfin Tuna.</li>
+                    <li>The <em>Voyager</em> arrived this afternoon from their 2 day trip with 55 Bluefin Tuna and 45 Yellowtail.</li>
+                    <li>The <em>San Diego</em>'s charter group ended their full day trip to the Coronado Islands with 1 Halibut and 15 Yellowtail.</li>
+                    <li>The <em>New Seaforth</em> finished their AM Half Day with 38 Yellowtail and 56 Barracuda.</li>
+                    <li>The <em>New Seaforth</em> on the PM Half Day returned with 80 Calico Bass and 15 Sand Bass.</li>
+                    <li>The <em>Voyager</em> on a Full day Offshore charter landed 14 Yellowfin Tuna and 1 Yellowtail for 13 anglers.</li>
+                    <li>The <em>New Seaforth</em>'s Twilight trip finished with 4 Sculpin fore their 36 anglers.</li>
+                    <li>The <em>Pacific Voyager</em> finished up their 2 day with 68 Bluefin Tuna with fish up to 160lbs! They also reported 7 Yellowfin Tuna and 70 Yellowtail.</li>
+                </ul>
+            HTML,
+        ));
+
+        $this->assertCount(9, $parsed->tripReports);
+        $this->assertSame(
+            ['Pacific Voyager', 'Tribute', 'Voyager', 'San Diego', 'New Seaforth', 'New Seaforth', 'Voyager', 'New Seaforth', 'Pacific Voyager'],
+            $parsed->tripReports->pluck('boatName')->all(),
+        );
+        $this->assertSame(
+            ['2 Day', '3 Day', '2 Day', 'Full Day', '1/2 Day AM', '1/2 Day PM', 'Full Day', 'Twilight', '2 Day'],
+            $parsed->tripReports->pluck('tripTypeName')->all(),
+        );
+        $expectedReports = [
+            ['anglers' => null, 'counts' => [['Yellowtail', 36]]],
+            ['anglers' => null, 'counts' => [['Yellowfin Tuna', 1]]],
+            ['anglers' => null, 'counts' => [['Bluefin Tuna', 55], ['Yellowtail', 45]]],
+            ['anglers' => null, 'counts' => [['Halibut', 1], ['Yellowtail', 15]]],
+            ['anglers' => null, 'counts' => [['Yellowtail', 38], ['Barracuda', 56]]],
+            ['anglers' => null, 'counts' => [['Calico Bass', 80], ['Sand Bass', 15]]],
+            ['anglers' => 13, 'counts' => [['Yellowfin Tuna', 14], ['Yellowtail', 1]]],
+            ['anglers' => 36, 'counts' => [['Sculpin', 4]]],
+            ['anglers' => null, 'counts' => [['Bluefin Tuna', 68], ['Yellowfin Tuna', 7], ['Yellowtail', 70]]],
+        ];
+
+        foreach ($expectedReports as $index => $expectedReport) {
+            $report = $parsed->tripReports->get($index);
+
+            $this->assertSame($expectedReport['anglers'], $report->anglers);
+            $this->assertSame(
+                $expectedReport['counts'],
+                collect($report->speciesCounts)
+                    ->map(fn (ParsedSpeciesCountData $count): array => [$count->speciesName, $count->count])
+                    ->all(),
+            );
+        }
+    }
+
     public function test_report_feed_source_parser_handles_json_fixture(): void
     {
         $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
@@ -626,7 +682,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Point Loma Sportfishing', $report->landingName);
         $this->assertSame('3/4 Day', $report->tripTypeName);
         $this->assertSame(28, $report->anglers);
-        $this->assertSame('source-specific-sandiego_fish_reports-v2', $report->metadata['parser']);
+        $this->assertSame('source-specific-sandiego_fish_reports-v3', $report->metadata['parser']);
         $this->assertSame('Rockfish', $report->speciesCounts[1]->speciesName);
         $this->assertSame(140, $report->speciesCounts[1]->count);
     }
@@ -781,7 +837,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $dolphin->landingName);
         $this->assertSame('1/2 Day', $dolphin->tripTypeName);
         $this->assertSame(25, $dolphin->anglers);
-        $this->assertSame('source-specific-sportfishingreport-party-boat-scores-v2', $dolphin->metadata['parser']);
+        $this->assertSame('source-specific-sportfishingreport-party-boat-scores-v3', $dolphin->metadata['parser']);
         $this->assertSame('party-boat-scores', $dolphin->metadata['format']);
         $this->assertSame('fallback', $dolphin->metadata['source_role']);
         $this->assertSame('Southern Cal', $southernCal->boatName);

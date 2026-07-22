@@ -6,9 +6,12 @@ use App\Contracts\Parsing\ParsedReportDiagnosticRule;
 use App\DTOs\ParsedReportValidationData;
 use App\DTOs\ParserDiagnosticFindingData;
 use App\Enums\ParserDiagnosticType;
+use App\Services\Parsing\SourceFishCountGrammar;
 
 class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
 {
+    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
+
     public function inspect(ParsedReportValidationData $data): array
     {
         if ($data->report === null || $data->sanitizedParagraph === '') {
@@ -19,6 +22,7 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
         $remaining = preg_replace([
             '/\b\d{4}-\d{2}-\d{2}\b/',
             '/\([^)]*(?:lbs?|pounds?)\b[^)]*\)/i',
+            '/\(\s*(?:up\s+to\s+)?\d+(?:\s*(?:-|to|\x{2013})\s*\d+)?\s*\)/iu',
             '/\b\d+(?:\.\d+|\/\d+)?\s*(?:day|hour)s?\b/i',
             '/\bday\s+\d+\b/i',
             '/\b\d+(?:\.\d+)?\s*(?:lb|lbs|pound|pounds|oz)\b/i',
@@ -94,6 +98,8 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             ? $data->report->rawFishCountText
             : $data->sanitizedParagraph;
 
-        return preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
+        $sourceText = preg_replace('/\bCakico\s+Bass\b/i', 'Calico Bass', $sourceText) ?? $sourceText;
+
+        return $this->sourceGrammar->normalize($sourceText);
     }
 }

@@ -33,7 +33,13 @@ class DiagnosticContextFactory
             fn (string $paragraph): bool => $rawCounts !== '' && $this->containsSourceSpan($paragraph, $rawCounts),
         )->values();
         $matchingParagraph = $matchingParagraphs
-            ->sortByDesc(fn (string $paragraph): int => $this->reportIdentityMatchScore($paragraph, $report))
+            ->sort(function (string $left, string $right) use ($report): int {
+                $scoreComparison = $this->reportIdentityMatchScore($right, $report) <=> $this->reportIdentityMatchScore($left, $report);
+
+                return $scoreComparison !== 0
+                    ? $scoreComparison
+                    : Str::length($left) <=> Str::length($right);
+            })
             ->first();
 
         if (is_string($matchingParagraph)) {

@@ -44,16 +44,16 @@
 
             <div
                 class="space-y-3"
-                data-backfill-poll
-                data-backfill-poll-active="{{ $hasActiveReparseRun ? 'true' : 'false' }}"
-                data-backfill-poll-active-key="has_active_reparse"
-                data-backfill-poll-active-message="Reparse running"
-                data-backfill-poll-complete-message="Reparse complete"
-                data-backfill-poll-paused-message="Reparse updates paused"
-                data-backfill-poll-interval="2000"
-                data-backfill-poll-url="{{ route('admin.backfills.reparse-poll', $backfill) }}"
+                data-progress-poll
+                data-progress-poll-active="{{ $hasActiveReparseRun ? 'true' : 'false' }}"
+                data-progress-poll-active-key="has_active_reparse"
+                data-progress-poll-active-message="Reparse running"
+                data-progress-poll-complete-message="Reparse complete"
+                data-progress-poll-paused-message="Reparse updates paused"
+                data-progress-poll-interval="2000"
+                data-progress-poll-url="{{ route('admin.backfills.reparse-poll', $backfill) }}"
             >
-                <div class="flex items-center gap-2 text-xs text-gray-500" data-backfill-poll-status>
+                <div class="flex items-center gap-2 text-xs text-gray-500" data-progress-poll-status>
                     @if ($hasActiveReparseRun)
                         <span class="h-2 w-2 rounded-full bg-blue-600"></span>
                         <span>Reparse running</span>
@@ -62,7 +62,7 @@
                         <span>Reparse idle</span>
                     @endif
                 </div>
-                <div data-backfill-poll-target>
+                <div data-progress-poll-target>
                     @include('admin.backfills._reparse', [
                         'backfill' => $backfill,
                         'latestReparseRun' => $latestReparseRun,
