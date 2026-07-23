@@ -19,7 +19,7 @@ class FractionalTripConflictRule implements ParsedReportDiagnosticRule
         $sourceTripType = Str::of($matches['fraction'].' Day')->lower()->squish()->toString();
         $parsedTripType = Str::of($data->report->tripTypeName ?? '')->lower()->squish()->toString();
 
-        if (Str::startsWith($parsedTripType, $sourceTripType)) {
+        if (Str::contains($parsedTripType, $sourceTripType)) {
             return [];
         }
 

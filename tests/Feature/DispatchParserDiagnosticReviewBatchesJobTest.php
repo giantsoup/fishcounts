@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Enums\ParserDiagnosticReviewRunStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ScrapeRunType;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
+use App\Models\ParserExecution;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
@@ -62,6 +64,28 @@ class DispatchParserDiagnosticReviewBatchesJobTest extends TestCase
 
         Bus::assertNothingDispatched();
         $this->assertSame(ParserDiagnosticReviewRunStatus::Completed, $run->refresh()->status);
+    }
+
+    public function test_it_does_not_dispatch_reviews_for_current_ai_authoritative_output(): void
+    {
+        Bus::fake();
+        [$payload] = $this->payloadWithErrors(1);
+        $execution = ParserExecution::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'idempotency_key' => hash('sha256', 'ai-authoritative-dispatch'),
+            'requested_engine' => ParserEngine::Ai,
+            'selected_engine' => ParserEngine::Ai,
+            'status' => 'completed',
+            'payload_hash' => $payload->payload_hash,
+            'started_at' => now(),
+            'completed_at' => now(),
+        ]);
+        $payload->update(['authoritative_parser_execution_id' => $execution->id]);
+
+        app()->call([new DispatchParserDiagnosticReviewBatchesJob($payload->id), 'handle']);
+
+        Bus::assertNothingDispatched();
     }
 
     public function test_it_is_unique_per_payload_and_manual_run(): void

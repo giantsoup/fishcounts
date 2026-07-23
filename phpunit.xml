@@ -29,6 +29,7 @@
         <env name="FISH_AI_REVIEW_ENABLED" value="false" force="true"/>
         <env name="FISH_AI_REVIEW_DISPATCH_ENABLED" value="false" force="true"/>
         <env name="FISH_AI_REVIEW_HUMAN_WORKFLOW_ENABLED" value="false" force="true"/>
+        <env name="FISH_AI_PARSING_ENABLED" value="false" force="true"/>
         <env name="FISH_GITHUB_ISSUES_ENABLED" value="false" force="true"/>
         <env name="FISH_GITHUB_ISSUES_WRITE_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array"/>

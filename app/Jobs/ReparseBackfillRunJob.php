@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enums\BackfillReparseRunStatus;
 use App\Models\BackfillReparseRun;
+use App\Models\RawScrapePayload;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
@@ -69,7 +70,16 @@ class ReparseBackfillRunJob implements ShouldBeUnique, ShouldQueue
             'error_message' => null,
         ]);
 
-        $payloadIds->each(fn (int $payloadId): mixed => ReparseBackfillPayloadJob::dispatch($reparseRun->id, $payloadId));
+        RawScrapePayload::query()
+            ->select(['id', 'scrape_source_id'])
+            ->with('scrapeSource:id,parser_engine')
+            ->whereKey($payloadIds)
+            ->lazyById(100)
+            ->each(fn (RawScrapePayload $payload): mixed => ReparseBackfillPayloadJob::dispatch(
+                $reparseRun->id,
+                $payload->id,
+                $payload->scrapeSource->parser_engine,
+            ));
     }
 
     public function failed(Throwable $throwable): void

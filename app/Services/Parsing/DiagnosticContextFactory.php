@@ -9,6 +9,8 @@ use Illuminate\Support\Str;
 
 class DiagnosticContextFactory
 {
+    public function __construct(private readonly SourceFishCountDocumentScope $documentScope) {}
+
     public function sanitizeDiagnosticText(string $text): string
     {
         return $this->sanitizeText($text);
@@ -57,7 +59,10 @@ class DiagnosticContextFactory
     /** @return array<int, string> */
     public function fishCountParagraphs(RawPayloadData $payload): array
     {
-        $body = preg_replace('/<(script|style|head|nav|form)\b[^>]*>.*?<\/\1>/is', ' ', $payload->body) ?? '';
+        $body = in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)
+            ? $this->documentScope->forPayload($payload)
+            : $payload->body;
+        $body = preg_replace('/<(script|style|head|nav|form)\b[^>]*>.*?<\/\1>/is', ' ', $body) ?? '';
         $body = preg_replace('/<div\b(?=[^>]*(?:border-top\s*:\s*1px|\bclass=[\'\"][^\'\"]*\brow\b))[^>]*>/i', "\n", $body) ?? $body;
         $body = preg_replace('/<\/(?:p|li|tr|section|article|table|h[1-6])\s*>/i', "\n", $body) ?? $body;
         $body = preg_replace('/<\/(?:td|th|div)\s*>/i', ' | ', $body) ?? $body;

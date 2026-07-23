@@ -6,6 +6,7 @@ use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ScrapeRunType;
 use App\Exceptions\OpenAiIncompleteResponseException;
 use App\Exceptions\OpenAiResponseValidationException;
@@ -14,6 +15,7 @@ use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
+use App\Models\ParserExecution;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
@@ -234,6 +236,35 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertDatabaseEmpty('ai_budget_reservations');
         $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
         $this->assertSame('AI review dispatch is no longer available.', $run->failure_message);
+    }
+
+    public function test_queued_review_no_ops_when_ai_output_becomes_authoritative(): void
+    {
+        [$payload] = $this->payloadAndError();
+        $execution = ParserExecution::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'idempotency_key' => hash('sha256', 'ai-authoritative-review'),
+            'requested_engine' => ParserEngine::Ai,
+            'selected_engine' => ParserEngine::Ai,
+            'status' => 'completed',
+            'payload_hash' => $payload->payload_hash,
+            'started_at' => now(),
+            'completed_at' => now(),
+        ]);
+        $payload->update(['authoritative_parser_execution_id' => $execution->id]);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new LogicException('The provider must not be called for AI-authored primary output.');
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id), 'handle']);
+
+        $this->assertDatabaseEmpty('parser_diagnostic_reviews');
+        $this->assertDatabaseEmpty('ai_budget_reservations');
     }
 
     public function test_budget_exhaustion_skips_the_review_without_calling_the_provider(): void

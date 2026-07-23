@@ -15,13 +15,13 @@ class ParsePayloadCommand extends Command
     public function handle(): int
     {
         $payloadId = (int) $this->argument('payloadId');
-        RawScrapePayload::query()->findOrFail($payloadId);
+        $payload = RawScrapePayload::query()->with('scrapeSource')->findOrFail($payloadId);
 
         if ($this->option('sync')) {
-            ParseRawPayloadJob::dispatchSync($payloadId);
+            ParseRawPayloadJob::dispatchSync(rawScrapePayloadId: $payloadId, parserEngine: $payload->scrapeSource->parser_engine);
             $this->info("Payload {$payloadId} parsed.");
         } else {
-            ParseRawPayloadJob::dispatch($payloadId);
+            ParseRawPayloadJob::dispatch(rawScrapePayloadId: $payloadId, parserEngine: $payload->scrapeSource->parser_engine);
             $this->info("Payload {$payloadId} queued for parsing.");
         }
 

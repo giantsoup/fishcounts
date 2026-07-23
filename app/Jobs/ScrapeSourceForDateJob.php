@@ -93,7 +93,10 @@ class ScrapeSourceForDateJob implements ShouldBeUnique, ShouldQueue
 
             $source->update(['last_success_at' => now()]);
 
-            ParseRawPayloadJob::dispatch($payload->id);
+            ParseRawPayloadJob::dispatch(
+                rawScrapePayloadId: $payload->id,
+                parserEngine: $source->parser_engine,
+            );
         } catch (Throwable $throwable) {
             $scrapeRun->update([
                 'status' => ScrapeRunStatus::Failed,

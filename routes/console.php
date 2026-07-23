@@ -33,13 +33,13 @@ Schedule::command('fish:collect-environmental-data yesterday --finalize')
     ->onOneServer();
 
 Schedule::command('fish:score-latest')
-    ->dailyAt('01:15')
+    ->dailyAt('02:00')
     ->timezone('America/Los_Angeles')
     ->withoutOverlapping()
     ->onOneServer();
 
 Schedule::command('fish:send-hot-alerts')
-    ->dailyAt('01:25')
+    ->dailyAt('02:15')
     ->timezone('America/Los_Angeles')
     ->withoutOverlapping()
     ->onOneServer();
@@ -52,6 +52,12 @@ Schedule::command('fish:send-weekly-digest')
     ->onOneServer();
 
 Schedule::command('ai-reviews:prune')
+    ->monthly()
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('ai-parsing:prune')
     ->monthly()
     ->timezone('America/Los_Angeles')
     ->withoutOverlapping()

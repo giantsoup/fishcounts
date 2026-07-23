@@ -53,6 +53,7 @@ final class AiReviewMetrics
             'tokens' => (int) ($usage?->tokens ?? 0),
             'cost_micros' => (int) AiBudgetReservation::query()
                 ->where('status', 'settled')
+                ->whereNull('parser_execution_id')
                 ->where('settled_at', '>=', $since)
                 ->sum('actual_micros'),
             'github_duplicates' => (int) ParserBugReport::query()->selectRaw('COALESCE(SUM(CASE WHEN occurrence_count > 1 THEN occurrence_count - 1 ELSE 0 END), 0) as aggregate')->value('aggregate'),

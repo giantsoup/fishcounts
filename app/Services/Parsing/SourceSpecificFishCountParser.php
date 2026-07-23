@@ -12,7 +12,10 @@ use Illuminate\Support\Str;
 
 class SourceSpecificFishCountParser
 {
-    public function __construct(private readonly GenericFishCountParser $genericParser) {}
+    public function __construct(
+        private readonly GenericFishCountParser $genericParser,
+        private readonly SourceFishCountDocumentScope $documentScope,
+    ) {}
 
     public function parse(RawPayloadData $payload): ParsedFishCountCollection
     {
@@ -29,7 +32,19 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v3");
+        $parserVersion = "source-specific-{$payload->sourceKey}-v3";
+        if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
+            $payload = new RawPayloadData(
+                sourceKey: $payload->sourceKey,
+                targetDate: $payload->targetDate,
+                url: $payload->url,
+                body: $this->documentScope->forPayload($payload),
+                metadata: $payload->metadata,
+            );
+            $parserVersion = "source-specific-{$payload->sourceKey}-v4";
+        }
+
+        return $this->parseStructuredPayload($payload, $parserVersion);
     }
 
     private function parseReportFeedPayload(RawPayloadData $payload): ParsedFishCountCollection
@@ -40,7 +55,7 @@ class SourceSpecificFishCountParser
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
         $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v3';
-        $panelHtml = $this->sportfishingReportSanDiegoPanelHtml($payload->body);
+        $panelHtml = $this->documentScope->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
             return new ParsedFishCountCollection(collect(), $parserVersion, 'party-boat-scores');
@@ -54,15 +69,6 @@ class SourceSpecificFishCountParser
             ->values();
 
         return new ParsedFishCountCollection($reports, $parserVersion, 'party-boat-scores');
-    }
-
-    private function sportfishingReportSanDiegoPanelHtml(string $html): ?string
-    {
-        if (! preg_match('/<div\b[^>]*class=[\'"][^\'"]*\bpanel\b[^\'"]*[\'"][^>]*>\s*<h2\b[^>]*>\s*San Diego Fish Counts\s*<\/h2>(?<panel>.*?)(?=<div\b[^>]*class=[\'"][^\'"]*\bpanel\b[^\'"]*[\'"]|<\/body>|\z)/is', $html, $matches)) {
-            return null;
-        }
-
-        return $matches['panel'];
     }
 
     private function sportfishingReportPartyBoatReportFromRow(RawPayloadData $payload, string $rowHtml, string $parserVersion): ?ParsedTripReportData

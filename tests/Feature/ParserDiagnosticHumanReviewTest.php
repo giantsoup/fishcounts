@@ -7,6 +7,7 @@ use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserDiagnosticReviewClassification;
 use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ParserErrorResolutionType;
 use App\Enums\Role;
 use App\Enums\ScrapeRunType;
@@ -231,6 +232,26 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             fn (ParseRawPayloadJob $job): bool => $job->parserDiagnosticReviewRunId === $run->id,
         );
         Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
+    }
+
+    public function test_ai_primary_output_cannot_be_sent_through_the_diagnostic_ai_reviewer(): void
+    {
+        Queue::fake();
+        [$payload, $parserError] = $this->payloadAndError();
+        $payload->scrapeSource()->update(['parser_engine' => ParserEngine::Ai]);
+        $admin = User::factory()->admin()->create();
+        $indexRoute = route('admin.parser-errors.index');
+
+        $this->actingAs($admin)
+            ->from($indexRoute)
+            ->post(route('admin.parser-errors.reviews.store', $parserError))
+            ->assertRedirect($indexRoute)
+            ->assertSessionHasErrors([
+                'review' => 'AI-primary parser output is monitored through parser executions and cannot be sent through the diagnostic AI reviewer.',
+            ]);
+
+        $this->assertDatabaseCount('parser_diagnostic_review_runs', 0);
+        Queue::assertNothingPushed();
     }
 
     public function test_stalled_manual_run_is_recoverable_without_duplicate_dispatch(): void

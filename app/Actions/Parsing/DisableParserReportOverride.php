@@ -2,6 +2,7 @@
 
 namespace App\Actions\Parsing;
 
+use App\Enums\ParserEngine;
 use App\Enums\ParserReportOverrideStatus;
 use App\Models\ParserReportOverride;
 use App\Models\RawScrapePayload;
@@ -26,7 +27,7 @@ final class DisableParserReportOverride
                 throw ValidationException::withMessages(['override' => 'Only an active override may be disabled.']);
             }
 
-            $payload = RawScrapePayload::query()->lockForUpdate()->findOrFail($override->raw_scrape_payload_id);
+            $payload = RawScrapePayload::query()->with('scrapeSource:id,parser_engine')->lockForUpdate()->findOrFail($override->raw_scrape_payload_id);
             $override->forceFill([
                 'status' => ParserReportOverrideStatus::Disabled,
                 'disabled_by_user_id' => $actor->id,
@@ -36,8 +37,10 @@ final class DisableParserReportOverride
                 'disabled_at' => now(),
             ])->save();
 
-            $this->parseRawPayload->handle($payload->id, false);
-            $this->normalizer->refreshPrimaryReports($payload->target_date->toDateString());
+            if ($payload->scrapeSource->parser_engine === ParserEngine::Deterministic) {
+                $this->parseRawPayload->handle($payload->id, false);
+                $this->normalizer->refreshPrimaryReports($payload->target_date->toDateString());
+            }
         }, attempts: 3);
     }
 }

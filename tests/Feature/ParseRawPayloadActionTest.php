@@ -7,6 +7,7 @@ use App\DTOs\ParseRawPayloadResult;
 use App\Enums\BackfillReparseRunStatus;
 use App\Enums\BackfillRunStatus;
 use App\Enums\ParserDiagnosticReviewRunStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ScrapeRunType;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\ParseRawPayloadJob;
@@ -17,6 +18,7 @@ use App\Models\Boat;
 use App\Models\Landing;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
+use App\Models\ParserExecution;
 use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
@@ -44,7 +46,7 @@ class ParseRawPayloadActionTest extends TestCase
 
         $this->assertInstanceOf(ParseRawPayloadResult::class, $firstResult);
         $this->assertSame($payload->id, $firstResult->rawScrapePayloadId);
-        $this->assertSame('source-specific-fishermans_landing-v3', $firstResult->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v4', $firstResult->parserVersion);
         $this->assertSame(1, $firstResult->parsedReportCount);
         $this->assertSame(
             ParserError::query()->where('raw_scrape_payload_id', $payload->id)->whereNull('resolution_type')->count(),
@@ -100,14 +102,14 @@ class ParseRawPayloadActionTest extends TestCase
             $normalReport->speciesCounts()->orderBy('species_id')->pluck('count', 'species_id')->all(),
             $backfillReport->speciesCounts()->orderBy('species_id')->pluck('count', 'species_id')->all(),
         );
-        $this->assertSame('source-specific-fishermans_landing-v3', $normalPayload->refresh()->parser_version);
+        $this->assertSame('source-specific-fishermans_landing-v4', $normalPayload->refresh()->parser_version);
         $this->assertSame($normalPayload->parser_version, $backfillPayload->refresh()->parser_version);
         $this->assertSame(1, $reparseRun->refresh()->completed_payloads);
         $this->assertSame(BackfillReparseRunStatus::Succeeded, $reparseRun->status);
         Queue::assertPushed(DeduplicateTripReportsJob::class, 2);
     }
 
-    public function test_job_configuration_and_failure_behavior_remain_unchanged(): void
+    public function test_job_configuration_bounds_ai_failures_and_preserves_failure_auditing(): void
     {
         $payload = $this->createPayload('2026-07-01');
         $reviewRun = ParserDiagnosticReviewRun::factory()->create([
@@ -115,26 +117,57 @@ class ParseRawPayloadActionTest extends TestCase
             'status' => ParserDiagnosticReviewRunStatus::Preparing,
         ]);
         $parseJob = new ParseRawPayloadJob($payload->id, true, $reviewRun->id);
+        $aiParseJob = new ParseRawPayloadJob($payload->id, parserEngine: ParserEngine::Ai);
         $backfillJob = new ReparseBackfillPayloadJob(42, $payload->id);
+        $aiBackfillJob = new ReparseBackfillPayloadJob(42, $payload->id, ParserEngine::Ai);
+        $readyExecution = ParserExecution::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'idempotency_key' => hash('sha256', 'terminal-ready-execution'),
+            'requested_engine' => ParserEngine::Ai,
+            'selected_engine' => ParserEngine::Ai,
+            'status' => 'ready',
+            'payload_hash' => $payload->payload_hash,
+            'started_at' => now(),
+        ]);
         $failureMessage = Str::repeat('x', 1200);
 
         $this->assertSame('parsing', $parseJob->queue);
         $this->assertSame(3, $parseJob->tries);
-        $this->assertSame(120, $parseJob->timeout);
+        $this->assertSame(90, $parseJob->timeout);
         $this->assertSame("{$payload->id}:review-run:{$reviewRun->id}", $parseJob->uniqueId());
         $this->assertSame((string) $payload->id, (new ParseRawPayloadJob($payload->id))->uniqueId());
         $this->assertSame([30, 120, 300], $parseJob->backoff());
+        $this->assertSame('ai-primary-parsing', $aiParseJob->queue);
+        $this->assertSame('database', $aiParseJob->connection);
+        $this->assertSame(300, $aiParseJob->timeout);
+        $this->assertSame(86_400, $aiParseJob->uniqueFor);
+        $this->assertSame(0, $aiParseJob->tries());
+        $this->assertSame(1, $aiParseJob->maxExceptions);
+        $this->assertTrue($aiParseJob->failOnTimeout);
+        $this->assertSame(ParserEngine::Ai, $aiParseJob->parserEngine);
         $this->assertSame('parsing', $backfillJob->queue);
         $this->assertSame(3, $backfillJob->tries);
-        $this->assertSame(120, $backfillJob->timeout);
+        $this->assertSame(90, $backfillJob->timeout);
+        $this->assertSame(86_400, $backfillJob->uniqueFor);
+        $this->assertSame(3, $backfillJob->maxExceptions);
+        $this->assertFalse($backfillJob->failOnTimeout);
         $this->assertSame("42:{$payload->id}", $backfillJob->uniqueId());
         $this->assertSame([30, 120, 300], $backfillJob->backoff());
+        $this->assertSame('database', $aiBackfillJob->connection);
+        $this->assertSame('ai-primary-parsing', $aiBackfillJob->queue);
+        $this->assertSame(300, $aiBackfillJob->timeout);
+        $this->assertSame(0, $aiBackfillJob->tries());
+        $this->assertSame(1, $aiBackfillJob->maxExceptions);
+        $this->assertTrue($aiBackfillJob->failOnTimeout);
 
         $parseJob->failed(new RuntimeException($failureMessage));
 
         $this->assertSame(1003, Str::length($payload->refresh()->error_message));
         $this->assertStringEndsWith('...', $payload->error_message);
         $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $reviewRun->refresh()->status);
+        $this->assertSame('failed', $readyExecution->refresh()->status);
+        $this->assertSame('job_failure', $readyExecution->failure_category);
     }
 
     public function test_normal_parsing_job_is_idempotent(): void

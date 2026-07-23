@@ -52,7 +52,7 @@ services:
   ai-queue:
     build:
       context: .
-    command: php artisan queue:work database --queue=ai-parsing,github-issues --sleep=3 --tries=0 --timeout=220
+    command: php artisan queue:work database --queue=ai-primary-parsing,ai-parsing,github-issues --sleep=3 --tries=0 --timeout=330
     env_file:
       - .env
     environment:
@@ -64,11 +64,15 @@ services:
       DB_PASSWORD: fishcounts
       CACHE_STORE: database
       QUEUE_CONNECTION: database
+      FISH_APPLICATION_QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
     volumes:
       - .:/app
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   scheduler:
     build:

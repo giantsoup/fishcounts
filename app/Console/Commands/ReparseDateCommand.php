@@ -33,12 +33,19 @@ class ReparseDateCommand extends Command
 
         $payloads->each(function (RawScrapePayload $payload) use ($synchronous): void {
             if ($synchronous) {
-                ParseRawPayloadJob::dispatchSync($payload->id, false);
+                ParseRawPayloadJob::dispatchSync(
+                    rawScrapePayloadId: $payload->id,
+                    shouldDispatchDeduplication: false,
+                    parserEngine: $payload->scrapeSource->parser_engine,
+                );
 
                 return;
             }
 
-            ParseRawPayloadJob::dispatch($payload->id);
+            ParseRawPayloadJob::dispatch(
+                rawScrapePayloadId: $payload->id,
+                parserEngine: $payload->scrapeSource->parser_engine,
+            );
         });
 
         if ($synchronous) {

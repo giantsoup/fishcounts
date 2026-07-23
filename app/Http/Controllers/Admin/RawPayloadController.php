@@ -31,7 +31,11 @@ class RawPayloadController extends Controller
     {
         $this->authorize('reparse', $rawScrapePayload);
 
-        ParseRawPayloadJob::dispatch($rawScrapePayload->id);
+        $rawScrapePayload->loadMissing('scrapeSource');
+        ParseRawPayloadJob::dispatch(
+            rawScrapePayloadId: $rawScrapePayload->id,
+            parserEngine: $rawScrapePayload->scrapeSource->parser_engine,
+        );
 
         return redirect()->route('admin.raw-payloads.show', $rawScrapePayload)->with('status', 'Payload queued for reparsing.');
     }

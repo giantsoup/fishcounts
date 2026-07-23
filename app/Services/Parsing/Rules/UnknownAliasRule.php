@@ -26,16 +26,24 @@ class UnknownAliasRule implements ParsedReportDiagnosticRule
 
         $findings = [];
 
-        if ($data->report->boatName !== null && ! $this->knownBoat($data->report->boatName)) {
+        if (
+            $data->report->canonicalBoatId === null
+            && $data->report->boatName !== null
+            && ! $this->knownBoat($data->report->boatName)
+        ) {
             $findings[] = $this->finding('boat', $data->report->boatName);
         }
 
-        if ($data->report->tripTypeName !== null && ! $this->knownTripType($data->report->tripTypeName)) {
+        if (
+            $data->report->canonicalTripTypeId === null
+            && $data->report->tripTypeName !== null
+            && ! $this->knownTripType($data->report->tripTypeName)
+        ) {
             $findings[] = $this->finding('trip_type', $data->report->tripTypeName);
         }
 
         foreach ($data->report->speciesCounts as $speciesCount) {
-            if (! $this->knownSpecies($speciesCount->speciesName)) {
+            if ($speciesCount->canonicalSpeciesId === null && ! $this->knownSpecies($speciesCount->speciesName)) {
                 $findings[] = $this->finding('species', $speciesCount->speciesName);
             }
         }

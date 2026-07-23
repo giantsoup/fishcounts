@@ -510,8 +510,8 @@ class PhaseNineOperationsTest extends TestCase
         $this->assertSame('1', $job->uniqueId());
 
         $composer = json_decode(file_get_contents(base_path('composer.json')), true, flags: JSON_THROW_ON_ERROR);
-        $this->assertStringContainsString('--timeout=220', implode(' ', $composer['scripts']['dev']));
-        $this->assertStringContainsString('--timeout=220', file_get_contents(base_path('DEPLOYMENT.md')));
+        $this->assertStringContainsString('--timeout=330', implode(' ', $composer['scripts']['dev']));
+        $this->assertStringContainsString('--timeout=330', file_get_contents(base_path('DEPLOYMENT.md')));
     }
 
     public function test_worker_restart_retries_a_running_item_without_duplicate_processing(): void

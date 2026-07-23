@@ -15,9 +15,16 @@ class RawPayloadEvaluator
     /** @return array{RawScrapePayload, RawPayloadData, ParsedFishCountCollection} */
     public function evaluate(int $rawScrapePayloadId): array
     {
-        $payload = RawScrapePayload::query()
-            ->with('scrapeSource')
-            ->findOrFail($rawScrapePayloadId);
+        [$payload, $rawPayload] = $this->load($rawScrapePayloadId);
+        $parsed = $this->parseDeterministically($payload, $rawPayload);
+
+        return [$payload, $rawPayload, $parsed];
+    }
+
+    /** @return array{RawScrapePayload, RawPayloadData} */
+    public function load(int $rawScrapePayloadId): array
+    {
+        $payload = RawScrapePayload::query()->with('scrapeSource')->findOrFail($rawScrapePayloadId);
         $rawPayload = new RawPayloadData(
             sourceKey: $payload->scrapeSource->slug,
             targetDate: CarbonImmutable::parse($payload->target_date),
@@ -25,8 +32,14 @@ class RawPayloadEvaluator
             body: $payload->payload,
             metadata: $payload->metadata ?? [],
         );
-        $parsed = $this->registry->forSource($payload->scrapeSource)->parse($rawPayload);
 
-        return [$payload, $rawPayload, $parsed];
+        return [$payload, $rawPayload];
+    }
+
+    public function parseDeterministically(
+        RawScrapePayload $payload,
+        RawPayloadData $rawPayload,
+    ): ParsedFishCountCollection {
+        return $this->registry->forSource($payload->scrapeSource)->parse($rawPayload);
     }
 }

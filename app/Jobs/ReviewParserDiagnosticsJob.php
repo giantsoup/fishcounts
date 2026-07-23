@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Actions\Parsing\AutomateParserDiagnosticReviews;
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Exceptions\AiBudgetExceededException;
 use App\Exceptions\OpenAiIncompleteResponseException;
 use App\Exceptions\OpenAiResponseValidationException;
@@ -141,9 +142,24 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
         $reviewRun?->markRunning();
 
-        $payload = RawScrapePayload::query()->find($this->rawScrapePayloadId);
+        $payload = RawScrapePayload::query()
+            ->with('authoritativeParserExecution:id,selected_engine')
+            ->find($this->rawScrapePayloadId);
         if ($payload === null) {
             $this->failReviewRun('The raw payload is no longer available for AI review.');
+
+            return;
+        }
+        if ($payload->authoritativeParserExecution?->selected_engine === ParserEngine::Ai) {
+            $this->skip(ParserDiagnosticReview::query()
+                ->where('raw_scrape_payload_id', $this->rawScrapePayloadId)
+                ->when(
+                    $this->diagnosticFingerprints !== null,
+                    fn ($query) => $query->whereIn('diagnostic_fingerprint', $this->diagnosticFingerprints),
+                )
+                ->whereIn('status', [ParserDiagnosticReviewStatus::Pending, ParserDiagnosticReviewStatus::Running])
+                ->get());
+            $this->failReviewRun('AI-authored primary output is not eligible for diagnostic AI review.');
 
             return;
         }

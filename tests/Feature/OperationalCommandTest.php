@@ -302,6 +302,33 @@ class OperationalCommandTest extends TestCase
         }
     }
 
+    public function test_production_check_accepts_the_supported_docker_redis_defaults(): void
+    {
+        $databaseConnection = config('database.default');
+
+        try {
+            config([
+                'app.env' => 'production',
+                'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+                'app.debug' => false,
+                'database.default' => 'pgsql',
+                'queue.default' => 'redis',
+                'cache.default' => 'redis',
+                'session.secure' => true,
+                'session.http_only' => true,
+                'mail.default' => 'smtp',
+                'mail.from.address' => 'alerts@example.test',
+                'fish.admin.password' => 'not-the-default-password',
+                'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)',
+                'fish.queues.application_connection' => 'redis',
+            ]);
+
+            $this->artisan('fish:production-check', ['--skip-database' => true])->assertSuccessful();
+        } finally {
+            config(['database.default' => $databaseConnection]);
+        }
+    }
+
     public function test_production_check_fails_for_invalid_environmental_condition_configuration(): void
     {
         $databaseConnection = config('database.default');
@@ -324,6 +351,44 @@ class OperationalCommandTest extends TestCase
             ]);
 
             $this->artisan('fish:production-check', ['--skip-database' => true])->assertFailed();
+        } finally {
+            config(['database.default' => $databaseConnection]);
+        }
+    }
+
+    public function test_production_check_fails_for_unsafe_ai_parser_guardrails(): void
+    {
+        $databaseConnection = config('database.default');
+
+        try {
+            config([
+                'app.env' => 'production',
+                'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+                'app.debug' => false,
+                'database.default' => 'mariadb',
+                'queue.default' => 'database',
+                'cache.default' => 'database',
+                'session.secure' => true,
+                'session.http_only' => true,
+                'mail.default' => 'smtp',
+                'mail.from.address' => 'alerts@example.test',
+                'fish.admin.password' => 'not-the-default-password',
+                'fish.conditions.user_agent' => 'FishCountsBot/1.0 (+https://fish.tayloroyer.com/contact)',
+                'fish.ai_parsing.limits.max_input_tokens' => 64_001,
+                'fish.ai_parsing.store_provider_response' => true,
+                'fish.ai_parsing.rate_limit_per_minute' => 6,
+                'fish.ai_parsing.timeout_seconds' => 121,
+                'fish.ai_parsing.model' => 'unpriced-model',
+                'fish.ai_parsing.pricing.model' => 'unpriced-model',
+            ]);
+
+            $this->artisan('fish:production-check', ['--skip-database' => true])
+                ->expectsOutputToContain('FISH_AI_PARSING_MAX_INPUT_TOKENS must be between 1 and 64000.')
+                ->expectsOutputToContain('AI parser provider responses must not be stored.')
+                ->expectsOutputToContain('FISH_AI_PARSING_RATE_LIMIT_PER_MINUTE must be between 1 and 5.')
+                ->expectsOutputToContain('FISH_AI_PARSING_TIMEOUT must be at least the connect timeout and no greater than 120 seconds.')
+                ->expectsOutputToContain('must remain gpt-5.6-luna')
+                ->assertFailed();
         } finally {
             config(['database.default' => $databaseConnection]);
         }

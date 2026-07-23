@@ -52,6 +52,24 @@
 
             <div class="bg-white p-6 shadow sm:rounded-lg">
                 <div class="flex items-center justify-between">
+                    <h3 class="font-semibold text-gray-900">AI primary parsing</h3>
+                    <p class="text-xs text-gray-500">Last 24 hours unless noted</p>
+                </div>
+                <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div><p class="text-xs text-gray-500">Queue / oldest</p><p class="font-semibold">{{ number_format($parserMetrics['queue_depth']) }} / {{ $parserMetrics['queue_depth'] === 0 ? 'none' : now()->subSeconds($parserMetrics['queue_oldest_age_seconds'])->diffForHumans(short: true) }}</p></div>
+                    <div><p class="text-xs text-gray-500">AI success / fallback</p><p class="font-semibold">{{ number_format($parserMetrics['ai_success']) }} / {{ number_format($parserMetrics['fallbacks']) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Mismatch / failure</p><p class="font-semibold">{{ number_format($parserMetrics['mismatches']) }} / {{ number_format($parserMetrics['failures']) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Schema/domain failures</p><p class="font-semibold">{{ number_format($parserMetrics['validation_failures']) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Estimated-cost executions</p><p class="font-semibold">{{ number_format($parserMetrics['estimated_costs']) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Average provider latency</p><p class="font-semibold">{{ number_format($parserMetrics['average_latency_ms']) }} ms</p></div>
+                    <div><p class="text-xs text-gray-500">Tokens</p><p class="font-semibold">{{ number_format($parserMetrics['tokens']) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Daily spend / remaining</p><p class="font-semibold">${{ number_format($parserMetrics['daily_cost_micros'] / 1_000_000, 2) }} / ${{ number_format($parserMetrics['daily_remaining_micros'] / 1_000_000, 2) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Monthly spend / remaining</p><p class="font-semibold">${{ number_format($parserMetrics['monthly_cost_micros'] / 1_000_000, 2) }} / ${{ number_format($parserMetrics['monthly_remaining_micros'] / 1_000_000, 2) }}</p></div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 shadow sm:rounded-lg">
+                <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-gray-900">Source health</h3>
                     <div class="flex gap-4 text-sm">
                         <a class="text-blue-700" href="{{ route('admin.sources.index') }}">Manage sources</a>

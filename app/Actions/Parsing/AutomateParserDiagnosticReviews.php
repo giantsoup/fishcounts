@@ -11,6 +11,7 @@ use App\Enums\ParserCorrectionOperation;
 use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserDiagnosticReviewClassification;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ParserErrorResolutionType;
 use App\Models\Boat;
 use App\Models\BoatAlias;
@@ -105,6 +106,7 @@ final class AutomateParserDiagnosticReviews
 
             $payloadIds = $affectedPayloadIds->unique()->values()->all();
             $affectedPayloads = RawScrapePayload::query()
+                ->with('scrapeSource:id,parser_engine')
                 ->whereKey($payloadIds)
                 ->orderBy('id')
                 ->lockForUpdate()
@@ -112,6 +114,10 @@ final class AutomateParserDiagnosticReviews
             $dates = [];
 
             foreach ($affectedPayloads as $affectedPayload) {
+                if ($affectedPayload->scrapeSource->parser_engine === ParserEngine::Ai) {
+                    continue;
+                }
+
                 $this->parseRawPayload->handle($affectedPayload->id, false);
                 $this->relinkReviews($affectedPayload);
                 $dates[] = $affectedPayload->target_date->toDateString();

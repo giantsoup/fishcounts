@@ -34,10 +34,21 @@ class ParsedReportValidatorTest extends TestCase
 
         $unknown = $rule->inspect($this->data($this->report(species: 'Moon Fish'), '20 anglers | 4 Moon Fish'));
         $known = $rule->inspect($this->data($this->report(species: 'Rockfish'), '20 anglers | 4 Rockfish'));
+        $canonical = $rule->inspect($this->data(
+            $this->report(
+                tripType: 'Narrative Trip Phrase',
+                species: 'Narrative Fish Phrase',
+                canonicalBoatId: 1,
+                canonicalTripTypeId: 1,
+                canonicalSpeciesId: 1,
+            ),
+            'Narrative Boat Phrase | Narrative Trip Phrase | 20 anglers | 4 Narrative Fish Phrase',
+        ));
 
         $this->assertSame(ParserDiagnosticType::UnknownAlias, $unknown[0]->type);
         $this->assertSame('species', $unknown[0]->field);
         $this->assertSame([], $known);
+        $this->assertSame([], $canonical);
     }
 
     public function test_fractional_trip_rule_detects_conflicts_and_accepts_valid_fractions_and_decimals(): void
@@ -47,11 +58,13 @@ class ParsedReportValidatorTest extends TestCase
         $conflict = $rule->inspect($this->data($this->report(tripType: 'Unknown'), 'Sea Watch | 3/4 Day | 20 anglers | 4 Rockfish'));
         $validHalfDay = $rule->inspect($this->data($this->report(tripType: '1/2 Day AM'), 'Dolphin | 1/2 Day AM | 20 anglers | 4 Rockfish'));
         $validThreeQuarterDay = $rule->inspect($this->data($this->report(tripType: '3/4 Day'), 'Sea Watch | 3/4 Day | 20 anglers | 4 Rockfish'));
+        $validModifiedThreeQuarterDay = $rule->inspect($this->data($this->report(tripType: 'Local 3/4 Day'), 'Sea Watch | Local 3/4 Day | 20 anglers | 4 Rockfish'));
         $validDecimal = $rule->inspect($this->data($this->report(tripType: '1.5 Day'), 'Pacific Queen | 1.5 Day | 20 anglers | 4 Rockfish'));
 
         $this->assertSame(ParserDiagnosticType::FractionalTripConflict, $conflict[0]->type);
         $this->assertSame([], $validHalfDay);
         $this->assertSame([], $validThreeQuarterDay);
+        $this->assertSame([], $validModifiedThreeQuarterDay);
         $this->assertSame([], $validDecimal);
     }
 
@@ -311,6 +324,9 @@ class ParsedReportValidatorTest extends TestCase
         int $released = 0,
         ?string $rawText = '4 Rockfish',
         array $metadata = ['parser' => 'source-v2'],
+        ?int $canonicalBoatId = null,
+        ?int $canonicalTripTypeId = null,
+        ?int $canonicalSpeciesId = null,
     ): ParsedTripReportData {
         return new ParsedTripReportData(
             sourceKey: 'fishermans_landing',
@@ -321,8 +337,10 @@ class ParsedReportValidatorTest extends TestCase
             tripTypeName: $tripType,
             anglers: $anglers,
             rawFishCountText: $rawText,
-            speciesCounts: [new ParsedSpeciesCountData($species, $retained, $released, $rawText)],
+            speciesCounts: [new ParsedSpeciesCountData($species, $retained, $released, $rawText, $canonicalSpeciesId)],
             metadata: $metadata,
+            canonicalBoatId: $canonicalBoatId,
+            canonicalTripTypeId: $canonicalTripTypeId,
         );
     }
 }

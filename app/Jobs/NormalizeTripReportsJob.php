@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\RawScrapePayload;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable as FoundationQueueable;
 
@@ -18,6 +19,10 @@ class NormalizeTripReportsJob implements ShouldQueue
 
     public function handle(): void
     {
-        ParseRawPayloadJob::dispatchSync($this->rawScrapePayloadId);
+        $payload = RawScrapePayload::query()->with('scrapeSource')->findOrFail($this->rawScrapePayloadId);
+        ParseRawPayloadJob::dispatch(
+            rawScrapePayloadId: $this->rawScrapePayloadId,
+            parserEngine: $payload->scrapeSource->parser_engine,
+        );
     }
 }

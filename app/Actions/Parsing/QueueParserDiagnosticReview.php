@@ -4,6 +4,7 @@ namespace App\Actions\Parsing;
 
 use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Enums\QueueParserDiagnosticReviewResult;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ParseRawPayloadJob;
@@ -34,7 +35,12 @@ final class QueueParserDiagnosticReview
         $payloadId = $parserError->raw_scrape_payload_id;
         $newRunId = null;
         $result = DB::transaction(function () use ($parserErrorId, $payloadId, $requestedBy, &$newRunId): QueueParserDiagnosticReviewResult {
-            $payload = RawScrapePayload::query()->lockForUpdate()->findOrFail($payloadId);
+            $payload = RawScrapePayload::query()->with('scrapeSource:id,parser_engine')->lockForUpdate()->findOrFail($payloadId);
+            if ($payload->scrapeSource->parser_engine === ParserEngine::Ai) {
+                throw ValidationException::withMessages([
+                    'review' => 'AI-primary parser output is monitored through parser executions and cannot be sent through the diagnostic AI reviewer.',
+                ]);
+            }
             $parserError = ParserError::query()
                 ->whereKey($parserErrorId)
                 ->whereBelongsTo($payload, 'rawScrapePayload')
@@ -88,10 +94,11 @@ final class QueueParserDiagnosticReview
             ]);
             $newRunId = $run->id;
 
-            DB::afterCommit(function () use ($payloadId, $requiresReparse, $run): void {
+            $parserEngine = $payload->scrapeSource->parser_engine;
+            DB::afterCommit(function () use ($payloadId, $requiresReparse, $run, $parserEngine): void {
                 try {
                     if ($requiresReparse) {
-                        ParseRawPayloadJob::dispatch($payloadId, true, $run->id);
+                        ParseRawPayloadJob::dispatch($payloadId, true, $run->id, $parserEngine);
                     } else {
                         DispatchParserDiagnosticReviewBatchesJob::dispatch($payloadId, $run->id);
                     }

@@ -4,6 +4,7 @@ namespace App\Actions\Parsing;
 
 use App\DTOs\RawPayloadData;
 use App\Enums\ParserDiagnosticReviewStatus;
+use App\Enums\ParserEngine;
 use App\Enums\ParserReportOverrideStatus;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserReportOverride;
@@ -45,6 +46,10 @@ final class ApproveParserReportOverride
             $review = ParserDiagnosticReview::query()->lockForUpdate()->findOrFail($override->parser_diagnostic_review_id);
             $payload = RawScrapePayload::query()->with('scrapeSource')->lockForUpdate()->findOrFail($override->raw_scrape_payload_id);
             $override->loadMissing('parserBugReport');
+
+            if ($payload->scrapeSource->parser_engine === ParserEngine::Ai) {
+                throw ValidationException::withMessages(['override' => 'Parser-version-bound overrides cannot be approved while this source uses AI primary parsing.']);
+            }
 
             if (! in_array($payload->scrapeSource->slug, config('fish.parsing.overrides.allowed_source_slugs', []), true)) {
                 throw ValidationException::withMessages(['override' => 'Report overrides are not enabled for this scrape source.']);

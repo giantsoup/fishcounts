@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Enums\ParserDiagnosticReviewRunStatus;
+use App\Enums\ParserEngine;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -66,8 +67,16 @@ class DispatchParserDiagnosticReviewBatchesJob implements ShouldBeUnique, Should
             return;
         }
 
-        if (! RawScrapePayload::query()->whereKey($this->rawScrapePayloadId)->exists()) {
+        $payload = RawScrapePayload::query()
+            ->with('authoritativeParserExecution:id,selected_engine')
+            ->find($this->rawScrapePayloadId);
+        if ($payload === null) {
             $reviewRun?->markFailed('The raw payload is no longer available for AI review.');
+
+            return;
+        }
+        if ($payload->authoritativeParserExecution?->selected_engine === ParserEngine::Ai) {
+            $reviewRun?->markFailed('AI-authored primary output is not eligible for diagnostic AI review.');
 
             return;
         }

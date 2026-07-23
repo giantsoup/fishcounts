@@ -36,7 +36,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('Full Day', $report->tripTypeName);
         $this->assertSame(20, $report->anglers);
-        $this->assertSame('source-specific-fishermans_landing-v3', $report->metadata['parser']);
+        $this->assertSame('source-specific-fishermans_landing-v4', $report->metadata['parser']);
         $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
         $this->assertSame(40, $report->speciesCounts[0]->count);
         $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
@@ -52,6 +52,7 @@ class SourceAdapterFixtureTest extends TestCase
             url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
             body: <<<'HTML'
                 <table>
+                    <tr><td class="HMFishCountBreak" colspan="4">Wednesday June 17th, 2026</td></tr>
                     <tr><th>Boat</th><th>Trip Type</th><th></th><th>Fish Count</th></tr>
                     <tr><td>Premier</td><td>1/2 Day AM</td><td>32</td><td>25 Calico Bass Released, 21 Calico Bass, 9 Rockfish, 2 Sculpin, 2 Sheephead</td></tr>
                     <tr><td>5 Boats</td><td>5 Trips</td><td>103 Anglers</td><td>65 Yellowtail, 50 Calico Bass Released</td></tr>
@@ -70,6 +71,88 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame(25, $report->speciesCounts[0]->releasedCount);
     }
 
+    public function test_hm_landing_parser_only_reads_the_requested_date_section(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'hm_landing',
+            targetDate: CarbonImmutable::parse('2026-07-22'),
+            url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
+            body: <<<'HTML'
+                <!doctype html>
+                <html><body><table><tbody>
+                    <tr><td class="HMFishCountBreak" colspan="4">Thursday July 23rd, 2026</td></tr>
+                    <tr><th>Boat</th><th>Trip Type</th><th></th><th>Fish Count</th></tr>
+                    <tr><td>Patriot (SD)</td><td>2.5 Day</td><td>6</td><td>18 Bluefin Tuna</td></tr>
+                    <tr><td class="HMFishCountBreak" colspan="4">Wednesday July 22nd, 2026</td></tr>
+                    <tr><th>Boat</th><th>Trip Type</th><th></th><th>Fish Count</th></tr>
+                    <tr><td>Premier</td><td>1/2 Day AM</td><td>37</td><td>93 Calico Bass</td></tr>
+                </tbody></table></body></html>
+                HTML,
+        ));
+
+        $report = $parsed->tripReports->sole();
+
+        $this->assertSame('Premier', $report->boatName);
+        $this->assertSame('2026-07-22', $report->tripDate->toDateString());
+        $this->assertSame(93, $report->speciesCounts[0]->count);
+        $this->assertSame('source-specific-hm_landing-v4', $parsed->parserVersion);
+    }
+
+    public function test_fishermans_landing_parser_only_reads_the_requested_date_section(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-22'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: <<<'HTML'
+                <p>
+                    07/23/2026<br>
+                    The Pegasus returned with 30 Bluefin Tuna for 19 anglers on a 3 Day trip.<br><br>
+                    7/22/2026<br>
+                    The Dolphin returned with 40 Yellowtail for 20 anglers on a 1/2 Day trip.<br><br>
+                    7/21/2026<br>
+                    The Pacific Queen returned with 25 Bluefin Tuna for 18 anglers on a Full Day trip.
+                </p>
+                HTML,
+        ));
+
+        $report = $parsed->tripReports->sole();
+
+        $this->assertSame('Dolphin', $report->boatName);
+        $this->assertSame('2026-07-22', $report->tripDate->toDateString());
+        $this->assertSame(40, $report->speciesCounts[0]->count);
+        $this->assertSame('source-specific-fishermans_landing-v4', $parsed->parserVersion);
+    }
+
+    public function test_hm_landing_parser_fails_closed_without_trusted_date_markers(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'hm_landing',
+            targetDate: CarbonImmutable::parse('2026-07-22'),
+            url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
+            body: '<table><tr><td>Premier</td><td>1/2 Day AM</td><td>37</td><td>93 Calico Bass</td></tr></table>',
+        ));
+
+        $this->assertCount(0, $parsed->tripReports);
+    }
+
+    public function test_hm_landing_parser_fails_closed_when_the_target_date_is_absent(): void
+    {
+        $parsed = app(SourceSpecificFishCountParser::class)->parse(new RawPayloadData(
+            sourceKey: 'hm_landing',
+            targetDate: CarbonImmutable::parse('2026-07-22'),
+            url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
+            body: <<<'HTML'
+                <table>
+                    <tr><td class="HMFishCountBreak" colspan="4">Thursday July 23rd, 2026</td></tr>
+                    <tr><td>Patriot (SD)</td><td>2.5 Day</td><td>6</td><td>18 Bluefin Tuna</td></tr>
+                </table>
+                HTML,
+        ));
+
+        $this->assertCount(0, $parsed->tripReports);
+    }
+
     public function test_hm_landing_diagnostics_do_not_match_partial_numeric_species_counts_to_another_row(): void
     {
         $payload = new RawPayloadData(
@@ -78,6 +161,7 @@ class SourceAdapterFixtureTest extends TestCase
             url: 'https://www.fishcounts.com/hmlanding/fishcounts.php',
             body: <<<'HTML'
                 <table>
+                    <tr><td class="HMFishCountBreak" colspan="4">Sunday July 12th, 2026</td></tr>
                     <tr><th>Boat</th><th>Trip Type</th><th></th><th>Fish Count</th></tr>
                     <tr><td>Excalibur</td><td>3 Day</td><td>28</td><td>200 Rockfish, 115 Red Rockfish, 91 Bluefin Tuna, 17 Dorado, 17 Yellowtail, 15 Sheephead, 1 Yellowfin Tuna</td></tr>
                     <tr><td>Nautilus</td><td>1.5 Day</td><td>5</td><td>1 Bluefin Tuna</td></tr>

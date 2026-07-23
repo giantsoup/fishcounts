@@ -14,6 +14,10 @@ if ($conditionsUserAgent === '' || str_contains($conditionsUserAgent, 'example.c
 }
 
 return [
+    'queues' => [
+        'application_connection' => env('FISH_APPLICATION_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database')),
+    ],
+
     'admin' => [
         'name' => env('FISH_ADMIN_NAME', 'Fish Counts Admin'),
         'email' => env('FISH_ADMIN_EMAIL', 'admin@example.com'),
@@ -200,6 +204,60 @@ return [
             'lock_wait_seconds' => (int) env('FISH_AI_ALIAS_AUTOMATION_LOCK_WAIT_SECONDS', 5),
             'actor_name' => 'Luna automation',
             'actor_email' => 'system@fishcounts.invalid',
+        ],
+    ],
+
+    'ai_parsing' => [
+        'enabled' => (bool) env('FISH_AI_PARSING_ENABLED', false),
+        'provider' => 'openai-parser',
+        'model' => env('FISH_AI_PARSING_MODEL', 'gpt-5.6-luna'),
+        'reasoning_effort' => env('FISH_AI_PARSING_REASONING_EFFORT', 'medium'),
+        'service_tier' => env('FISH_AI_PARSING_SERVICE_TIER', 'default'),
+        'store_provider_response' => false,
+        'connect_timeout_seconds' => (int) env('FISH_AI_PARSING_CONNECT_TIMEOUT', 5),
+        'timeout_seconds' => (int) env('FISH_AI_PARSING_TIMEOUT', 120),
+        'job_timeout_seconds' => (int) env('FISH_AI_PARSING_JOB_TIMEOUT', 300),
+        'lock_seconds' => (int) env('FISH_AI_PARSING_LOCK_SECONDS', 330),
+        'rate_limit_per_minute' => (int) env('FISH_AI_PARSING_RATE_LIMIT_PER_MINUTE', 5),
+        'prompt_version' => env('FISH_AI_PARSING_PROMPT_VERSION', 'v4'),
+        'schema_version' => env('FISH_AI_PARSING_SCHEMA_VERSION', 'v2'),
+        'sanitizer_version' => env('FISH_AI_PARSING_SANITIZER_VERSION', 'v2'),
+        'catalog_version' => env('FISH_AI_PARSING_CATALOG_VERSION', 'v1'),
+        'sources' => [
+            'allow_empty_results' => [
+                'sandiego_fish_reports',
+            ],
+        ],
+        'limits' => [
+            'max_input_tokens' => (int) env('FISH_AI_PARSING_MAX_INPUT_TOKENS', 64000),
+            'max_output_tokens' => (int) env('FISH_AI_PARSING_MAX_OUTPUT_TOKENS', 16000),
+            'max_reports' => (int) env('FISH_AI_PARSING_MAX_REPORTS', 250),
+            'max_species_per_report' => (int) env('FISH_AI_PARSING_MAX_SPECIES_PER_REPORT', 100),
+            'max_anglers' => (int) env('FISH_AI_PARSING_MAX_ANGLERS', 65535),
+            'max_count' => (int) env('FISH_AI_PARSING_MAX_COUNT', 1000000),
+            'max_failure_message_length' => 1000,
+        ],
+        'budgets' => [
+            'timezone' => env('FISH_AI_PARSING_BUDGET_TIMEZONE', 'America/Los_Angeles'),
+            'daily_limit_micros' => (int) env('FISH_AI_PARSING_DAILY_LIMIT_MICROS', 5000000),
+            'monthly_limit_micros' => (int) env('FISH_AI_PARSING_MONTHLY_LIMIT_MICROS', 50000000),
+            'estimated_attempt_cost_micros' => (int) env('FISH_AI_PARSING_ESTIMATED_ATTEMPT_COST_MICROS', 500000),
+            'reservation_ttl_minutes' => (int) env('FISH_AI_PARSING_RESERVATION_TTL_MINUTES', 5),
+        ],
+        'pricing' => [
+            'model' => env('FISH_AI_PARSING_PRICING_MODEL', 'gpt-5.6-luna'),
+            'service_tier' => env('FISH_AI_PARSING_PRICING_SERVICE_TIER', 'default'),
+            'input_cost_per_million_micros' => 1000000,
+            'cached_input_cost_per_million_micros' => 100000,
+            'cache_write_cost_per_million_micros' => 1250000,
+            'output_cost_per_million_micros' => 6000000,
+        ],
+        'retention' => [
+            'snapshot_months' => (int) env('FISH_AI_PARSING_SNAPSHOT_RETENTION_MONTHS', 3),
+        ],
+        'operations' => [
+            'queue_age_warning_minutes' => (int) env('FISH_AI_PARSING_QUEUE_AGE_WARNING_MINUTES', 10),
+            'failure_warning' => (int) env('FISH_AI_PARSING_FAILURE_WARNING', 5),
         ],
     ],
 

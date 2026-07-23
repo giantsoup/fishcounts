@@ -68,4 +68,16 @@ class RawScrapePayload extends Model
     {
         return $this->hasMany(ParserReportOverride::class);
     }
+
+    /** @return HasMany<ParserExecution, $this> */
+    public function parserExecutions(): HasMany
+    {
+        return $this->hasMany(ParserExecution::class);
+    }
+
+    /** @return BelongsTo<ParserExecution, $this> */
+    public function authoritativeParserExecution(): BelongsTo
+    {
+        return $this->belongsTo(ParserExecution::class, 'authoritative_parser_execution_id');
+    }
 }

@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\ParserEngine;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateScrapeSourceRequest extends FormRequest
 {
@@ -29,6 +32,26 @@ class UpdateScrapeSourceRequest extends FormRequest
             'supports_landing_filter' => ['sometimes', 'boolean'],
             'rate_limit_seconds' => ['required', 'integer', 'min:1', 'max:3600'],
             'notes' => ['nullable', 'string', 'max:5000'],
+            'parser_engine' => ['sometimes', Rule::enum(ParserEngine::class)],
+            'parser_engine_change_reason' => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    /** @return list<callable(Validator): void> */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $source = $this->route('source');
+                $requested = $this->input('parser_engine');
+
+                if ($source !== null
+                    && is_string($requested)
+                    && $requested !== $source->parser_engine->value
+                    && blank($this->input('parser_engine_change_reason'))) {
+                    $validator->errors()->add('parser_engine_change_reason', 'A reason is required when changing parser engines.');
+                }
+            },
         ];
     }
 }
