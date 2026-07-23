@@ -18,5 +18,7 @@ final readonly class ParserDiagnosticReviewProviderResponseData
         public int $outputTokens,
         public int $reasoningTokens,
         public int $totalTokens,
+        public int $cacheWriteTokens = 0,
+        public string $serviceTier = 'default',
     ) {}
 }

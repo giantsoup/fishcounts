@@ -454,8 +454,8 @@ class PhaseNineOperationsTest extends TestCase
             ->assertSee('GitHub queue / oldest')
             ->assertSee('GitHub issue failures are above the 24-hour warning threshold.')
             ->assertSee('monthly cap applies')
-            ->assertSee('$50.00 remaining')
-            ->assertSee('$50.00 limit');
+            ->assertSee('$100.00 remaining')
+            ->assertSee('$100.00 limit');
     }
 
     public function test_ai_maintenance_schedules_use_overlap_and_single_server_guards(): void
@@ -710,7 +710,7 @@ class PhaseNineOperationsTest extends TestCase
 
         $dailyPeriod = AiBudgetPeriod::query()->where('period_type', 'daily')->sole();
         $this->assertSame('2026-07-12', $dailyPeriod->period_start->toDateString());
-        $this->assertSame(50_000_000, $dailyPeriod->limit_micros);
+        $this->assertSame(100_000_000, $dailyPeriod->limit_micros);
         $this->assertSame(750_000, $dailyPeriod->spent_micros);
         $this->assertSame($dailyPeriod->id, $reservation->refresh()->daily_ai_budget_period_id);
     }

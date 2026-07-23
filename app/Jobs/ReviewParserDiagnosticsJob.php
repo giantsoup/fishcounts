@@ -7,12 +7,14 @@ use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Exceptions\AiBudgetExceededException;
 use App\Exceptions\OpenAiIncompleteResponseException;
+use App\Exceptions\OpenAiResponseValidationException;
 use App\Models\AiBudgetReservation;
 use App\Models\ParserDiagnosticReview;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 use App\Services\AI\AiBudgetManager;
+use App\Services\AI\OpenAiUsageCostCalculator;
 use App\Services\AI\ParserDiagnosticReviewRequestFactory;
 use App\Services\AI\ParserDiagnosticReviewRequestValidator;
 use App\Services\AI\ParserDiagnosticReviewResultValidator;
@@ -111,6 +113,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         ParserDiagnosticReviewRequestValidator $requestValidator,
         ParserDiagnosticReviewResultValidator $resultValidator,
         AiBudgetManager $budgetManager,
+        OpenAiUsageCostCalculator $costCalculator,
         AutomateParserDiagnosticReviews $automateParserDiagnosticReviews,
     ): void {
         $reviewRun = $this->reviewRun();
@@ -200,6 +203,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         }
 
         $reservation = null;
+        $actualCost = null;
         $estimatedCost = (int) config('fish.ai_review.budgets.estimated_request_cost_micros');
         try {
             if (! $this->enabled()) {
@@ -242,9 +246,15 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             }
 
             $providerResponse = $reviewer->review(array_values(array_intersect_key($requests, array_flip($reviews->pluck('diagnostic_fingerprint')->all()))));
+            $actualCost = $costCalculator->calculate(
+                inputTokens: $providerResponse->inputTokens,
+                cachedInputTokens: $providerResponse->cachedInputTokens,
+                cacheWriteTokens: $providerResponse->cacheWriteTokens,
+                outputTokens: $providerResponse->outputTokens,
+            );
 
             if (! $this->isCurrent($payload, $reviews)) {
-                $budgetManager->settle($reservation, $estimatedCost);
+                $budgetManager->settle($reservation, $actualCost);
                 $this->stale($reviews);
                 $this->finishReviewRun();
 
@@ -252,8 +262,8 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             }
 
             if ($providerResponse->refused) {
-                $this->recordRefusal($reviews, $providerResponse, $estimatedCost);
-                $budgetManager->settle($reservation, $estimatedCost);
+                $this->recordRefusal($reviews, $providerResponse, $actualCost);
+                $budgetManager->settle($reservation, $actualCost);
                 $this->finishReviewRun();
 
                 return;
@@ -279,13 +289,13 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
                     continue;
                 }
 
-                $review->forceFill($this->resultAttributes($result->toArray(), $providerResponse, $index, $reviews->count(), $estimatedCost))->save();
+                $review->forceFill($this->resultAttributes($result->toArray(), $providerResponse, $index, $reviews->count(), $actualCost))->save();
                 $review->transitionTo(ParserDiagnosticReviewStatus::Succeeded);
                 $automatableReviewIds[] = $review->id;
                 $this->dispatchParserBugIssue($review);
             }
 
-            $budgetManager->settle($reservation, $estimatedCost);
+            $budgetManager->settle($reservation, $actualCost);
             rescue(
                 fn (): int => $automateParserDiagnosticReviews->handle($payload->id, $automatableReviewIds),
                 report: true,
@@ -295,15 +305,26 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $this->skip($reviews, 'budget_exhausted');
             $this->finishReviewRun();
         } catch (Throwable $throwable) {
+            if ($throwable instanceof OpenAiIncompleteResponseException || $throwable instanceof OpenAiResponseValidationException) {
+                $actualCost = $costCalculator->calculate(
+                    inputTokens: $throwable->inputTokens,
+                    cachedInputTokens: $throwable->cachedInputTokens,
+                    cacheWriteTokens: $throwable->cacheWriteTokens,
+                    outputTokens: $throwable->outputTokens,
+                );
+            }
+
             if ($reservation instanceof AiBudgetReservation) {
-                if ($throwable instanceof ConnectionException) {
+                if ($throwable instanceof ConnectionException || $throwable instanceof RequestException) {
                     $budgetManager->release($reservation);
                 } else {
-                    $budgetManager->settle($reservation, (int) config('fish.ai_review.budgets.estimated_request_cost_micros'));
+                    $budgetManager->settle($reservation, $actualCost ?? $estimatedCost);
                 }
             }
             if ($throwable instanceof OpenAiIncompleteResponseException) {
-                $this->recordIncompleteFailure($reviews, $throwable, $estimatedCost);
+                $this->recordIncompleteFailure($reviews, $throwable, $actualCost);
+            } elseif ($throwable instanceof OpenAiResponseValidationException) {
+                $this->recordResponseValidationFailure($reviews, $throwable, $actualCost);
             } else {
                 $this->failReviews($reviews, $throwable);
             }
@@ -410,13 +431,13 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         return $reviewFingerprints->diff($current)->isEmpty();
     }
 
-    private function recordRefusal(Collection $reviews, object $response, int $estimatedCost): void
+    private function recordRefusal(Collection $reviews, object $response, int $actualCost): void
     {
         foreach ($reviews as $index => $review) {
             $review->forceFill($this->usageAttributes($response, $index, $reviews->count()) + [
                 'response_id' => $response->responseId,
                 'model' => $response->model,
-                'estimated_cost_micros' => $this->share($estimatedCost, $index, $reviews->count()),
+                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
                 'failure_message' => str($response->refusal)->limit((int) config('fish.ai_review.limits.max_failure_message_length'))->toString(),
                 'failure_category' => 'provider_refusal',
             ])->save();
@@ -427,7 +448,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
     private function recordIncompleteFailure(
         Collection $reviews,
         OpenAiIncompleteResponseException $exception,
-        int $estimatedCost,
+        int $actualCost,
     ): void {
         $category = $exception->reason === 'max_output_tokens'
             ? 'output_token_limit'
@@ -441,13 +462,28 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $review->forceFill($this->usageAttributes($exception, $index, $reviews->count()) + [
                 'response_id' => $exception->responseId !== '' ? $exception->responseId : null,
                 'model' => $exception->model,
-                'estimated_cost_micros' => $this->share($estimatedCost, $index, $reviews->count()),
+                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
             ])->save();
             $review->fail($this->safeFailureMessage($exception), $category);
         }
     }
 
-    private function resultAttributes(array $result, object $response, int $index, int $count, int $estimatedCost): array
+    private function recordResponseValidationFailure(
+        Collection $reviews,
+        OpenAiResponseValidationException $exception,
+        int $actualCost,
+    ): void {
+        foreach ($reviews as $index => $review) {
+            $review->forceFill($this->usageAttributes($exception, $index, $reviews->count()) + [
+                'response_id' => $exception->responseId !== '' ? $exception->responseId : null,
+                'model' => $exception->model,
+                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
+            ])->save();
+            $review->fail($this->safeFailureMessage($exception), 'schema_validation');
+        }
+    }
+
+    private function resultAttributes(array $result, object $response, int $index, int $count, int $actualCost): array
     {
         return $this->usageAttributes($response, $index, $count) + [
             'classification' => $result['classification'],
@@ -456,7 +492,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             'rationale' => $result['rationale'],
             'response_id' => $response->responseId,
             'model' => $response->model,
-            'estimated_cost_micros' => $this->share($estimatedCost, $index, $count),
+            'estimated_cost_micros' => $this->share($actualCost, $index, $count),
         ];
     }
 

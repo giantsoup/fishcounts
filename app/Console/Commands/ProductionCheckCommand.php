@@ -99,12 +99,28 @@ class ProductionCheckCommand extends Command
         );
         $databaseCache = Cache::store('database')->getStore();
         $maxDiagnosticsPerRequest = (int) config('fish.ai_review.limits.max_diagnostics_per_request');
+        $maxInputTokens = (int) config('fish.ai_review.limits.max_input_tokens');
         $maxOutputTokens = (int) config('fish.ai_review.limits.max_output_tokens');
+        $pricingRates = [
+            (int) config('fish.ai_review.pricing.input_cost_per_million_micros'),
+            (int) config('fish.ai_review.pricing.cached_input_cost_per_million_micros'),
+            (int) config('fish.ai_review.pricing.cache_write_cost_per_million_micros'),
+            (int) config('fish.ai_review.pricing.output_cost_per_million_micros'),
+        ];
+        $maximumRequestCost = intdiv(
+            ($maxInputTokens * max(array_slice($pricingRates, 0, 3)))
+                + ($maxOutputTokens * $pricingRates[3])
+                + 999_999,
+            1_000_000,
+        );
 
         $this->assert($dailyLimit >= 0, 'Optional daily AI budget limit is valid.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be zero or greater.', $failures);
         $this->assert($monthlyLimit > 0 && ($dailyLimit === 0 || $monthlyLimit >= $dailyLimit), 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be positive and at least any enabled daily limit.', $failures);
         $this->assert($estimatedRequestCost > 0, 'AI estimated request cost is configured.', 'FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be greater than zero.', $failures);
+        $this->assert(! in_array(true, array_map(fn (int $rate): bool => $rate <= 0, $pricingRates), true), 'AI token pricing is configured.', 'Every FISH_AI_REVIEW_*_COST_PER_MILLION_MICROS value must be greater than zero.', $failures);
+        $this->assert($estimatedRequestCost >= $maximumRequestCost, 'AI reservation covers the maximum configured request cost.', "FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be at least {$maximumRequestCost} for the configured token limits.", $failures);
         $this->assert($maxDiagnosticsPerRequest > 0, 'AI diagnostic batch size is configured.', 'FISH_AI_REVIEW_MAX_DIAGNOSTICS_PER_REQUEST must be greater than zero.', $failures);
+        $this->assert($maxInputTokens > 0, 'AI input-token limit is configured.', 'FISH_AI_REVIEW_MAX_INPUT_TOKENS must be greater than zero.', $failures);
         $this->assert($maxOutputTokens > 0, 'AI output-token limit is configured.', 'FISH_AI_REVIEW_MAX_OUTPUT_TOKENS must be greater than zero.', $failures);
         $this->assert(in_array($budgetTimezone, DateTimeZone::listIdentifiers(), true), 'AI budget timezone is valid.', 'FISH_AI_REVIEW_BUDGET_TIMEZONE must be a valid timezone identifier.', $failures);
         $this->assert((bool) config('fish.ai_review.budgets.hard_stop'), 'AI budget hard stop is enabled.', 'AI budget hard stop must remain enabled.', $failures);

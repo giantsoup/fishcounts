@@ -273,7 +273,7 @@
                                                 <dt>Output tokens</dt><dd>{{ $review->output_tokens ?? 'n/a' }}</dd>
                                                 <dt>Reasoning tokens</dt><dd>{{ $review->reasoning_tokens }}</dd>
                                                 <dt>Total tokens</dt><dd>{{ $review->total_tokens ?? 'n/a' }}</dd>
-                                                <dt>Estimated cost</dt><dd>{{ $review->estimated_cost_micros === null ? 'n/a' : Number::currency($review->estimated_cost_micros / 1_000_000) }}</dd>
+                                                <dt>Calculated cost</dt><dd>{{ $review->estimated_cost_micros === null ? 'n/a' : Number::currency($review->estimated_cost_micros / 1_000_000) }}</dd>
                                             </dl>
                                         @else
                                             <p class="mt-1 text-sm text-gray-600">No usage data available.</p>

@@ -164,10 +164,16 @@ return [
         'budgets' => [
             'timezone' => env('FISH_AI_REVIEW_BUDGET_TIMEZONE', 'America/Los_Angeles'),
             'daily_limit_micros' => (int) env('FISH_AI_REVIEW_DAILY_LIMIT_MICROS', 0),
-            'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 50000000),
+            'monthly_limit_micros' => (int) env('FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS', 100000000),
             'hard_stop' => true,
             'reservation_ttl_minutes' => (int) env('FISH_AI_REVIEW_RESERVATION_TTL_MINUTES', 15),
             'estimated_request_cost_micros' => (int) env('FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS', 1000000),
+        ],
+        'pricing' => [
+            'input_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_INPUT_COST_PER_MILLION_MICROS', 1000000),
+            'cached_input_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_CACHED_INPUT_COST_PER_MILLION_MICROS', 100000),
+            'cache_write_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_CACHE_WRITE_COST_PER_MILLION_MICROS', 1250000),
+            'output_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_OUTPUT_COST_PER_MILLION_MICROS', 6000000),
         ],
         'retention' => [
             'complete_months' => (int) env('FISH_AI_REVIEW_RETENTION_MONTHS', 3),

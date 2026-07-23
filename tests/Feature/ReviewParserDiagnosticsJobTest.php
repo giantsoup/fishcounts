@@ -8,6 +8,7 @@ use App\Enums\ParserDiagnosticReviewRunStatus;
 use App\Enums\ParserDiagnosticReviewStatus;
 use App\Enums\ScrapeRunType;
 use App\Exceptions\OpenAiIncompleteResponseException;
+use App\Exceptions\OpenAiResponseValidationException;
 use App\Jobs\CreateParserBugIssueJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\ParserDiagnosticReview;
@@ -38,8 +39,8 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         config()->set('fish.ai_review.enabled', true);
         config()->set('fish.ai_review.dispatch_enabled', true);
         config()->set('services.openai.api_key', 'test-key');
-        config()->set('fish.ai_review.budgets.estimated_request_cost_micros', 1000);
-        config()->set('fish.ai_review.budgets.monthly_limit_micros', 10000);
+        config()->set('fish.ai_review.budgets.estimated_request_cost_micros', 1_000_000);
+        config()->set('fish.ai_review.budgets.monthly_limit_micros', 10_000_000);
     }
 
     public function test_it_is_unique_rate_limited_and_uses_a_safe_queue_timeout(): void
@@ -116,6 +117,7 @@ class ReviewParserDiagnosticsJobTest extends TestCase
                     outputTokens: 40,
                     reasoningTokens: 20,
                     totalTokens: 140,
+                    cacheWriteTokens: 20,
                 );
             }
         });
@@ -127,7 +129,11 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame('uncertain', $review->classification->value);
         $this->assertSame('resp_test', $review->response_id);
         $this->assertSame(100, $review->input_tokens);
-        $this->assertSame(1000, $review->estimated_cost_micros);
+        $this->assertSame(336, $review->estimated_cost_micros);
+        $this->assertDatabaseHas('ai_budget_reservations', [
+            'reserved_micros' => 1_000_000,
+            'actual_micros' => 336,
+        ]);
         $this->assertModelExists($parserError);
         $this->assertNull($parserError->refresh()->resolved_at);
         $this->assertSame(ParserDiagnosticReviewRunStatus::Completed, $run->refresh()->status);
@@ -264,7 +270,7 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $review = ParserDiagnosticReview::query()->sole();
         $this->assertSame(ParserDiagnosticReviewStatus::Refused, $review->status);
         $this->assertSame('resp_refusal', $review->response_id);
-        $this->assertSame(1000, $review->estimated_cost_micros);
+        $this->assertSame(55, $review->estimated_cost_micros);
         $this->assertModelExists($parserError);
         $this->assertNull($parserError->refresh()->resolution_type);
     }
@@ -468,6 +474,7 @@ class ReviewParserDiagnosticsJobTest extends TestCase
                     outputTokens: 16000,
                     reasoningTokens: 15000,
                     totalTokens: 16120,
+                    cacheWriteTokens: 5,
                 );
             }
         });
@@ -484,12 +491,51 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame(16000, $review->output_tokens);
         $this->assertSame(15000, $review->reasoning_tokens);
         $this->assertSame(16120, $review->total_tokens);
-        $this->assertSame(1000, $review->estimated_cost_micros);
+        $this->assertSame(96_104, $review->estimated_cost_micros);
         $this->assertSame(1, $review->attempts);
         $this->assertSame(ParserDiagnosticReviewRunStatus::Failed, $run->refresh()->status);
         $this->assertDatabaseHas('ai_budget_reservations', [
             'status' => 'settled',
-            'actual_micros' => 1000,
+            'actual_micros' => 96_104,
+        ]);
+    }
+
+    public function test_invalid_structured_output_settles_the_reported_provider_cost(): void
+    {
+        [$payload] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new OpenAiResponseValidationException(
+                    message: 'The OpenAI response contained malformed JSON.',
+                    responseId: 'resp_malformed',
+                    model: 'gpt-5.6-luna',
+                    inputTokens: 100,
+                    cachedInputTokens: 10,
+                    cacheWriteTokens: 20,
+                    outputTokens: 40,
+                    reasoningTokens: 20,
+                    totalTokens: 140,
+                    serviceTier: 'default',
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
+
+        $review = ParserDiagnosticReview::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $review->status);
+        $this->assertSame('schema_validation', $review->failure_category);
+        $this->assertSame('resp_malformed', $review->response_id);
+        $this->assertSame(336, $review->estimated_cost_micros);
+        $this->assertDatabaseHas('ai_budget_reservations', [
+            'status' => 'settled',
+            'actual_micros' => 336,
         ]);
     }
 

@@ -5,13 +5,13 @@ namespace Tests\Feature;
 use App\DTOs\ParserDiagnosticReviewRequestData;
 use App\Enums\ParserDiagnosticType;
 use App\Exceptions\OpenAiIncompleteResponseException;
+use App\Exceptions\OpenAiResponseValidationException;
 use App\Services\AI\OpenAiParserDiagnosticReviewer;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
-use UnexpectedValueException;
 
 class OpenAiParserDiagnosticReviewerTest extends TestCase
 {
@@ -33,8 +33,10 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
         $this->assertSame('resp_123', $response->responseId);
         $this->assertSame(12, $response->inputTokens);
         $this->assertSame(2, $response->cachedInputTokens);
+        $this->assertSame(3, $response->cacheWriteTokens);
         $this->assertSame(8, $response->outputTokens);
         $this->assertSame(3, $response->reasoningTokens);
+        $this->assertSame('default', $response->serviceTier);
         $this->assertArrayHasKey($this->fingerprint(), $response->results);
 
         Http::assertSent(function (Request $request): bool {
@@ -43,6 +45,7 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
 
             return $request->url() === 'https://api.openai.test/v1/responses'
                 && $payload['model'] === 'gpt-5.6-luna'
+                && $payload['service_tier'] === 'default'
                 && $payload['reasoning'] === ['effort' => 'medium']
                 && $payload['store'] === false
                 && $payload['tools'] === []
@@ -85,8 +88,12 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
             try {
                 app(OpenAiParserDiagnosticReviewer::class)->review([$this->request()]);
                 $this->fail('Expected invalid structured output to be rejected.');
-            } catch (UnexpectedValueException) {
-                $this->addToAssertionCount(1);
+            } catch (OpenAiResponseValidationException $exception) {
+                $this->assertSame('resp_123', $exception->responseId);
+                $this->assertSame(12, $exception->inputTokens);
+                $this->assertSame(2, $exception->cachedInputTokens);
+                $this->assertSame(3, $exception->cacheWriteTokens);
+                $this->assertSame(8, $exception->outputTokens);
             }
         }
     }
@@ -97,10 +104,11 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
             'id' => 'resp_incomplete',
             'status' => 'incomplete',
             'model' => 'gpt-5.6-luna-2026-07-01',
+            'service_tier' => 'default',
             'incomplete_details' => ['reason' => 'max_output_tokens'],
             'usage' => [
                 'input_tokens' => 120,
-                'input_tokens_details' => ['cached_tokens' => 20],
+                'input_tokens_details' => ['cached_tokens' => 20, 'cache_write_tokens' => 5],
                 'output_tokens' => 16000,
                 'output_tokens_details' => ['reasoning_tokens' => 15000],
                 'total_tokens' => 16120,
@@ -117,6 +125,7 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
             $this->assertSame('max_output_tokens', $exception->reason);
             $this->assertSame(120, $exception->inputTokens);
             $this->assertSame(20, $exception->cachedInputTokens);
+            $this->assertSame(5, $exception->cacheWriteTokens);
             $this->assertSame(16000, $exception->outputTokens);
             $this->assertSame(15000, $exception->reasoningTokens);
             $this->assertSame(16120, $exception->totalTokens);
@@ -191,6 +200,7 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
             'id' => 'resp_123',
             'status' => 'completed',
             'model' => 'gpt-5.6-luna',
+            'service_tier' => 'default',
             'output' => [
                 ['type' => 'reasoning', 'summary' => []],
                 [
@@ -209,7 +219,7 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
             ],
             'usage' => [
                 'input_tokens' => 12,
-                'input_tokens_details' => ['cached_tokens' => 2],
+                'input_tokens_details' => ['cached_tokens' => 2, 'cache_write_tokens' => 3],
                 'output_tokens' => 8,
                 'output_tokens_details' => ['reasoning_tokens' => 3],
                 'total_tokens' => 20,

@@ -141,7 +141,7 @@ class AiBudgetManagerTest extends TestCase
     {
         $this->assertSame(0, config('fish.ai_review.budgets.daily_limit_micros'));
         $this->assertTrue(config('fish.ai_review.budgets.hard_stop'));
-        $this->assertSame(50000000, config('fish.ai_review.budgets.monthly_limit_micros'));
+        $this->assertSame(100000000, config('fish.ai_review.budgets.monthly_limit_micros'));
     }
 
     public function test_disabled_daily_limit_uses_the_monthly_hard_stop_without_a_stricter_cap(): void

@@ -17,6 +17,8 @@ final class OpenAiIncompleteResponseException extends UnexpectedValueException
         public readonly int $outputTokens,
         public readonly int $reasoningTokens,
         public readonly int $totalTokens,
+        public readonly int $cacheWriteTokens = 0,
+        public readonly string $serviceTier = 'default',
     ) {
         $normalizedReason = str($reason)
             ->lower()

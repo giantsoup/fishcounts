@@ -6,6 +6,7 @@ use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\DTOs\ParserDiagnosticReviewProviderResponseData;
 use App\DTOs\ParserDiagnosticReviewRequestData;
 use App\Exceptions\OpenAiIncompleteResponseException;
+use App\Exceptions\OpenAiResponseValidationException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -70,6 +71,7 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
 
         return [
             'model' => config('fish.ai_review.model'),
+            'service_tier' => 'default',
             'store' => false,
             'tools' => [],
             'tool_choice' => 'none',
@@ -145,6 +147,8 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
                 outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
                 reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
                 totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
+                cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
+                serviceTier: (string) ($json['service_tier'] ?? 'default'),
             );
         }
         $message = collect($json['output'] ?? [])->first(
@@ -161,28 +165,28 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
         $text = is_array($content) ? ($content['text'] ?? null) : null;
 
         if (! is_string($text)) {
-            throw new UnexpectedValueException('The OpenAI response did not contain structured output text.');
+            throw $this->responseValidationException($json, 'The OpenAI response did not contain structured output text.');
         }
 
         try {
             $decoded = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw new UnexpectedValueException('The OpenAI response contained malformed JSON.', previous: $exception);
+            throw $this->responseValidationException($json, 'The OpenAI response contained malformed JSON.', $exception);
         }
 
         if (! is_array($decoded) || array_keys($decoded) !== ['results'] || ! is_array($decoded['results'])) {
-            throw new UnexpectedValueException('The OpenAI response did not match the batch result envelope.');
+            throw $this->responseValidationException($json, 'The OpenAI response did not match the batch result envelope.');
         }
 
         $results = [];
         foreach ($decoded['results'] as $result) {
             if (! is_array($result) || ! is_string($result['diagnostic_fingerprint'] ?? null)) {
-                throw new UnexpectedValueException('The OpenAI response contained an invalid diagnostic result.');
+                throw $this->responseValidationException($json, 'The OpenAI response contained an invalid diagnostic result.');
             }
             $fingerprint = $result['diagnostic_fingerprint'];
             unset($result['diagnostic_fingerprint']);
             if (isset($results[$fingerprint])) {
-                throw new UnexpectedValueException('The OpenAI response contained a duplicate diagnostic fingerprint.');
+                throw $this->responseValidationException($json, 'The OpenAI response contained a duplicate diagnostic fingerprint.');
             }
             $results[$fingerprint] = $result;
         }
@@ -204,6 +208,29 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
             outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
             reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
             totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
+            cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
+            serviceTier: (string) ($json['service_tier'] ?? 'default'),
+        );
+    }
+
+    /** @param array<string, mixed> $json */
+    private function responseValidationException(
+        array $json,
+        string $message,
+        ?JsonException $previous = null,
+    ): OpenAiResponseValidationException {
+        return new OpenAiResponseValidationException(
+            message: $message,
+            responseId: (string) ($json['id'] ?? ''),
+            model: (string) ($json['model'] ?? config('fish.ai_review.model')),
+            inputTokens: (int) data_get($json, 'usage.input_tokens', 0),
+            cachedInputTokens: (int) data_get($json, 'usage.input_tokens_details.cached_tokens', 0),
+            cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
+            outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
+            reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
+            totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
+            serviceTier: (string) ($json['service_tier'] ?? 'default'),
+            previous: $previous,
         );
     }
 }
