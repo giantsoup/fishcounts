@@ -17,6 +17,7 @@ use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Jobs\ReviewParserDiagnosticsJob;
 use App\Models\Boat;
+use App\Models\BoatAlias;
 use App\Models\Landing;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
@@ -34,6 +35,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ParserDiagnosticPersistenceTest extends TestCase
@@ -254,6 +256,50 @@ class ParserDiagnosticPersistenceTest extends TestCase
         );
 
         $this->assertSame([], app(ParsedReportValidator::class)->validate($storedPayload, $paragraphWithoutSpeciesEvidence, $parsed));
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function narrativeBoatLabelCases(): array
+    {
+        return [
+            'production sentence' => ['The Pacific Dawn just called in with', 'Pacific Dawn', 'pacific dawn just'],
+            'uppercase modifier' => ['The Pacific Dawn JUST called in with', 'Pacific Dawn', 'pacific dawn just'],
+            'called without in' => ['The Pacific Dawn just called with', 'Pacific Dawn', 'pacific dawn just'],
+            'caught action' => ['The Pacific Dawn just caught', 'Pacific Dawn', 'pacific dawn just'],
+            'ended action' => ['The Pacific Dawn just ended with', 'Pacific Dawn', 'pacific dawn just'],
+            'legitimate name containing just' => ['The Just Reward just called in with', 'Just Reward', 'just reward just'],
+        ];
+    }
+
+    #[DataProvider('narrativeBoatLabelCases')]
+    public function test_missing_report_diagnostic_excludes_narrative_adverbs_from_the_boat_label(
+        string $sentenceStart,
+        string $boatName,
+        string $malformedAlias,
+    ): void {
+        $body = "<p>{$sentenceStart} LIMITS of Bluefin Tuna (25 to 70 lbs) for their 2 day charter with 18 anglers.</p>";
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        Queue::fake();
+        $payload = $this->payload(
+            $body,
+            boatName: $boatName,
+        );
+
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+
+        $this->assertSame(0, $result->parsedReportCount);
+        $this->assertSame(1, $result->diagnosticCount);
+        $this->assertDatabaseHas('parser_errors', [
+            'raw_scrape_payload_id' => $payload->id,
+            'error_type' => 'empty_or_unexpectedly_small_result_set',
+            'raw_field' => 'report',
+            'raw_value' => $boatName,
+        ]);
+        $this->assertDatabaseMissing('parser_errors', [
+            'raw_scrape_payload_id' => $payload->id,
+            'error_type' => 'unknown_boat_alias',
+        ]);
+        $this->assertFalse(BoatAlias::query()->where('normalized_alias', $malformedAlias)->exists());
     }
 
     public function test_source_specific_evidence_does_not_treat_a_partial_numeric_span_as_a_parsed_report(): void

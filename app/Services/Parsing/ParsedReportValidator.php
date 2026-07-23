@@ -142,7 +142,7 @@ class ParsedReportValidator
                 });
             })
             ->map(function (string $paragraph, int $index) use ($payload, $parsed, $paragraphs, $evidenceStrategy): ParsedReportValidationData {
-                preg_match('/(?:The\s+)?(?<label>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\s+(?:returned|called|checked|finished|\||\d+(?:\.\d+|\/\d+)?\s*Day))\b/', $paragraph, $matches);
+                preg_match('/(?:The\s+)?(?<label>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\s+(?:also\s+)?(?:just\s+)?(?:caught|returned|came\s+back|is\s+returning|had|has|finished(?:\s+up)?|ended|called(?:\s+in)?|checked(?:\s+in)?|\||\d+(?:\.\d+|\/\d+)?\s*Day))\b/i', $paragraph, $matches);
 
                 return new ParsedReportValidationData(
                     payload: $payload,

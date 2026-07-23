@@ -93,6 +93,7 @@ class ReparseCorrectedParserErrorsCommand extends Command
         'Of The Bluefin Were In The Class',
         'Of Their',
         'Oz Sinker And Live Bait',
+        'Pacific Dawn just',
         'Pounds',
         'Pacific Mackerel',
         'Reds',

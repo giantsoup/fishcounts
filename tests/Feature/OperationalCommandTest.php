@@ -125,6 +125,7 @@ class OperationalCommandTest extends TestCase
         $resolvedPayload = $this->payload('2026-01-09');
         $recentCorrectionPayload = $this->payload('2026-01-10');
         $tripTypeCorrectionPayload = $this->payload('2026-01-11');
+        $candidateLabelCorrectionPayload = $this->payload('2026-01-12');
 
         ParserError::query()->create([
             'raw_scrape_payload_id' => $correctedPayload->id,
@@ -181,6 +182,15 @@ class OperationalCommandTest extends TestCase
             'message' => 'Unknown trip_type alias [2 Day Am].',
         ]);
         ParserError::query()->create([
+            'raw_scrape_payload_id' => $candidateLabelCorrectionPayload->id,
+            'scrape_source_id' => $candidateLabelCorrectionPayload->scrape_source_id,
+            'target_date' => $candidateLabelCorrectionPayload->target_date,
+            'error_type' => 'empty_or_unexpectedly_small_result_set',
+            'raw_field' => 'report',
+            'raw_value' => 'Pacific Dawn just',
+            'message' => 'Source-specific report evidence was not represented in the parsed result set.',
+        ]);
+        ParserError::query()->create([
             'raw_scrape_payload_id' => $resolvedPayload->id,
             'scrape_source_id' => $resolvedPayload->scrape_source_id,
             'target_date' => $resolvedPayload->target_date,
@@ -205,9 +215,10 @@ class OperationalCommandTest extends TestCase
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $compactFullDayPayload->id);
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $recentCorrectionPayload->id);
         Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $tripTypeCorrectionPayload->id);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $candidateLabelCorrectionPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $ambiguousPayload->id);
         Queue::assertNotPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $resolvedPayload->id);
-        Queue::assertPushedTimes(ParseRawPayloadJob::class, 5);
+        Queue::assertPushedTimes(ParseRawPayloadJob::class, 6);
     }
 
     public function test_score_backfill_command_queues_score_jobs_for_range(): void
