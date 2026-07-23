@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v3";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v4";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -41,7 +41,7 @@ class SourceSpecificFishCountParser
                 body: $this->documentScope->forPayload($payload),
                 metadata: $payload->metadata,
             );
-            $parserVersion = "source-specific-{$payload->sourceKey}-v4";
+            $parserVersion = "source-specific-{$payload->sourceKey}-v5";
         }
 
         return $this->parseStructuredPayload($payload, $parserVersion);
@@ -49,12 +49,12 @@ class SourceSpecificFishCountParser
 
     private function parseReportFeedPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v3");
+        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v4");
     }
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v3';
+        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v4';
         $panelHtml = $this->documentScope->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
@@ -157,7 +157,7 @@ class SourceSpecificFishCountParser
                         anglers: $report->anglers,
                         rawFishCountText: $report->rawFishCountText,
                         speciesCounts: $report->speciesCounts,
-                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => 'generic-line-v3']),
+                        metadata: array_merge($report->metadata, ['parser' => $parserVersion, 'fallback_parser' => GenericFishCountParser::PARSER_VERSION]),
                     );
                 }),
             $parserVersion,

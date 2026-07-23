@@ -242,6 +242,8 @@ class ParsedReportValidatorTest extends TestCase
             'The Dolphin caught limits of Calico (Kelp) Bass for 22 anglers, so 105 kept in total, and 200 released, 20 Barracuda.',
             'The Lucky B caught Limits of Yellowfin Tuna (15), 6 Yellowtail for 3 anglers.',
             'The Pacific Queen returned with 31 Bluefin Tuna (70 to 170), and 1 20lbs Yellowtail for 29 anglers.',
+            'The Dolphin just called in with 48 Calico Bass, 37 Bonito, 34 rockfish, 4 Sheephead, 4 Whitefish, and 4 Yellowtail for their AM half day trip 38 anglers.',
+            'The Constitution called in with LIMITS (60) of Bluefin Tuna (up to 120 lbs.) for 15 anglers for 2 days of their 3 day trip.',
         ];
 
         foreach ($paragraphs as $paragraph) {

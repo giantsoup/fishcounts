@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    private const string PARSER_VERSION = 'generic-line-v3';
+    public const string PARSER_VERSION = 'generic-line-v4';
 
     public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
 
@@ -113,13 +113,14 @@ class GenericFishCountParser
             ->replaceMatches('/\(\s*up\s+to\s+\d+\s*\)/i', '')
             ->replaceMatches('/\b\d+(?:\/\d+)?\s*oz\b/i', '')
             ->replaceMatches('/\b(?:one|two|three|four)\s+day\b/i', fn (array $matches): string => $this->numericWordTripDuration($matches[0]))
+            ->replaceMatches('/\bfor\s+(?:\d+|one|two|three|four)\s+days?\s+of\s+(?:their\s+|a\s+|an\s+)?\d+(?:\.\d+)?\s*day\s+(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
             ->replaceMatches('/\bfor\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day)\s+(?:trip|charter),?\s+(?:for|with)\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+day\s+\d+\s+of\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:reverse\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+aboard)?/i', '')
-            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b/i', '')
+            ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day(?:\s+(?:am|pm))?|(?:am|pm)\s+half[-\s]+day|half[-\s]+day(?:\s+(?:am|pm))?|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
-            ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s*day|overnight|twilight)\s+(?:trip|charter)\b(?:\s+(?:for|with)\s+\d+\s+(?:anglers?|people|passengers?))?/i', '')
+            ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day(?:\s+(?:am|pm))?|(?:am|pm)\s+half[-\s]+day|half[-\s]+day(?:\s+(?:am|pm))?|full\s*day|overnight|twilight)\s+(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
             ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:(?:trip|charter)\s+|today\s+)?(?:with|wth)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s*(?:trip|charter)?\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+their\s+\d+(?:\.\d+)?\s*(?:day\s+)?charter\b/i', '')
@@ -196,7 +197,7 @@ class GenericFishCountParser
             return '1/2 Day '.Str::upper($matches['period']);
         }
 
-        if (preg_match('/\b(?<trip>(?:1\/2|3\/4|\d+(?:\.\d+)?|One|Two|Three|Four)\s*Day(?:\s+(?:AM|PM))?|AM\s+Half\s+Day|PM\s+Half\s+Day|Half\s+Day|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight|Twiligiht|Twlight)\b/i', $line, $matches)) {
+        if (preg_match('/\b(?<trip>(?:1\/2|3\/4|\d+(?:\.\d+)?|One|Two|Three|Four)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half[-\s]+Day|Half[-\s]+Day(?:\s+(?:AM|PM))?|Full\s+Day(?:\s+[A-Za-z\s]+)?|Overnight|Twilight|Twiligiht|Twlight)\b/i', $line, $matches)) {
             return $this->normalizeTripType($matches['trip']);
         }
 
@@ -236,8 +237,8 @@ class GenericFishCountParser
 
         $normalized = $this->numericWordTripDuration($normalized);
 
-        if (preg_match('/^(?<period>Am|Pm)\s+Half\s+Day$/', $normalized, $matches)) {
-            return '1/2 Day '.Str::upper($matches['period']);
+        if (preg_match('/^(?:(?<prefix>Am|Pm)\s+Half[-\s]+Day|Half[-\s]+Day\s+(?<suffix>Am|Pm))$/', $normalized, $matches)) {
+            return '1/2 Day '.Str::upper($matches['prefix'] !== '' ? $matches['prefix'] : $matches['suffix']);
         }
 
         return Str::of($normalized)

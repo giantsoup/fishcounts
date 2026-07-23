@@ -191,6 +191,69 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertDatabaseEmpty('parser_errors');
     }
 
+    /** @return array<string, array{string, string, string, int, array<string, int>}> */
+    public static function productionTripContextCases(): array
+    {
+        return [
+            'half-day context after the final species' => [
+                '<p>The Dolphin just called in with 48 Calico Bass, 37 Bonito, 34 rockfish, 4 Sheephead, 4 Whitefish, and 4 Yellowtail for their AM half day trip 38 anglers.</p>',
+                'Dolphin',
+                '1/2 Day AM',
+                38,
+                [
+                    'Bonito' => 37,
+                    'Calico Bass' => 48,
+                    'Rockfish' => 34,
+                    'Sheephead' => 4,
+                    'Whitefish' => 4,
+                    'Yellowtail' => 4,
+                ],
+            ],
+            'multi-day progress after the final species' => [
+                '<p>The Constitution called in with LIMITS (60) of Bluefin Tuna (up to 120 lbs.) for 15 anglers for 2 days of their 3 day trip.</p>',
+                'Constitution',
+                '3 Day',
+                15,
+                ['Bluefin Tuna' => 60],
+            ],
+        ];
+    }
+
+    /** @param array<string, int> $expectedCounts */
+    #[DataProvider('productionTripContextCases')]
+    public function test_production_trip_context_variants_persist_without_diagnostics(
+        string $body,
+        string $boatName,
+        string $tripType,
+        int $anglers,
+        array $expectedCounts,
+    ): void {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        Queue::fake();
+        $payload = $this->payload($body, boatName: $boatName);
+
+        $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
+        $report = TripReport::query()
+            ->with(['boat', 'speciesCounts.species'])
+            ->where('raw_scrape_payload_id', $payload->id)
+            ->firstOrFail();
+
+        $this->assertSame(1, $result->parsedReportCount);
+        $this->assertSame(0, $result->diagnosticCount);
+        $this->assertSame('source-specific-fishermans_landing-v5', $result->parserVersion);
+        $this->assertSame($boatName, $report->boat->name);
+        $this->assertSame($tripType, $report->raw_trip_type);
+        $this->assertSame($anglers, $report->anglers);
+        $this->assertSame(
+            $expectedCounts,
+            $report->speciesCounts
+                ->mapWithKeys(fn ($count): array => [$count->species->name => $count->count])
+                ->sortKeys()
+                ->all(),
+        );
+        $this->assertDatabaseEmpty('parser_errors');
+    }
+
     public function test_seaforth_six_pack_report_is_parsed_without_diagnostics_or_ai_review(): void
     {
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);

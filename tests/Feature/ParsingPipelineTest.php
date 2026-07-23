@@ -160,6 +160,61 @@ class ParsingPipelineTest extends TestCase
         $this->assertSame(30, $counts->first()->count);
     }
 
+    public function test_parser_removes_trailing_half_day_and_multi_day_progress_context(): void
+    {
+        $halfDayCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Dolphin just called in with 48 Calico Bass, 37 Bonito, 34 rockfish, 4 Sheephead, 4 Whitefish, and 4 Yellowtail for their AM half day trip 38 anglers.',
+        );
+        $multiDayCounts = app(GenericFishCountParser::class)->parseSpeciesCounts(
+            'The Constitution called in with LIMITS (60) of Bluefin Tuna (up to 120 lbs.) for 15 anglers for 2 days of their 3 day trip.',
+        );
+
+        $this->assertSame(
+            ['Calico Bass', 'Bonito', 'Rockfish', 'Sheephead', 'Whitefish', 'Yellowtail'],
+            $halfDayCounts->pluck('speciesName')->all(),
+        );
+        $this->assertSame([48, 37, 34, 4, 4, 4], $halfDayCounts->pluck('count')->all());
+        $this->assertSame(['Bluefin Tuna'], $multiDayCounts->pluck('speciesName')->all());
+        $this->assertSame(60, $multiDayCounts->first()->count);
+
+        $variants = [
+            ['The Dolphin called in with 4 Yellowtail for their 1/2 Day AM trip 20 anglers.', 'Yellowtail', 4],
+            ['The Dolphin called in with 4 Yellowtail for their AM half day trip with 20 anglers.', 'Yellowtail', 4],
+            ['The Dolphin called in with 4 Yellowtail on their PM half day trip with 20 anglers.', 'Yellowtail', 4],
+            ['The Constitution called in with LIMITS (60) of Bluefin Tuna for 2 days of their 3 day trip with 15 anglers.', 'Bluefin Tuna', 60],
+        ];
+
+        foreach ($variants as [$line, $species, $expectedCount]) {
+            $counts = app(GenericFishCountParser::class)->parseSpeciesCounts($line);
+
+            $this->assertSame([$species], $counts->pluck('speciesName')->all(), $line);
+            $this->assertSame($expectedCount, $counts->first()->count, $line);
+        }
+    }
+
+    public function test_parser_normalizes_hyphenated_half_day_context(): void
+    {
+        $payload = new RawPayloadData(
+            sourceKey: 'fishermans_landing',
+            targetDate: CarbonImmutable::parse('2026-07-22'),
+            url: 'https://www.fishermanslanding.com/fishcounts.php',
+            body: '',
+        );
+        $cases = [
+            ['The Dolphin called in with 4 Yellowtail for their AM half-day trip with 20 anglers.', '1/2 Day AM'],
+            ['The Dolphin called in with 4 Yellowtail on their half-day PM trip with 20 anglers.', '1/2 Day PM'],
+        ];
+
+        foreach ($cases as [$line, $expectedTripType]) {
+            $report = app(GenericFishCountParser::class)->parseLine($payload, $line);
+
+            $this->assertNotNull($report, $line);
+            $this->assertSame($expectedTripType, $report->tripTypeName, $line);
+            $this->assertSame(['Yellowtail'], collect($report->speciesCounts)->pluck('speciesName')->all(), $line);
+            $this->assertSame(4, $report->speciesCounts[0]->count, $line);
+        }
+    }
+
     public function test_parser_handles_production_limit_count_placements(): void
     {
         $cases = [
