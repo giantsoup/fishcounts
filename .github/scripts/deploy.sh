@@ -31,9 +31,7 @@ mkdir -p "${shared_dir}/storage/app/private"
 mkdir -p "${shared_dir}/storage/app/public"
 mkdir -p "${shared_dir}/storage/framework/cache/data"
 mkdir -p "${shared_dir}/storage/framework/sessions"
-mkdir -p "${shared_dir}/storage/framework/views"
 mkdir -p "${shared_dir}/storage/logs"
-mkdir -p "${shared_dir}/bootstrap/cache"
 
 if [[ ! -f "${shared_dir}/.env" ]]; then
     echo "Missing shared environment file at ${shared_dir}/.env" >&2
@@ -77,11 +75,16 @@ fi
     sha256sum -c .release-manifest
 )
 
-rm -rf "${release_dir}/storage"
-ln -sfn "${shared_dir}/storage" "${release_dir}/storage"
-
 rm -rf "${release_dir}/bootstrap/cache"
-ln -sfn "${shared_dir}/bootstrap/cache" "${release_dir}/bootstrap/cache"
+mkdir -p "${release_dir}/bootstrap/cache"
+
+rm -rf "${release_dir}/storage"
+mkdir -p "${release_dir}/storage/framework/cache"
+mkdir -p "${release_dir}/storage/framework/views"
+ln -sfn "${shared_dir}/storage/app" "${release_dir}/storage/app"
+ln -sfn "${shared_dir}/storage/framework/cache/data" "${release_dir}/storage/framework/cache/data"
+ln -sfn "${shared_dir}/storage/framework/sessions" "${release_dir}/storage/framework/sessions"
+ln -sfn "${shared_dir}/storage/logs" "${release_dir}/storage/logs"
 
 ln -sfn "${shared_dir}/.env" "${release_dir}/.env"
 
@@ -94,17 +97,13 @@ shared_writable_paths=(
     "${shared_dir}/storage/framework/cache"
     "${shared_dir}/storage/framework/cache/data"
     "${shared_dir}/storage/framework/sessions"
-    "${shared_dir}/storage/framework/views"
     "${shared_dir}/storage/logs"
-    "${shared_dir}/bootstrap"
-    "${shared_dir}/bootstrap/cache"
 )
 
 shared_sensitive_paths=(
     "${shared_dir}/storage/app/private"
     "${shared_dir}/storage/framework"
     "${shared_dir}/storage/logs"
-    "${shared_dir}/bootstrap/cache"
 )
 
 runtime_boundary_paths=(
@@ -141,6 +140,24 @@ fi
 if ! chmod -R u+rwX,g+rX,o-rwx "${release_dir}"; then
     echo "Warning: unable to normalize release permissions; continuing." >&2
 fi
+
+release_writable_paths=(
+    "${release_dir}/bootstrap/cache"
+    "${release_dir}/storage/framework"
+    "${release_dir}/storage/framework/cache"
+    "${release_dir}/storage/framework/views"
+)
+
+if ! chgrp "${APP_GROUP}" "${release_writable_paths[@]}"; then
+    echo "Warning: unable to normalize release-local writable group ownership; continuing." >&2
+fi
+if ! chmod ug+rwx "${release_writable_paths[@]}"; then
+    echo "Warning: unable to normalize release-local writable permissions; continuing." >&2
+fi
+if ! chmod g+s "${release_writable_paths[@]}"; then
+    echo "Warning: unable to normalize release-local writable setgid bits; continuing." >&2
+fi
+
 chmod -R a+rX "${release_dir}/public/build"
 
 if command -v setfacl >/dev/null 2>&1; then
@@ -166,7 +183,7 @@ fi
 cd "${release_dir}"
 
 "${COMPOSER_BIN}" install --no-dev --prefer-dist --no-interaction --optimize-autoloader
-"${PHP_BIN}" artisan optimize:clear --no-interaction
+"${PHP_BIN}" artisan fish:production-check --skip-database --no-interaction
 "${PHP_BIN}" artisan migrate --force --no-interaction
 "${PHP_BIN}" artisan db:seed --class=EnvironmentalSourceSeeder --force --no-interaction
 "${PHP_BIN}" artisan optimize --no-interaction
