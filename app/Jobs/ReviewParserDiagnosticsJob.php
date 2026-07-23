@@ -29,6 +29,7 @@ use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use Throwable;
 use UnexpectedValueException;
 use ValueError;
@@ -36,6 +37,8 @@ use ValueError;
 class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
+
+    private const string COST_CALCULATION_VERSION = 'openai-list-price-v1';
 
     public int $tries = 0;
 
@@ -172,7 +175,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             }
 
             if ($review->status === ParserDiagnosticReviewStatus::Failed) {
-                $review->transitionTo(ParserDiagnosticReviewStatus::Pending);
+                $review->prepareForRetry();
             }
 
             try {
@@ -247,6 +250,8 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
 
             $providerResponse = $reviewer->review(array_values(array_intersect_key($requests, array_flip($reviews->pluck('diagnostic_fingerprint')->all()))));
             $actualCost = $costCalculator->calculate(
+                model: $providerResponse->model,
+                serviceTier: $providerResponse->serviceTier,
                 inputTokens: $providerResponse->inputTokens,
                 cachedInputTokens: $providerResponse->cachedInputTokens,
                 cacheWriteTokens: $providerResponse->cacheWriteTokens,
@@ -305,13 +310,22 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $this->skip($reviews, 'budget_exhausted');
             $this->finishReviewRun();
         } catch (Throwable $throwable) {
-            if ($throwable instanceof OpenAiIncompleteResponseException || $throwable instanceof OpenAiResponseValidationException) {
-                $actualCost = $costCalculator->calculate(
-                    inputTokens: $throwable->inputTokens,
-                    cachedInputTokens: $throwable->cachedInputTokens,
-                    cacheWriteTokens: $throwable->cacheWriteTokens,
-                    outputTokens: $throwable->outputTokens,
-                );
+            $hasMeteredUsage = $throwable instanceof OpenAiIncompleteResponseException
+                || ($throwable instanceof OpenAiResponseValidationException && $throwable->hasValidUsage);
+
+            if ($hasMeteredUsage) {
+                try {
+                    $actualCost = $costCalculator->calculate(
+                        model: $throwable->model,
+                        serviceTier: $throwable->serviceTier,
+                        inputTokens: $throwable->inputTokens,
+                        cachedInputTokens: $throwable->cachedInputTokens,
+                        cacheWriteTokens: $throwable->cacheWriteTokens,
+                        outputTokens: $throwable->outputTokens,
+                    );
+                } catch (InvalidArgumentException $costCalculationException) {
+                    report($costCalculationException);
+                }
             }
 
             if ($reservation instanceof AiBudgetReservation) {
@@ -437,10 +451,9 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $review->forceFill($this->usageAttributes($response, $index, $reviews->count()) + [
                 'response_id' => $response->responseId,
                 'model' => $response->model,
-                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
                 'failure_message' => str($response->refusal)->limit((int) config('fish.ai_review.limits.max_failure_message_length'))->toString(),
                 'failure_category' => 'provider_refusal',
-            ])->save();
+            ] + $this->costAttributes($actualCost, $index, $reviews->count()))->save();
             $review->transitionTo(ParserDiagnosticReviewStatus::Refused);
         }
     }
@@ -448,7 +461,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
     private function recordIncompleteFailure(
         Collection $reviews,
         OpenAiIncompleteResponseException $exception,
-        int $actualCost,
+        ?int $actualCost,
     ): void {
         $category = $exception->reason === 'max_output_tokens'
             ? 'output_token_limit'
@@ -462,8 +475,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             $review->forceFill($this->usageAttributes($exception, $index, $reviews->count()) + [
                 'response_id' => $exception->responseId !== '' ? $exception->responseId : null,
                 'model' => $exception->model,
-                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
-            ])->save();
+            ] + $this->costAttributes($actualCost, $index, $reviews->count()))->save();
             $review->fail($this->safeFailureMessage($exception), $category);
         }
     }
@@ -471,14 +483,17 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
     private function recordResponseValidationFailure(
         Collection $reviews,
         OpenAiResponseValidationException $exception,
-        int $actualCost,
+        ?int $actualCost,
     ): void {
         foreach ($reviews as $index => $review) {
-            $review->forceFill($this->usageAttributes($exception, $index, $reviews->count()) + [
+            $attributes = $exception->hasValidUsage
+                ? $this->usageAttributes($exception, $index, $reviews->count())
+                : [];
+
+            $review->forceFill($attributes + [
                 'response_id' => $exception->responseId !== '' ? $exception->responseId : null,
-                'model' => $exception->model,
-                'estimated_cost_micros' => $this->share($actualCost, $index, $reviews->count()),
-            ])->save();
+                'model' => $exception->model !== '' ? $exception->model : $review->model,
+            ] + $this->costAttributes($actualCost, $index, $reviews->count()))->save();
             $review->fail($this->safeFailureMessage($exception), 'schema_validation');
         }
     }
@@ -492,8 +507,7 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
             'rationale' => $result['rationale'],
             'response_id' => $response->responseId,
             'model' => $response->model,
-            'estimated_cost_micros' => $this->share($actualCost, $index, $count),
-        ];
+        ] + $this->costAttributes($actualCost, $index, $count);
     }
 
     private function usageAttributes(object $response, int $index, int $count): array
@@ -501,9 +515,35 @@ class ReviewParserDiagnosticsJob implements ShouldBeUnique, ShouldQueue
         return [
             'input_tokens' => $this->share($response->inputTokens, $index, $count),
             'cached_input_tokens' => $this->share($response->cachedInputTokens, $index, $count),
+            'cache_write_tokens' => $this->share($response->cacheWriteTokens, $index, $count),
             'output_tokens' => $this->share($response->outputTokens, $index, $count),
             'reasoning_tokens' => $this->share($response->reasoningTokens, $index, $count),
             'total_tokens' => $this->share($response->totalTokens, $index, $count),
+            'service_tier' => $response->serviceTier,
+        ];
+    }
+
+    private function costAttributes(?int $actualCost, int $index, int $count): array
+    {
+        if ($actualCost === null) {
+            return [
+                'estimated_cost_micros' => null,
+                'cost_calculation_version' => null,
+                'pricing_snapshot' => null,
+            ];
+        }
+
+        return [
+            'estimated_cost_micros' => $this->share($actualCost, $index, $count),
+            'cost_calculation_version' => self::COST_CALCULATION_VERSION,
+            'pricing_snapshot' => [
+                'model' => (string) config('fish.ai_review.pricing.model'),
+                'service_tier' => (string) config('fish.ai_review.pricing.service_tier'),
+                'input_cost_per_million_micros' => (int) config('fish.ai_review.pricing.input_cost_per_million_micros'),
+                'cached_input_cost_per_million_micros' => (int) config('fish.ai_review.pricing.cached_input_cost_per_million_micros'),
+                'cache_write_cost_per_million_micros' => (int) config('fish.ai_review.pricing.cache_write_cost_per_million_micros'),
+                'output_cost_per_million_micros' => (int) config('fish.ai_review.pricing.output_cost_per_million_micros'),
+            ],
         ];
     }
 

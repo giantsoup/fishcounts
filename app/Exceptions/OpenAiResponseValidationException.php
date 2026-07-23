@@ -18,6 +18,7 @@ final class OpenAiResponseValidationException extends UnexpectedValueException
         public readonly int $reasoningTokens,
         public readonly int $totalTokens,
         public readonly string $serviceTier,
+        public readonly bool $hasValidUsage = true,
         ?Throwable $previous = null,
     ) {
         parent::__construct($message, previous: $previous);

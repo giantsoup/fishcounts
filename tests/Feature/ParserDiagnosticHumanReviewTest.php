@@ -73,6 +73,7 @@ class ParserDiagnosticHumanReviewTest extends TestCase
             ->assertSeeText('parser-v5')
             ->assertSeeText('gpt-5.6-luna')
             ->assertSeeText('150')
+            ->assertSeeText('Legacy estimate')
             ->assertSee(e($review->rationale), false)
             ->assertSee(e(data_get($parserError->context, 'sanitized_paragraph')), false)
             ->assertDontSee('<script>alert', false)

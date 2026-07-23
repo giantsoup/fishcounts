@@ -129,7 +129,18 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         $this->assertSame('uncertain', $review->classification->value);
         $this->assertSame('resp_test', $review->response_id);
         $this->assertSame(100, $review->input_tokens);
+        $this->assertSame(20, $review->cache_write_tokens);
+        $this->assertSame('default', $review->service_tier);
         $this->assertSame(336, $review->estimated_cost_micros);
+        $this->assertSame('openai-list-price-v1', $review->cost_calculation_version);
+        $this->assertSame([
+            'model' => 'gpt-5.6-luna',
+            'service_tier' => 'default',
+            'input_cost_per_million_micros' => 1_000_000,
+            'cached_input_cost_per_million_micros' => 100_000,
+            'cache_write_cost_per_million_micros' => 1_250_000,
+            'output_cost_per_million_micros' => 6_000_000,
+        ], $review->pricing_snapshot);
         $this->assertDatabaseHas('ai_budget_reservations', [
             'reserved_micros' => 1_000_000,
             'actual_micros' => 336,
@@ -539,6 +550,114 @@ class ReviewParserDiagnosticsJobTest extends TestCase
         ]);
     }
 
+    public function test_missing_usage_consumes_the_conservative_reservation_without_recording_a_false_cost(): void
+    {
+        [$payload, $parserError] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $existingReview = ParserDiagnosticReview::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'payload_hash' => $payload->payload_hash,
+            'parser_error_id' => $parserError->id,
+            'diagnostic_fingerprint' => $parserError->diagnostic_fingerprint,
+            'model' => 'gpt-5.6-luna',
+            'prompt_version' => 'v4',
+            'schema_version' => 'v2',
+        ]);
+        $existingReview->transitionTo(ParserDiagnosticReviewStatus::Running);
+        $existingReview->forceFill([
+            'response_id' => 'resp_old',
+            'service_tier' => 'default',
+            'input_tokens' => 50,
+            'cached_input_tokens' => 10,
+            'cache_write_tokens' => 5,
+            'output_tokens' => 20,
+            'reasoning_tokens' => 10,
+            'total_tokens' => 70,
+            'estimated_cost_micros' => 100,
+            'cost_calculation_version' => 'openai-list-price-v1',
+            'pricing_snapshot' => ['model' => 'gpt-5.6-luna'],
+        ])->save();
+        $existingReview->fail('Previous failure.', 'schema_validation');
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new OpenAiResponseValidationException(
+                    message: 'The OpenAI response did not contain valid usage metadata.',
+                    responseId: 'resp_missing_usage',
+                    model: 'gpt-5.6-luna',
+                    inputTokens: 0,
+                    cachedInputTokens: 0,
+                    cacheWriteTokens: 0,
+                    outputTokens: 0,
+                    reasoningTokens: 0,
+                    totalTokens: 0,
+                    serviceTier: 'default',
+                    hasValidUsage: false,
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
+
+        $review = ParserDiagnosticReview::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $review->status);
+        $this->assertSame('schema_validation', $review->failure_category);
+        $this->assertSame('resp_missing_usage', $review->response_id);
+        $this->assertNull($review->input_tokens);
+        $this->assertSame(0, $review->cached_input_tokens);
+        $this->assertSame(0, $review->cache_write_tokens);
+        $this->assertNull($review->total_tokens);
+        $this->assertNull($review->estimated_cost_micros);
+        $this->assertNull($review->cost_calculation_version);
+        $this->assertNull($review->pricing_snapshot);
+        $this->assertDatabaseHas('ai_budget_reservations', [
+            'status' => 'settled',
+            'actual_micros' => 1_000_000,
+        ]);
+    }
+
+    public function test_unpriced_response_metadata_falls_back_without_stranding_the_reservation(): void
+    {
+        [$payload] = $this->payloadAndError();
+        $run = ParserDiagnosticReviewRun::factory()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'status' => ParserDiagnosticReviewRunStatus::Running,
+        ]);
+        $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class implements ParserDiagnosticReviewer
+        {
+            public function review(array $requests): ParserDiagnosticReviewProviderResponseData
+            {
+                throw new OpenAiResponseValidationException(
+                    message: 'The OpenAI response contained malformed JSON.',
+                    responseId: 'resp_unpriced',
+                    model: 'unpriced-model',
+                    inputTokens: 100,
+                    cachedInputTokens: 10,
+                    cacheWriteTokens: 20,
+                    outputTokens: 40,
+                    reasoningTokens: 20,
+                    totalTokens: 140,
+                    serviceTier: 'default',
+                );
+            }
+        });
+
+        app()->call([new ReviewParserDiagnosticsJob($payload->id, $run->id), 'handle']);
+
+        $review = ParserDiagnosticReview::query()->sole();
+        $this->assertSame(ParserDiagnosticReviewStatus::Failed, $review->status);
+        $this->assertSame(140, $review->total_tokens);
+        $this->assertNull($review->estimated_cost_micros);
+        $this->assertDatabaseHas('ai_budget_reservations', [
+            'status' => 'settled',
+            'actual_micros' => 1_000_000,
+        ]);
+    }
+
     public function test_a_failed_final_batch_does_not_discard_a_successful_earlier_batch(): void
     {
         [$payload, $firstError] = $this->payloadAndError();
@@ -636,6 +755,7 @@ class ReviewParserDiagnosticsJobTest extends TestCase
 
         config()->set('fish.ai_review.provider', 'openai');
         config()->set('fish.ai_review.model', 'gpt-current');
+        config()->set('fish.ai_review.pricing.model', 'gpt-current');
         config()->set('fish.ai_review.prompt_version', 'v2');
         config()->set('fish.ai_review.schema_version', 'v2');
         $this->app->bind(ParserDiagnosticReviewer::class, fn () => new class($parserError->diagnostic_fingerprint) implements ParserDiagnosticReviewer

@@ -134,6 +134,37 @@ class OpenAiParserDiagnosticReviewerTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_it_rejects_a_completed_response_without_usage_metadata(): void
+    {
+        $response = $this->validResponse();
+        unset($response['usage']);
+        Http::fake(['api.openai.test/*' => Http::response($response)]);
+
+        try {
+            app(OpenAiParserDiagnosticReviewer::class)->review([$this->request()]);
+            $this->fail('Expected missing usage metadata to be rejected.');
+        } catch (OpenAiResponseValidationException $exception) {
+            $this->assertSame('The OpenAI response did not contain valid usage metadata.', $exception->getMessage());
+            $this->assertFalse($exception->hasValidUsage);
+            $this->assertSame(0, $exception->totalTokens);
+        }
+    }
+
+    public function test_it_rejects_internally_inconsistent_usage_metadata(): void
+    {
+        $response = $this->validResponse();
+        $response['usage']['input_tokens_details']['cached_tokens'] = 13;
+        Http::fake(['api.openai.test/*' => Http::response($response)]);
+
+        try {
+            app(OpenAiParserDiagnosticReviewer::class)->review([$this->request()]);
+            $this->fail('Expected inconsistent usage metadata to be rejected.');
+        } catch (OpenAiResponseValidationException $exception) {
+            $this->assertSame('The OpenAI response contained inconsistent usage metadata.', $exception->getMessage());
+            $this->assertFalse($exception->hasValidUsage);
+        }
+    }
+
     public function test_it_does_not_retry_authentication_failures(): void
     {
         Http::fake(['api.openai.test/*' => Http::response(['error' => ['message' => 'Unauthorized']], 401)]);

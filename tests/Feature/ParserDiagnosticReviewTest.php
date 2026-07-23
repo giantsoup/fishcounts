@@ -52,6 +52,7 @@ class ParserDiagnosticReviewTest extends TestCase
         $this->assertNotSame(999, $review->id);
         $this->assertSame(ParserDiagnosticReviewStatus::Pending, $review->status);
         $this->assertSame('openai', $review->provider);
+        $this->assertSame(0, $review->cache_write_tokens);
         $this->assertSame(0, $review->attempts);
         $this->assertSame('0.9250', $review->confidence);
         $this->assertSame(['classification' => 'legitimate_alias'], $review->validated_result);
@@ -66,6 +67,10 @@ class ParserDiagnosticReviewTest extends TestCase
             'diagnostic_fingerprint',
             'validated_result',
             'estimated_cost_micros',
+            'service_tier',
+            'cache_write_tokens',
+            'cost_calculation_version',
+            'pricing_snapshot',
             'failure_message',
         ]));
     }

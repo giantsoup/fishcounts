@@ -170,6 +170,8 @@ return [
             'estimated_request_cost_micros' => (int) env('FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS', 1000000),
         ],
         'pricing' => [
+            'model' => env('FISH_AI_REVIEW_PRICING_MODEL', 'gpt-5.6-luna'),
+            'service_tier' => env('FISH_AI_REVIEW_PRICING_SERVICE_TIER', 'default'),
             'input_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_INPUT_COST_PER_MILLION_MICROS', 1000000),
             'cached_input_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_CACHED_INPUT_COST_PER_MILLION_MICROS', 100000),
             'cache_write_cost_per_million_micros' => (int) env('FISH_AI_REVIEW_CACHE_WRITE_COST_PER_MILLION_MICROS', 1250000),

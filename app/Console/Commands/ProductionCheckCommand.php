@@ -101,6 +101,9 @@ class ProductionCheckCommand extends Command
         $maxDiagnosticsPerRequest = (int) config('fish.ai_review.limits.max_diagnostics_per_request');
         $maxInputTokens = (int) config('fish.ai_review.limits.max_input_tokens');
         $maxOutputTokens = (int) config('fish.ai_review.limits.max_output_tokens');
+        $model = (string) config('fish.ai_review.model');
+        $pricingModel = (string) config('fish.ai_review.pricing.model');
+        $pricingServiceTier = (string) config('fish.ai_review.pricing.service_tier');
         $pricingRates = [
             (int) config('fish.ai_review.pricing.input_cost_per_million_micros'),
             (int) config('fish.ai_review.pricing.cached_input_cost_per_million_micros'),
@@ -117,6 +120,8 @@ class ProductionCheckCommand extends Command
         $this->assert($dailyLimit >= 0, 'Optional daily AI budget limit is valid.', 'FISH_AI_REVIEW_DAILY_LIMIT_MICROS must be zero or greater.', $failures);
         $this->assert($monthlyLimit > 0 && ($dailyLimit === 0 || $monthlyLimit >= $dailyLimit), 'Monthly AI budget hard limit is configured.', 'FISH_AI_REVIEW_MONTHLY_LIMIT_MICROS must be positive and at least any enabled daily limit.', $failures);
         $this->assert($estimatedRequestCost > 0, 'AI estimated request cost is configured.', 'FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be greater than zero.', $failures);
+        $this->assert($pricingModel !== '' && $model === $pricingModel, 'AI model has matching token pricing.', 'FISH_AI_REVIEW_PRICING_MODEL must exactly match FISH_AI_REVIEW_MODEL.', $failures);
+        $this->assert($pricingServiceTier === 'default', 'AI pricing uses the standard service tier.', 'FISH_AI_REVIEW_PRICING_SERVICE_TIER must be default unless tier-specific pricing is implemented.', $failures);
         $this->assert(! in_array(true, array_map(fn (int $rate): bool => $rate <= 0, $pricingRates), true), 'AI token pricing is configured.', 'Every FISH_AI_REVIEW_*_COST_PER_MILLION_MICROS value must be greater than zero.', $failures);
         $this->assert($estimatedRequestCost >= $maximumRequestCost, 'AI reservation covers the maximum configured request cost.', "FISH_AI_REVIEW_ESTIMATED_REQUEST_COST_MICROS must be at least {$maximumRequestCost} for the configured token limits.", $failures);
         $this->assert($maxDiagnosticsPerRequest > 0, 'AI diagnostic batch size is configured.', 'FISH_AI_REVIEW_MAX_DIAGNOSTICS_PER_REQUEST must be greater than zero.', $failures);

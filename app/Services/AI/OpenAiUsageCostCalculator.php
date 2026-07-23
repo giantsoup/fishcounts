@@ -7,11 +7,25 @@ use InvalidArgumentException;
 final class OpenAiUsageCostCalculator
 {
     public function calculate(
+        string $model,
+        string $serviceTier,
         int $inputTokens,
         int $cachedInputTokens,
         int $cacheWriteTokens,
         int $outputTokens,
     ): int {
+        $pricedModel = (string) config('fish.ai_review.pricing.model');
+        $isPricedModel = $model === $pricedModel
+            || preg_match('/^'.preg_quote($pricedModel, '/').'-\d{4}-\d{2}-\d{2}$/', $model) === 1;
+
+        if ($pricedModel === '' || ! $isPricedModel) {
+            throw new InvalidArgumentException("OpenAI pricing is not configured for model [{$model}].");
+        }
+
+        if ($serviceTier !== (string) config('fish.ai_review.pricing.service_tier')) {
+            throw new InvalidArgumentException("OpenAI pricing is not configured for service tier [{$serviceTier}].");
+        }
+
         if ($inputTokens < 0 || $cachedInputTokens < 0 || $cacheWriteTokens < 0 || $outputTokens < 0) {
             throw new InvalidArgumentException('OpenAI token usage cannot be negative.');
         }

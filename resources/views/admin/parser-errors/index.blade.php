@@ -265,15 +265,17 @@
                                         @if ($review)
                                             <dl class="mt-1 grid grid-cols-2 gap-x-3 text-xs text-gray-700">
                                                 <dt>Model</dt><dd>{{ $review->model }}</dd>
+                                                <dt>Service tier</dt><dd>{{ $review->service_tier ?? 'n/a' }}</dd>
                                                 <dt>Prompt</dt><dd>{{ $review->prompt_version }}</dd>
                                                 <dt>Schema</dt><dd>{{ $review->schema_version }}</dd>
                                                 <dt>Parser</dt><dd>{{ data_get($error->context, 'parser_version', $error->rawScrapePayload?->parser_version ?? 'unknown') }}</dd>
                                                 <dt>Input tokens</dt><dd>{{ $review->input_tokens ?? 'n/a' }}</dd>
                                                 <dt>Cached tokens</dt><dd>{{ $review->cached_input_tokens }}</dd>
+                                                <dt>Cache-write tokens</dt><dd>{{ $review->cache_write_tokens }}</dd>
                                                 <dt>Output tokens</dt><dd>{{ $review->output_tokens ?? 'n/a' }}</dd>
                                                 <dt>Reasoning tokens</dt><dd>{{ $review->reasoning_tokens }}</dd>
                                                 <dt>Total tokens</dt><dd>{{ $review->total_tokens ?? 'n/a' }}</dd>
-                                                <dt>Calculated cost</dt><dd>{{ $review->estimated_cost_micros === null ? 'n/a' : Number::currency($review->estimated_cost_micros / 1_000_000) }}</dd>
+                                                <dt>{{ $review->cost_calculation_version === 'openai-list-price-v1' ? 'List-price cost' : 'Legacy estimate' }}</dt><dd>{{ $review->estimated_cost_micros === null ? 'n/a' : Number::currency($review->estimated_cost_micros / 1_000_000) }}</dd>
                                             </dl>
                                         @else
                                             <p class="mt-1 text-sm text-gray-600">No usage data available.</p>

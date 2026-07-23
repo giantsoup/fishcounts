@@ -111,8 +111,8 @@ final class AiBudgetManager
 
     public function settle(AiBudgetReservation $reservation, int $actualCostMicros): AiBudgetReservation
     {
-        if ($actualCostMicros < 0 || $actualCostMicros > $reservation->reserved_micros) {
-            throw new InvalidArgumentException('The actual AI cost must be between zero and the reserved amount.');
+        if ($actualCostMicros < 0) {
+            throw new InvalidArgumentException('The actual AI cost cannot be negative.');
         }
 
         return DB::transaction(function () use ($reservation, $actualCostMicros): AiBudgetReservation {

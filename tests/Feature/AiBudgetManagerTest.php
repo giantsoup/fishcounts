@@ -128,13 +128,20 @@ class AiBudgetManagerTest extends TestCase
         $this->assertSame(500, $dailyPeriod->spent_micros);
     }
 
-    public function test_actual_cost_cannot_exceed_the_atomic_reservation(): void
+    public function test_actual_cost_above_the_reservation_is_recorded_and_stops_future_spend(): void
     {
         config()->set('fish.ai_review.budgets.monthly_limit_micros', 1000);
-        $reservation = app(AiBudgetManager::class)->reserveMonthly('openai', 'review', 500);
+        $manager = app(AiBudgetManager::class);
+        $reservation = $manager->reserveMonthly('openai', 'review', 500);
+        $settled = $manager->settle($reservation, 1001);
 
-        $this->expectException(InvalidArgumentException::class);
-        app(AiBudgetManager::class)->settle($reservation, 501);
+        $this->assertSame(AiBudgetReservationStatus::Settled, $settled->status);
+        $this->assertSame(1001, $settled->actual_micros);
+        $this->assertSame(1001, $this->period('daily')->spent_micros);
+        $this->assertSame(1001, $this->period('monthly')->spent_micros);
+
+        $this->expectException(AiBudgetExceededException::class);
+        $manager->reserveMonthly('openai', 'future-review', 1);
     }
 
     public function test_monthly_hard_limit_is_enabled_without_an_independent_daily_limit_by_default(): void

@@ -453,6 +453,8 @@ class PhaseNineOperationsTest extends TestCase
             ->assertSee('Schema / output limit / stale')
             ->assertSee('GitHub queue / oldest')
             ->assertSee('GitHub issue failures are above the 24-hour warning threshold.')
+            ->assertSee('Budgeted costs use provider-reported tokens and configured list prices; requests without usable metering consume their conservative reservation. Billed spend may differ.')
+            ->assertSee('Tokens / budgeted cost')
             ->assertSee('monthly cap applies')
             ->assertSee('$100.00 remaining')
             ->assertSee('$100.00 limit');
@@ -548,6 +550,17 @@ class PhaseNineOperationsTest extends TestCase
 
         $this->artisan('fish:production-check', ['--skip-database' => true])
             ->expectsOutputToContain('OPENAI_API_KEY is required when AI reviews are enabled.')
+            ->assertFailed();
+    }
+
+    public function test_unpriced_ai_model_or_service_tier_fails_the_production_check(): void
+    {
+        config()->set('fish.ai_review.model', 'gpt-unpriced');
+        config()->set('fish.ai_review.pricing.service_tier', 'priority');
+
+        $this->artisan('fish:production-check', ['--skip-database' => true])
+            ->expectsOutputToContain('FISH_AI_REVIEW_PRICING_MODEL must exactly match FISH_AI_REVIEW_MODEL.')
+            ->expectsOutputToContain('FISH_AI_REVIEW_PRICING_SERVICE_TIER must be default unless tier-specific pricing is implemented.')
             ->assertFailed();
     }
 

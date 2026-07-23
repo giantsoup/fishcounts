@@ -74,7 +74,7 @@
             <div class="bg-white p-6 shadow sm:rounded-lg">
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-gray-900">AI parser review operations</h3>
-                    <p class="text-xs text-gray-500">Review metrics cover the last 24 hours unless noted.</p>
+                    <p class="text-xs text-gray-500">Review metrics cover the last 24 hours unless noted. Budgeted costs use provider-reported tokens and configured list prices; requests without usable metering consume their conservative reservation. Billed spend may differ.</p>
                 </div>
 
                 <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -83,7 +83,7 @@
                     <div><p class="text-xs text-gray-500">Succeeded / failed / refused</p><p class="font-semibold">{{ number_format($aiMetrics['succeeded']) }} / {{ number_format($aiMetrics['failed']) }} / {{ number_format($aiMetrics['refused']) }}</p></div>
                     <div><p class="text-xs text-gray-500">Schema / output limit / stale</p><p class="font-semibold">{{ number_format($aiMetrics['schema_failures']) }} / {{ number_format($aiMetrics['output_limit_failures']) }} / {{ number_format($aiMetrics['stale']) }}</p></div>
                     <div><p class="text-xs text-gray-500">Accepted / rejected / automatic</p><p class="font-semibold">{{ number_format($aiMetrics['accepted']) }} / {{ number_format($aiMetrics['rejected']) }} / {{ number_format($aiMetrics['automatic_resolutions']) }}</p></div>
-                    <div><p class="text-xs text-gray-500">Tokens / calculated cost</p><p class="font-semibold">{{ number_format($aiMetrics['tokens']) }} / ${{ number_format($aiMetrics['cost_micros'] / 1_000_000, 2) }}</p></div>
+                    <div><p class="text-xs text-gray-500">Tokens / budgeted cost</p><p class="font-semibold">{{ number_format($aiMetrics['tokens']) }} / ${{ number_format($aiMetrics['cost_micros'] / 1_000_000, 2) }}</p></div>
                     <div><p class="text-xs text-gray-500">GitHub duplicate occurrences</p><p class="font-semibold">{{ number_format($aiMetrics['github_duplicates']) }}</p></div>
                     <div><p class="text-xs text-gray-500">GitHub failures</p><p class="font-semibold">{{ number_format($aiMetrics['github_failures']) }}</p></div>
                     <div><p class="text-xs text-gray-500">Override invalidations</p><p class="font-semibold">{{ number_format($aiMetrics['override_invalidations']) }}</p></div>

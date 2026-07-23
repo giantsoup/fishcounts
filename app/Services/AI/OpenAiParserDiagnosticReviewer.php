@@ -71,7 +71,7 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
 
         return [
             'model' => config('fish.ai_review.model'),
-            'service_tier' => 'default',
+            'service_tier' => config('fish.ai_review.pricing.service_tier'),
             'store' => false,
             'tools' => [],
             'tool_choice' => 'none',
@@ -136,19 +136,34 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
     private function parse(Response $response): ParserDiagnosticReviewProviderResponseData
     {
         $json = $response->json();
+        if (! is_array($json)) {
+            throw $this->responseValidationException([], 'The OpenAI response did not contain a valid JSON object.');
+        }
+
+        $usage = $this->validatedUsage($json);
+        $model = $json['model'] ?? null;
+        $serviceTier = $json['service_tier'] ?? null;
+
+        if (! is_string($model) || $model === '') {
+            throw $this->responseValidationException($json, 'The OpenAI response did not identify the model used.', usage: $usage);
+        }
+
+        if (! is_string($serviceTier) || $serviceTier === '') {
+            throw $this->responseValidationException($json, 'The OpenAI response did not identify the service tier used.', usage: $usage);
+        }
 
         if (($json['status'] ?? null) !== 'completed') {
             throw new OpenAiIncompleteResponseException(
                 responseId: (string) ($json['id'] ?? ''),
-                model: (string) ($json['model'] ?? config('fish.ai_review.model')),
+                model: $model,
                 reason: (string) data_get($json, 'incomplete_details.reason', 'unknown'),
-                inputTokens: (int) data_get($json, 'usage.input_tokens', 0),
-                cachedInputTokens: (int) data_get($json, 'usage.input_tokens_details.cached_tokens', 0),
-                outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
-                reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
-                totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
-                cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
-                serviceTier: (string) ($json['service_tier'] ?? 'default'),
+                inputTokens: $usage['input_tokens'],
+                cachedInputTokens: $usage['cached_input_tokens'],
+                outputTokens: $usage['output_tokens'],
+                reasoningTokens: $usage['reasoning_tokens'],
+                totalTokens: $usage['total_tokens'],
+                cacheWriteTokens: $usage['cache_write_tokens'],
+                serviceTier: $serviceTier,
             );
         }
         $message = collect($json['output'] ?? [])->first(
@@ -159,77 +174,127 @@ final class OpenAiParserDiagnosticReviewer implements ParserDiagnosticReviewer
         ) : null;
 
         if (is_array($content) && ($content['type'] ?? null) === 'refusal') {
-            return $this->providerResponse($json, [], true, (string) ($content['refusal'] ?? 'The provider refused the request.'));
+            return $this->providerResponse($json, $usage, [], true, (string) ($content['refusal'] ?? 'The provider refused the request.'));
         }
 
         $text = is_array($content) ? ($content['text'] ?? null) : null;
 
         if (! is_string($text)) {
-            throw $this->responseValidationException($json, 'The OpenAI response did not contain structured output text.');
+            throw $this->responseValidationException($json, 'The OpenAI response did not contain structured output text.', usage: $usage);
         }
 
         try {
             $decoded = json_decode($text, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
-            throw $this->responseValidationException($json, 'The OpenAI response contained malformed JSON.', $exception);
+            throw $this->responseValidationException($json, 'The OpenAI response contained malformed JSON.', $exception, $usage);
         }
 
         if (! is_array($decoded) || array_keys($decoded) !== ['results'] || ! is_array($decoded['results'])) {
-            throw $this->responseValidationException($json, 'The OpenAI response did not match the batch result envelope.');
+            throw $this->responseValidationException($json, 'The OpenAI response did not match the batch result envelope.', usage: $usage);
         }
 
         $results = [];
         foreach ($decoded['results'] as $result) {
             if (! is_array($result) || ! is_string($result['diagnostic_fingerprint'] ?? null)) {
-                throw $this->responseValidationException($json, 'The OpenAI response contained an invalid diagnostic result.');
+                throw $this->responseValidationException($json, 'The OpenAI response contained an invalid diagnostic result.', usage: $usage);
             }
             $fingerprint = $result['diagnostic_fingerprint'];
             unset($result['diagnostic_fingerprint']);
             if (isset($results[$fingerprint])) {
-                throw $this->responseValidationException($json, 'The OpenAI response contained a duplicate diagnostic fingerprint.');
+                throw $this->responseValidationException($json, 'The OpenAI response contained a duplicate diagnostic fingerprint.', usage: $usage);
             }
             $results[$fingerprint] = $result;
         }
 
-        return $this->providerResponse($json, $results, false, null);
+        return $this->providerResponse($json, $usage, $results, false, null);
     }
 
-    /** @param array<string, array<string, mixed>> $results */
-    private function providerResponse(array $json, array $results, bool $refused, ?string $refusal): ParserDiagnosticReviewProviderResponseData
-    {
+    /**
+     * @param  array{input_tokens: int, cached_input_tokens: int, cache_write_tokens: int, output_tokens: int, reasoning_tokens: int, total_tokens: int}  $usage
+     * @param  array<string, array<string, mixed>>  $results
+     */
+    private function providerResponse(
+        array $json,
+        array $usage,
+        array $results,
+        bool $refused,
+        ?string $refusal,
+    ): ParserDiagnosticReviewProviderResponseData {
         return new ParserDiagnosticReviewProviderResponseData(
             responseId: (string) ($json['id'] ?? ''),
-            model: (string) ($json['model'] ?? config('fish.ai_review.model')),
+            model: (string) $json['model'],
             results: $results,
             refused: $refused,
             refusal: $refusal,
-            inputTokens: (int) data_get($json, 'usage.input_tokens', 0),
-            cachedInputTokens: (int) data_get($json, 'usage.input_tokens_details.cached_tokens', 0),
-            outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
-            reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
-            totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
-            cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
-            serviceTier: (string) ($json['service_tier'] ?? 'default'),
+            inputTokens: $usage['input_tokens'],
+            cachedInputTokens: $usage['cached_input_tokens'],
+            outputTokens: $usage['output_tokens'],
+            reasoningTokens: $usage['reasoning_tokens'],
+            totalTokens: $usage['total_tokens'],
+            cacheWriteTokens: $usage['cache_write_tokens'],
+            serviceTier: (string) $json['service_tier'],
         );
     }
 
-    /** @param array<string, mixed> $json */
+    /**
+     * @param  array<string, mixed>  $json
+     * @return array{input_tokens: int, cached_input_tokens: int, cache_write_tokens: int, output_tokens: int, reasoning_tokens: int, total_tokens: int}
+     */
+    private function validatedUsage(array $json): array
+    {
+        $usage = $json['usage'] ?? null;
+        $inputDetails = is_array($usage) ? ($usage['input_tokens_details'] ?? []) : null;
+        $outputDetails = is_array($usage) ? ($usage['output_tokens_details'] ?? []) : null;
+
+        if (! is_array($usage) || ! is_array($inputDetails) || ! is_array($outputDetails)) {
+            throw $this->responseValidationException($json, 'The OpenAI response did not contain valid usage metadata.');
+        }
+
+        $values = [
+            'input_tokens' => $usage['input_tokens'] ?? null,
+            'cached_input_tokens' => $inputDetails['cached_tokens'] ?? 0,
+            'cache_write_tokens' => $inputDetails['cache_write_tokens'] ?? 0,
+            'output_tokens' => $usage['output_tokens'] ?? null,
+            'reasoning_tokens' => $outputDetails['reasoning_tokens'] ?? 0,
+            'total_tokens' => $usage['total_tokens'] ?? null,
+        ];
+
+        foreach ($values as $value) {
+            if (! is_int($value) || $value < 0) {
+                throw $this->responseValidationException($json, 'The OpenAI response did not contain valid usage metadata.');
+            }
+        }
+
+        if (($values['cached_input_tokens'] + $values['cache_write_tokens']) > $values['input_tokens']
+            || $values['reasoning_tokens'] > $values['output_tokens']) {
+            throw $this->responseValidationException($json, 'The OpenAI response contained inconsistent usage metadata.');
+        }
+
+        return $values;
+    }
+
+    /**
+     * @param  array<string, mixed>  $json
+     * @param  null|array{input_tokens: int, cached_input_tokens: int, cache_write_tokens: int, output_tokens: int, reasoning_tokens: int, total_tokens: int}  $usage
+     */
     private function responseValidationException(
         array $json,
         string $message,
         ?JsonException $previous = null,
+        ?array $usage = null,
     ): OpenAiResponseValidationException {
         return new OpenAiResponseValidationException(
             message: $message,
             responseId: (string) ($json['id'] ?? ''),
-            model: (string) ($json['model'] ?? config('fish.ai_review.model')),
-            inputTokens: (int) data_get($json, 'usage.input_tokens', 0),
-            cachedInputTokens: (int) data_get($json, 'usage.input_tokens_details.cached_tokens', 0),
-            cacheWriteTokens: (int) data_get($json, 'usage.input_tokens_details.cache_write_tokens', 0),
-            outputTokens: (int) data_get($json, 'usage.output_tokens', 0),
-            reasoningTokens: (int) data_get($json, 'usage.output_tokens_details.reasoning_tokens', 0),
-            totalTokens: (int) data_get($json, 'usage.total_tokens', 0),
-            serviceTier: (string) ($json['service_tier'] ?? 'default'),
+            model: is_string($json['model'] ?? null) ? $json['model'] : '',
+            inputTokens: $usage['input_tokens'] ?? 0,
+            cachedInputTokens: $usage['cached_input_tokens'] ?? 0,
+            cacheWriteTokens: $usage['cache_write_tokens'] ?? 0,
+            outputTokens: $usage['output_tokens'] ?? 0,
+            reasoningTokens: $usage['reasoning_tokens'] ?? 0,
+            totalTokens: $usage['total_tokens'] ?? 0,
+            serviceTier: is_string($json['service_tier'] ?? null) ? $json['service_tier'] : '',
+            hasValidUsage: $usage !== null,
             previous: $previous,
         );
     }
