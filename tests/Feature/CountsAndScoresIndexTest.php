@@ -32,6 +32,28 @@ class CountsAndScoresIndexTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_single_select_filter_defaults_are_rendered_once_without_placeholder_metadata(): void
+    {
+        $user = User::factory()->create();
+
+        $countsResponse = $this->actingAs($user)->get(route('counts.index'));
+        $scoresResponse = $this->actingAs($user)->get(route('scores.index'));
+
+        $countsResponse->assertOk();
+        $scoresResponse->assertOk();
+
+        foreach (['All species', 'All trip types', 'All landings', 'All boats'] as $defaultLabel) {
+            $this->assertSame(1, substr_count($countsResponse->getContent(), $defaultLabel));
+        }
+
+        foreach (['All rules', 'All levels'] as $defaultLabel) {
+            $this->assertSame(1, substr_count($scoresResponse->getContent(), $defaultLabel));
+        }
+
+        $countsResponse->assertDontSee('data-placeholder=', false);
+        $scoresResponse->assertDontSee('data-placeholder=', false);
+    }
+
     public function test_counts_index_groups_species_counts_by_trip(): void
     {
         $user = User::factory()->create();

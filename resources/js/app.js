@@ -10,19 +10,54 @@ window.Alpine = Alpine;
 
 Alpine.plugin(mask);
 
+const boatManager = () => ({
+    boats: [],
+    selectedBoatId: null,
+    bookingUrl: null,
+    get selectedBoat() {
+        return this.boats.find((boat) => boat.id === this.selectedBoatId) || null;
+    },
+    init() {
+        this.boats = JSON.parse(this.$el.dataset.boats || '[]');
+
+        const selectedBoatId = this.$el.dataset.selectedBoatId;
+
+        this.selectedBoatId = selectedBoatId ? Number.parseInt(selectedBoatId, 10) : null;
+        this.bookingUrl = Object.hasOwn(this.$el.dataset, 'oldBookingUrl')
+            ? this.$el.dataset.oldBookingUrl
+            : (this.selectedBoat?.booking_url || '');
+    },
+    selectBoat(id) {
+        this.selectedBoatId = id;
+        this.bookingUrl = this.selectedBoat?.booking_url || '';
+        this.scrollToEditorOnMobile();
+    },
+    scrollToEditorOnMobile() {
+        if (window.matchMedia('(min-width: 1024px)').matches) {
+            return;
+        }
+
+        this.$nextTick(() => {
+            const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+            this.$refs.boatEditor?.scrollIntoView({ behavior, block: 'start' });
+        });
+    },
+});
+
 const isMultipleSelect = (select) => select.multiple || select.dataset.selectMode === 'multiple';
 
 const selectPlugins = (select) => (isMultipleSelect(select) ? ['remove_button'] : []);
 
 const selectConfig = (select) => {
     const isMultiple = isMultipleSelect(select);
-    const placeholder = select.dataset.placeholder || '';
+    const placeholder = isMultiple ? (select.dataset.placeholder || '') : '';
 
     return {
         allowEmptyOption: ! isMultiple,
         closeAfterSelect: ! isMultiple,
         create: false,
-        hidePlaceholder: isMultiple,
+        hidePlaceholder: true,
         hideSelected: isMultiple,
         maxOptions: 500,
         plugins: selectPlugins(select),
@@ -241,6 +276,7 @@ if (document.readyState === 'loading') {
     initializeFormControls();
 }
 document.addEventListener('alpine:init', () => {
+    Alpine.data('boatManager', boatManager);
     Alpine.magic('initializeFormControls', () => initializeFormControls);
 });
 

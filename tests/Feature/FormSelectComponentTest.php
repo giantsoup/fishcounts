@@ -19,16 +19,21 @@ class FormSelectComponentTest extends TestCase
             ->assertSee('data-placeholder="Select sources"', false);
     }
 
-    public function test_single_selects_do_not_render_multi_select_metadata(): void
+    public function test_single_selects_use_the_empty_option_as_the_only_placeholder(): void
     {
-        $this->blade(<<<'BLADE'
-            <x-form.select name="species_id" placeholder="Select species">
+        $view = $this->blade(<<<'BLADE'
+            <x-form.select name="species_id" placeholder="All species">
+                <option value="">All species</option>
                 <option value="1">Yellowtail</option>
             </x-form.select>
-        BLADE)
+        BLADE);
+
+        $view
             ->assertSee('data-enhance="select"', false)
-            ->assertSee('data-placeholder="Select species"', false)
+            ->assertDontSee('data-placeholder=', false)
             ->assertDontSee('multiple', false)
             ->assertDontSee('data-select-mode="multiple"', false);
+
+        $this->assertSame(1, substr_count((string) $view, 'All species'));
     }
 }

@@ -28,7 +28,7 @@
 
                     <div>
                         <label for="alert_rule_id" class="block text-sm font-medium text-gray-700">Rule</label>
-                        <x-form.select id="alert_rule_id" name="alert_rule_id" placeholder="All rules">
+                        <x-form.select id="alert_rule_id" name="alert_rule_id">
                             <option value="">All rules</option>
                             @foreach ($rules as $rule)
                                 <option value="{{ $rule->id }}" @selected($filters['alert_rule_id'] === $rule->id)>{{ $rule->name }}</option>
@@ -38,7 +38,7 @@
 
                     <div>
                         <label for="level" class="block text-sm font-medium text-gray-700">Level</label>
-                        <x-form.select id="level" name="level" placeholder="All levels">
+                        <x-form.select id="level" name="level">
                             <option value="">All levels</option>
                             @foreach ($levels as $level)
                                 <option value="{{ $level->value }}" @selected($filters['level'] === $level->value)>{{ str($level->value)->replace('_', ' ')->title() }}</option>

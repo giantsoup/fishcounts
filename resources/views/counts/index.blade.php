@@ -74,7 +74,7 @@
 
                     <div>
                         <label for="species_id" class="block text-sm font-medium text-gray-700">Species</label>
-                        <x-form.select id="species_id" name="species_id" placeholder="All species">
+                        <x-form.select id="species_id" name="species_id">
                             <option value="">All species</option>
                             @foreach ($species as $option)
                                 <option value="{{ $option->id }}" @selected($filters['species_id'] === $option->id)>{{ $option->name }}</option>
@@ -84,7 +84,7 @@
 
                     <div>
                         <label for="trip_type_id" class="block text-sm font-medium text-gray-700">Trip Type</label>
-                        <x-form.select id="trip_type_id" name="trip_type_id" placeholder="All trip types">
+                        <x-form.select id="trip_type_id" name="trip_type_id">
                             <option value="">All trip types</option>
                             @foreach ($tripTypes as $option)
                                 <option value="{{ $option->id }}" @selected($filters['trip_type_id'] === $option->id)>{{ $option->name }}</option>
@@ -94,7 +94,7 @@
 
                     <div>
                         <label for="landing_id" class="block text-sm font-medium text-gray-700">Landing</label>
-                        <x-form.select id="landing_id" name="landing_id" placeholder="All landings">
+                        <x-form.select id="landing_id" name="landing_id">
                             <option value="">All landings</option>
                             @foreach ($landings as $option)
                                 <option value="{{ $option->id }}" @selected($filters['landing_id'] === $option->id)>{{ $option->name }}</option>
@@ -104,7 +104,7 @@
 
                     <div>
                         <label for="boat_id" class="block text-sm font-medium text-gray-700">Boat</label>
-                        <x-form.select id="boat_id" name="boat_id" placeholder="All boats">
+                        <x-form.select id="boat_id" name="boat_id">
                             <option value="">All boats</option>
                             @foreach ($boats as $option)
                                 <option value="{{ $option->id }}" @selected($filters['boat_id'] === $option->id)>{{ $option->name }}</option>

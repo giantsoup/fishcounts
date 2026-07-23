@@ -32,7 +32,12 @@ class AliasManagementTest extends TestCase
             ->assertOk()
             ->assertSeeText('Active boats')
             ->assertSeeText('Dolphin')
-            ->assertSeeText('Select a boat to edit it or consolidate another name into it.')
+            ->assertSeeText('Choose a boat to manage')
+            ->assertSeeText('Booking details')
+            ->assertSeeText('Known alternate names')
+            ->assertSee('x-data="boatManager"', false)
+            ->assertSee('x-ref="boatEditor"', false)
+            ->assertSee('lg:grid-cols-2', false)
             ->assertSee('Save boat');
     }
 
