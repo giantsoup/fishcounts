@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\TripType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateTripTypeRequest extends FormRequest
 {
@@ -22,8 +24,11 @@ class UpdateTripTypeRequest extends FormRequest
      */
     public function rules(): array
     {
+        $tripTypeId = $this->route('tripType')?->getKey();
+
         return [
-            'order_sort_order' => ['required', 'integer', 'min:0'],
+            'order_trip_type_id' => ['required', 'integer', Rule::in([$tripTypeId])],
+            'order_sort_order' => ['required', 'integer', 'min:0', 'max:'.TripType::MAX_SORT_ORDER],
         ];
     }
 }

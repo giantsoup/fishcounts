@@ -10,6 +10,18 @@ window.Alpine = Alpine;
 
 Alpine.plugin(mask);
 
+const scrollToEditorOnMobile = (component, editor) => {
+    if (window.matchMedia('(min-width: 1024px)').matches) {
+        return;
+    }
+
+    component.$nextTick(() => {
+        const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+        editor?.scrollIntoView({ behavior, block: 'start' });
+    });
+};
+
 const boatManager = () => ({
     boats: [],
     selectedBoatId: null,
@@ -30,18 +42,55 @@ const boatManager = () => ({
     selectBoat(id) {
         this.selectedBoatId = id;
         this.bookingUrl = this.selectedBoat?.booking_url || '';
-        this.scrollToEditorOnMobile();
+        scrollToEditorOnMobile(this, this.$refs.boatEditor);
     },
-    scrollToEditorOnMobile() {
-        if (window.matchMedia('(min-width: 1024px)').matches) {
-            return;
-        }
+});
 
-        this.$nextTick(() => {
-            const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+const speciesManager = () => ({
+    species: [],
+    selectedSpeciesId: null,
+    environmentalLocationProfile: null,
+    get selectedSpecies() {
+        return this.species.find((species) => species.id === this.selectedSpeciesId) || null;
+    },
+    init() {
+        this.species = JSON.parse(this.$el.dataset.species || '[]');
 
-            this.$refs.boatEditor?.scrollIntoView({ behavior, block: 'start' });
-        });
+        const selectedSpeciesId = this.$el.dataset.selectedSpeciesId;
+
+        this.selectedSpeciesId = selectedSpeciesId ? Number.parseInt(selectedSpeciesId, 10) : null;
+        this.environmentalLocationProfile = Object.hasOwn(this.$el.dataset, 'oldEnvironmentalLocationProfile')
+            ? this.$el.dataset.oldEnvironmentalLocationProfile
+            : (this.selectedSpecies?.environmental_location_profile || '');
+    },
+    selectSpecies(id) {
+        this.selectedSpeciesId = id;
+        this.environmentalLocationProfile = this.selectedSpecies?.environmental_location_profile || '';
+        scrollToEditorOnMobile(this, this.$refs.speciesEditor);
+    },
+});
+
+const tripTypeManager = () => ({
+    tripTypes: [],
+    selectedTripTypeId: null,
+    orderSortOrder: null,
+    get selectedTripType() {
+        return this.tripTypes.find((tripType) => tripType.id === this.selectedTripTypeId) || null;
+    },
+    init() {
+        this.tripTypes = JSON.parse(this.$el.dataset.tripTypes || '[]');
+
+        const selectedTripTypeId = this.$el.dataset.selectedTripTypeId;
+
+        this.selectedTripTypeId = selectedTripTypeId ? Number.parseInt(selectedTripTypeId, 10) : null;
+        this.orderSortOrder = Object.hasOwn(this.$el.dataset, 'oldOrderSortOrder')
+            ? this.$el.dataset.oldOrderSortOrder
+            : (this.selectedTripType?.sort_order ?? '');
+    },
+    selectTripType(id) {
+        this.selectedTripTypeId = id;
+        this.orderSortOrder = this.selectedTripType?.sort_order ?? '';
+        scrollToEditorOnMobile(this, this.$refs.tripTypeEditor);
     },
 });
 
@@ -300,6 +349,8 @@ if (document.readyState === 'loading') {
 }
 document.addEventListener('alpine:init', () => {
     Alpine.data('boatManager', boatManager);
+    Alpine.data('speciesManager', speciesManager);
+    Alpine.data('tripTypeManager', tripTypeManager);
     Alpine.magic('initializeFormControls', () => initializeFormControls);
 });
 

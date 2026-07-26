@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\TripType;
+use App\Models\TripTypeAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -24,7 +25,7 @@ class StoreTripTypeRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'sort_order' => ['nullable', 'integer', 'min:0'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:'.TripType::MAX_SORT_ORDER],
         ];
     }
 
@@ -52,6 +53,17 @@ class StoreTripTypeRequest extends FormRequest
 
                 if (TripType::query()->where('slug', $this->slug())->exists()) {
                     $validator->errors()->add('name', 'This trip type already exists.');
+
+                    return;
+                }
+
+                $normalizedNames = [
+                    Str::of($this->validated('name'))->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString(),
+                    Str::of($this->validated('name'))->lower()->squish()->toString(),
+                ];
+
+                if (TripTypeAlias::query()->whereIn('normalized_alias', $normalizedNames)->exists()) {
+                    $validator->errors()->add('name', 'This name is already used as a trip type alias.');
                 }
             },
         ];

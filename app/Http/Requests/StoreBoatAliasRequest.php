@@ -58,8 +58,10 @@ class StoreBoatAliasRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        if ($this->has('alias')) {
-            $this->merge(['alias' => str($this->input('alias'))->squish()->toString()]);
+        $alias = $this->input('alias');
+
+        if (is_string($alias)) {
+            $this->merge(['alias' => str($alias)->squish()->toString()]);
         }
     }
 }

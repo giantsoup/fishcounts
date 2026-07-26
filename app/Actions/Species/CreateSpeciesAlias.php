@@ -7,6 +7,7 @@ use App\Models\ParserError;
 use App\Models\Species;
 use App\Models\SpeciesAlias;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CreateSpeciesAlias
@@ -18,10 +19,29 @@ class CreateSpeciesAlias
         ?int $resolvedByUserId,
         ParserErrorResolutionType $resolutionType = ParserErrorResolutionType::Alias,
     ): SpeciesAlias {
+        $alias = Str::squish($alias);
+
+        if (trim($normalizedAlias) === '') {
+            throw ValidationException::withMessages(['alias' => 'The alias must contain letters or numbers.']);
+        }
+
         return DB::transaction(function () use ($species, $alias, $normalizedAlias, $resolvedByUserId, $resolutionType): SpeciesAlias {
             $species = Species::query()->lockForUpdate()->findOrFail($species->id);
+            $canonicalSpecies = Species::query()
+                ->where('slug', Str::slug($normalizedAlias))
+                ->lockForUpdate()
+                ->first();
+
+            if ($canonicalSpecies !== null && ! $canonicalSpecies->is($species)) {
+                throw ValidationException::withMessages(['alias' => 'This name is already used by another canonical species.']);
+            }
+
+            $normalizedAliases = [
+                $normalizedAlias,
+                Str::of($alias)->lower()->squish()->toString(),
+            ];
             $speciesAlias = SpeciesAlias::query()
-                ->where('normalized_alias', $normalizedAlias)
+                ->whereIn('normalized_alias', $normalizedAliases)
                 ->lockForUpdate()
                 ->first();
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\TripType;
 use App\Models\TripTypeAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -45,10 +46,38 @@ class StoreTripTypeAliasRequest extends FormRequest
                     return;
                 }
 
-                if (TripTypeAlias::query()->where('normalized_alias', $this->normalizedAlias())->exists()) {
+                if ($this->normalizedAlias() === '') {
+                    $validator->errors()->add('alias', 'The alias must contain letters or numbers.');
+
+                    return;
+                }
+
+                $canonicalTripType = TripType::query()->where('slug', str($this->validated('alias'))->slug())->first();
+
+                if ($canonicalTripType !== null && $canonicalTripType->getKey() !== $this->integer('trip_type_id')) {
+                    $validator->errors()->add('alias', 'This name is already used by another canonical trip type.');
+
+                    return;
+                }
+
+                $normalizedAliases = [
+                    $this->normalizedAlias(),
+                    str($this->validated('alias'))->lower()->squish()->toString(),
+                ];
+
+                if (TripTypeAlias::query()->whereIn('normalized_alias', $normalizedAliases)->exists()) {
                     $validator->errors()->add('alias', 'This alias already exists.');
                 }
             },
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $alias = $this->input('alias');
+
+        if (is_string($alias)) {
+            $this->merge(['alias' => str($alias)->squish()->toString()]);
+        }
     }
 }

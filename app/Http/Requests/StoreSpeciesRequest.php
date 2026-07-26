@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Species;
+use App\Models\SpeciesAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -53,6 +54,17 @@ class StoreSpeciesRequest extends FormRequest
 
                 if (Species::query()->where('slug', $this->slug())->exists()) {
                     $validator->errors()->add('name', 'This species already exists.');
+
+                    return;
+                }
+
+                $normalizedNames = [
+                    Str::of($this->validated('name'))->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString(),
+                    Str::of($this->validated('name'))->lower()->squish()->toString(),
+                ];
+
+                if (SpeciesAlias::query()->whereIn('normalized_alias', $normalizedNames)->exists()) {
+                    $validator->errors()->add('name', 'This name is already used as a species alias.');
                 }
             },
         ];

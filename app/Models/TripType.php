@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Guarded(['id'])]
 class TripType extends Model
 {
+    public const int MAX_SORT_ORDER = 65_535;
+
     protected $attributes = [
         'sort_order' => 0,
         'is_active' => true,
@@ -18,7 +20,10 @@ class TripType extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'sort_order' => 'integer',
+            'is_active' => 'boolean',
+        ];
     }
 
     /** @return HasMany<TripTypeAlias, $this> */

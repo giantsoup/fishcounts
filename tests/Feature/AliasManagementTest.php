@@ -14,8 +14,13 @@ use App\Models\Species;
 use App\Models\SpeciesAlias;
 use App\Models\TripReport;
 use App\Models\TripType;
+use App\Models\TripTypeAlias;
 use App\Models\User;
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 class AliasManagementTest extends TestCase
@@ -37,6 +42,8 @@ class AliasManagementTest extends TestCase
             ->assertSeeText('Known alternate names')
             ->assertSee('x-data="boatManager"', false)
             ->assertSee('x-ref="boatEditor"', false)
+            ->assertSee(':aria-pressed="selectedBoatId ===', false)
+            ->assertSee('aria-controls="boat_editor"', false)
             ->assertSee('lg:grid-cols-2', false)
             ->assertSee('Save boat');
     }
@@ -262,12 +269,19 @@ class AliasManagementTest extends TestCase
             ->assertSeeText('Species')
             ->assertSeeText('Active species')
             ->assertSee('Save species')
-            ->assertSeeText('Select a species to edit it.')
+            ->assertSeeText('Choose a species to manage')
+            ->assertSeeText('Condition profile')
+            ->assertSeeText('Known alternate names')
             ->assertSeeText('Yellowtail')
             ->assertSeeText('Condition profile')
             ->assertSeeText('San Diego — Local')
             ->assertDontSeeText('Species aliases')
             ->assertDontSeeText('Add species alias')
+            ->assertSee('x-data="speciesManager"', false)
+            ->assertSee('x-ref="speciesEditor"', false)
+            ->assertSee(':aria-pressed="selectedSpeciesId ===', false)
+            ->assertSee('aria-controls="species_editor"', false)
+            ->assertSee('lg:grid-cols-2', false)
             ->assertDontSee('yellowtail');
     }
 
@@ -288,7 +302,7 @@ class AliasManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.species-aliases.store'), [
                 'species_id' => $species->id,
-                'alias' => 'Calicos',
+                'alias' => '  Calicos  ',
                 'parser_error_id' => $error->id,
             ])
             ->assertRedirect()
@@ -312,7 +326,11 @@ class AliasManagementTest extends TestCase
                 'environmental_location_profile' => 'coronado_islands',
             ])
             ->assertRedirect(route('admin.species-aliases.index'))
-            ->assertSessionHas('status', 'Species saved.');
+            ->assertSessionHas('status', 'Species saved.')
+            ->assertSessionHas(
+                'selected_species_id',
+                fn (int $speciesId): bool => Species::query()->whereKey($speciesId)->where('name', 'Soupfin Shark')->exists(),
+            );
 
         $this->assertDatabaseHas('species', [
             'name' => 'Soupfin Shark',
@@ -320,6 +338,12 @@ class AliasManagementTest extends TestCase
             'environmental_location_profile' => 'coronado_islands',
             'is_active' => true,
         ]);
+
+        $species = Species::query()->where('slug', 'soupfin-shark')->firstOrFail();
+
+        $this->get(route('admin.species-aliases.index'))
+            ->assertOk()
+            ->assertSee('data-selected-species-id="'.$species->id.'"', false);
     }
 
     public function test_admin_can_update_a_species_condition_profile(): void
@@ -355,6 +379,11 @@ class AliasManagementTest extends TestCase
             ->assertSessionHasErrors('species_environmental_location_profile');
 
         $this->assertSame('san_diego_bight', $species->fresh()->environmental_location_profile);
+
+        $this->get(route('admin.species-aliases.index'))
+            ->assertOk()
+            ->assertSee('data-selected-species-id="'.$species->id.'"', false)
+            ->assertSee('data-old-environmental-location-profile="unknown"', false);
     }
 
     public function test_duplicate_species_slug_is_rejected(): void
@@ -369,6 +398,114 @@ class AliasManagementTest extends TestCase
             ])
             ->assertRedirect(route('admin.species-aliases.index'))
             ->assertSessionHasErrors('name');
+    }
+
+    public function test_species_and_trip_aliases_must_contain_letters_or_numbers(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->post(route('admin.species-aliases.store'), [
+                'species_id' => $species->id,
+                'alias' => '!!!',
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-type-aliases.store'), [
+                'trip_type_id' => $tripType->id,
+                'alias' => '---',
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->post(route('admin.species-aliases.store'), [
+                'species_id' => $species->id,
+                'alias' => ['not-a-string'],
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-type-aliases.store'), [
+                'trip_type_id' => $tripType->id,
+                'alias' => ['not-a-string'],
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->assertDatabaseCount('species_aliases', 0);
+        $this->assertDatabaseCount('trip_type_aliases', 0);
+    }
+
+    public function test_aliases_cannot_shadow_canonical_species_or_trip_types(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $yellowtail = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $calicoBass = Species::query()->create(['name' => 'Calico Bass', 'slug' => 'calico-bass']);
+        $fullDay = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+        $halfDay = TripType::query()->create(['name' => 'Half Day', 'slug' => 'half-day']);
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->post(route('admin.species-aliases.store'), [
+                'species_id' => $calicoBass->id,
+                'alias' => $yellowtail->name,
+            ])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-type-aliases.store'), [
+                'trip_type_id' => $halfDay->id,
+                'alias' => $fullDay->name,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('alias');
+
+        $this->assertDatabaseCount('species_aliases', 0);
+        $this->assertDatabaseCount('trip_type_aliases', 0);
+    }
+
+    public function test_canonical_species_and_trip_types_cannot_shadow_existing_aliases(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+        SpeciesAlias::query()->create([
+            'species_id' => $species->id,
+            'alias' => 'Yellows',
+            'normalized_alias' => 'yellows',
+        ]);
+        TripTypeAlias::query()->create([
+            'trip_type_id' => $tripType->id,
+            'alias' => 'All Day',
+            'normalized_alias' => 'all day',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.species-aliases.index'))
+            ->post(route('admin.species.store'), ['name' => 'Yellows'])
+            ->assertRedirect(route('admin.species-aliases.index'))
+            ->assertSessionHasErrors('name');
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-types.store'), ['name' => 'All Day'])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('name');
+
+        $this->assertDatabaseMissing('species', ['slug' => 'yellows']);
+        $this->assertDatabaseMissing('trip_types', ['slug' => 'all-day']);
     }
 
     public function test_admin_can_resolve_trip_type_parser_error_by_creating_alias(): void
@@ -388,7 +525,7 @@ class AliasManagementTest extends TestCase
         $this->actingAs($admin)
             ->post(route('admin.trip-type-aliases.store'), [
                 'trip_type_id' => $tripType->id,
-                'alias' => 'Three Quarter Day',
+                'alias' => '  Three   Quarter Day  ',
                 'parser_error_id' => $error->id,
             ])
             ->assertRedirect()
@@ -413,10 +550,18 @@ class AliasManagementTest extends TestCase
             ->assertSeeText('Trips')
             ->assertSeeText('Active trips')
             ->assertSee('Save trip')
-            ->assertSeeText('Select a trip to edit it.')
+            ->assertSeeText('Choose a trip to manage')
+            ->assertSeeText('Display order')
+            ->assertSeeText('Known alternate names')
             ->assertSeeText('Full Day')
             ->assertDontSeeText('Trip type aliases')
-            ->assertDontSeeText('Add trip type alias');
+            ->assertDontSeeText('Add trip type alias')
+            ->assertSee('x-data="tripTypeManager"', false)
+            ->assertSee('x-ref="tripTypeEditor"', false)
+            ->assertSee(':aria-pressed="selectedTripTypeId ===', false)
+            ->assertSee('aria-controls="trip_type_editor"', false)
+            ->assertSee('max="65535"', false)
+            ->assertSee('lg:grid-cols-2', false);
     }
 
     public function test_admin_can_create_trip_type(): void
@@ -429,7 +574,11 @@ class AliasManagementTest extends TestCase
                 'name' => '3.5 Day',
             ])
             ->assertRedirect(route('admin.trip-type-aliases.index'))
-            ->assertSessionHas('status', 'Trip type saved.');
+            ->assertSessionHas('status', 'Trip type saved.')
+            ->assertSessionHas(
+                'selected_trip_type_id',
+                fn (int $tripTypeId): bool => TripType::query()->whereKey($tripTypeId)->where('name', '3.5 Day')->exists(),
+            );
 
         $this->assertDatabaseHas('trip_types', [
             'name' => '3.5 Day',
@@ -437,6 +586,12 @@ class AliasManagementTest extends TestCase
             'sort_order' => 4,
             'is_active' => true,
         ]);
+
+        $tripType = TripType::query()->where('slug', '35-day')->firstOrFail();
+
+        $this->get(route('admin.trip-type-aliases.index'))
+            ->assertOk()
+            ->assertSee('data-selected-trip-type-id="'.$tripType->id.'"', false);
     }
 
     public function test_admin_can_update_trip_type_order(): void
@@ -458,6 +613,87 @@ class AliasManagementTest extends TestCase
         $this->assertDatabaseHas('trip_types', [
             'id' => $tripType->id,
             'sort_order' => 2,
+        ]);
+    }
+
+    public function test_trip_type_order_validation_preserves_the_selected_editor_and_old_value(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day', 'sort_order' => 6]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->patch(route('admin.trip-types.update', $tripType), [
+                'order_trip_type_id' => $tripType->id,
+                'order_sort_order' => -1,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('order_sort_order');
+
+        $this->assertSame(6, $tripType->fresh()->sort_order);
+
+        $this->get(route('admin.trip-type-aliases.index'))
+            ->assertOk()
+            ->assertSee('data-selected-trip-type-id="'.$tripType->id.'"', false)
+            ->assertSee('data-old-order-sort-order="-1"', false);
+    }
+
+    public function test_trip_type_update_rejects_a_mismatched_editor_id(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $fullDay = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day', 'sort_order' => 6]);
+        $halfDay = TripType::query()->create(['name' => 'Half Day', 'slug' => 'half-day', 'sort_order' => 2]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->patch(route('admin.trip-types.update', $fullDay), [
+                'order_trip_type_id' => $halfDay->id,
+                'order_sort_order' => 3,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('order_trip_type_id');
+
+        $this->assertSame(6, $fullDay->fresh()->sort_order);
+        $this->assertSame(2, $halfDay->fresh()->sort_order);
+    }
+
+    public function test_trip_type_order_is_limited_to_the_database_range(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $tripType = TripType::query()->create([
+            'name' => 'Maximum Order',
+            'slug' => 'maximum-order',
+            'sort_order' => TripType::MAX_SORT_ORDER,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->post(route('admin.trip-types.store'), [
+                'name' => 'Out of Range',
+                'sort_order' => TripType::MAX_SORT_ORDER + 1,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('sort_order');
+
+        $this->actingAs($admin)
+            ->from(route('admin.trip-type-aliases.index'))
+            ->patch(route('admin.trip-types.update', $tripType), [
+                'order_trip_type_id' => $tripType->id,
+                'order_sort_order' => TripType::MAX_SORT_ORDER + 1,
+            ])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasErrors('order_sort_order');
+
+        $this->actingAs($admin)
+            ->post(route('admin.trip-types.store'), ['name' => 'Automatic Maximum'])
+            ->assertRedirect(route('admin.trip-type-aliases.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('trip_types', ['slug' => 'out-of-range']);
+        $this->assertSame(TripType::MAX_SORT_ORDER, $tripType->fresh()->sort_order);
+        $this->assertDatabaseHas('trip_types', [
+            'slug' => 'automatic-maximum',
+            'sort_order' => TripType::MAX_SORT_ORDER,
         ]);
     }
 
@@ -519,24 +755,98 @@ class AliasManagementTest extends TestCase
             ->assertSessionHasErrors('name');
     }
 
-    public function test_duplicate_normalized_alias_is_rejected(): void
+    public function test_manager_data_attributes_are_parseable_and_escape_hostile_labels(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $speciesName = 'Rockfish "><script>window.fishcountsCompromised=true</script>';
+        $tripTypeName = '3/4 Day "><script>window.tripsCompromised=true</script>';
+        $species = Species::query()->create(['name' => $speciesName, 'slug' => 'hostile-rockfish']);
+        $tripType = TripType::query()->create(['name' => $tripTypeName, 'slug' => 'hostile-trip']);
+        SpeciesAlias::query()->create([
+            'species_id' => $species->id,
+            'alias' => 'Rock & "Fish"',
+            'normalized_alias' => 'rock fish',
+        ]);
+        TripTypeAlias::query()->create([
+            'trip_type_id' => $tripType->id,
+            'alias' => 'Three & "Quarter"',
+            'normalized_alias' => 'three quarter',
+        ]);
+
+        $speciesResponse = $this->actingAs($admin)->get(route('admin.species-aliases.index'))->assertOk();
+        $speciesOptions = $this->decodedManagerData($speciesResponse, 'data-species');
+        $speciesOption = collect($speciesOptions)->firstWhere('id', $species->id);
+
+        $speciesResponse->assertDontSee('<script>window.fishcountsCompromised=true</script>', false);
+        $this->assertIsArray($speciesOption);
+        $this->assertSame($speciesName, $speciesOption['name']);
+        $this->assertSame('Rock & "Fish"', $speciesOption['aliases'][0]['alias']);
+
+        $tripTypeResponse = $this->get(route('admin.trip-type-aliases.index'))->assertOk();
+        $tripTypeOptions = $this->decodedManagerData($tripTypeResponse, 'data-trip-types');
+        $tripTypeOption = collect($tripTypeOptions)->firstWhere('id', $tripType->id);
+
+        $tripTypeResponse->assertDontSee('<script>window.tripsCompromised=true</script>', false);
+        $this->assertIsArray($tripTypeOption);
+        $this->assertSame($tripTypeName, $tripTypeOption['name']);
+        $this->assertSame('Three & "Quarter"', $tripTypeOption['aliases'][0]['alias']);
+    }
+
+    public function test_equivalent_normalized_alias_is_rejected_and_preserves_the_selected_editor(): void
     {
         $admin = User::factory()->admin()->create();
         $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
         SpeciesAlias::query()->create([
             'species_id' => $species->id,
-            'alias' => 'YT',
-            'normalized_alias' => 'yt',
+            'alias' => 'Misc. Rockfish',
+            'normalized_alias' => 'misc. rockfish',
         ]);
 
         $this->actingAs($admin)
             ->from(route('admin.species-aliases.index'))
             ->post(route('admin.species-aliases.store'), [
                 'species_id' => $species->id,
-                'alias' => 'YT!',
+                'alias' => '  Misc.   Rockfish  ',
             ])
             ->assertRedirect(route('admin.species-aliases.index'))
             ->assertSessionHasErrors('alias');
+
+        $response = $this->get(route('admin.species-aliases.index'))
+            ->assertOk()
+            ->assertSee('data-selected-species-id="'.$species->id.'"', false);
+
+        $oldAlias = str($this->domAttribute($response, '//input[@id="alias"]', 'value'))->squish()->toString();
+
+        $this->assertSame('Misc. Rockfish', $oldAlias);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function decodedManagerData(TestResponse $response, string $attribute): array
+    {
+        $data = json_decode(
+            $this->domAttribute($response, "//*[@{$attribute}]", $attribute),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertIsArray($data);
+
+        return $data;
+    }
+
+    private function domAttribute(TestResponse $response, string $query, string $attribute): string
+    {
+        $document = new DOMDocument;
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $nodes = (new DOMXPath($document))->query($query);
+
+        $this->assertNotFalse($nodes);
+        $element = $nodes->item(0);
+        $this->assertInstanceOf(DOMElement::class, $element);
+
+        return $element->getAttribute($attribute);
     }
 
     private function source(): ScrapeSource

@@ -71,6 +71,8 @@
                             data-booking-url="{{ $boat->booking_url }}"
                             class="flex min-h-14 flex-col items-center justify-center rounded border px-3 py-2 text-center transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             :class="selectedBoatId === {{ $boat->id }} ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'"
+                            :aria-pressed="selectedBoatId === {{ $boat->id }}"
+                            aria-controls="boat_editor"
                             @click="selectBoat({{ $boat->id }})"
                         >
                             <span class="text-base font-semibold leading-tight">{{ $boat->name }}</span>
@@ -80,7 +82,7 @@
                 </div>
             </div>
 
-            <div x-ref="boatEditor" class="scroll-mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
+            <div id="boat_editor" x-ref="boatEditor" role="region" aria-label="Boat editor" class="scroll-mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
                 <div x-show="! selectedBoat">
                     <div class="px-6 py-12 text-center">
                         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fc-blue-soft text-xl font-semibold text-primary">

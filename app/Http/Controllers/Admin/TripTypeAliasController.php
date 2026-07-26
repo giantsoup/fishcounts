@@ -18,6 +18,7 @@ class TripTypeAliasController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         return view('admin.trip-type-aliases.index', [
+            'maximumTripTypeSortOrder' => TripType::MAX_SORT_ORDER,
             'selectedTripTypeId' => old('order_trip_type_id', old('trip_type_id', session('selected_trip_type_id'))),
             'tripTypes' => TripType::query()
                 ->where('is_active', true)
@@ -29,14 +30,18 @@ class TripTypeAliasController extends Controller
 
     public function storeTripType(StoreTripTypeRequest $request): RedirectResponse
     {
-        TripType::query()->create([
+        $tripType = TripType::query()->create([
             'name' => $request->validated('name'),
             'slug' => $request->slug(),
-            'sort_order' => $request->validated('sort_order') ?? ((int) TripType::query()->max('sort_order') + 1),
+            'sort_order' => $request->validated('sort_order')
+                ?? min((int) TripType::query()->max('sort_order') + 1, TripType::MAX_SORT_ORDER),
             'is_active' => true,
         ]);
 
-        return redirect()->route('admin.trip-type-aliases.index')->with('status', 'Trip type saved.');
+        return redirect()
+            ->route('admin.trip-type-aliases.index')
+            ->with('status', 'Trip type saved.')
+            ->with('selected_trip_type_id', $tripType->id);
     }
 
     public function updateTripType(UpdateTripTypeRequest $request, TripType $tripType): RedirectResponse

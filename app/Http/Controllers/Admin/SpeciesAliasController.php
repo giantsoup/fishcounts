@@ -30,7 +30,7 @@ class SpeciesAliasController extends Controller
 
     public function storeSpecies(StoreSpeciesRequest $request): RedirectResponse
     {
-        Species::query()->create([
+        $species = Species::query()->create([
             'environmental_location_profile' => $request->validated('environmental_location_profile')
                 ?? config('fish.conditions.location_profile', 'san_diego_bight'),
             'name' => $request->validated('name'),
@@ -38,7 +38,10 @@ class SpeciesAliasController extends Controller
             'is_active' => true,
         ]);
 
-        return redirect()->route('admin.species-aliases.index')->with('status', 'Species saved.');
+        return redirect()
+            ->route('admin.species-aliases.index')
+            ->with('status', 'Species saved.')
+            ->with('selected_species_id', $species->id);
     }
 
     public function updateSpecies(

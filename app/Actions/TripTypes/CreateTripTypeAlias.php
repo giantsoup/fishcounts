@@ -7,6 +7,7 @@ use App\Models\ParserError;
 use App\Models\TripType;
 use App\Models\TripTypeAlias;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CreateTripTypeAlias
@@ -18,10 +19,29 @@ class CreateTripTypeAlias
         ?int $resolvedByUserId,
         ParserErrorResolutionType $resolutionType = ParserErrorResolutionType::Alias,
     ): TripTypeAlias {
+        $alias = Str::squish($alias);
+
+        if (trim($normalizedAlias) === '') {
+            throw ValidationException::withMessages(['alias' => 'The alias must contain letters or numbers.']);
+        }
+
         return DB::transaction(function () use ($tripType, $alias, $normalizedAlias, $resolvedByUserId, $resolutionType): TripTypeAlias {
             $tripType = TripType::query()->lockForUpdate()->findOrFail($tripType->id);
+            $canonicalTripType = TripType::query()
+                ->where('slug', Str::slug($normalizedAlias))
+                ->lockForUpdate()
+                ->first();
+
+            if ($canonicalTripType !== null && ! $canonicalTripType->is($tripType)) {
+                throw ValidationException::withMessages(['alias' => 'This name is already used by another canonical trip type.']);
+            }
+
+            $normalizedAliases = [
+                $normalizedAlias,
+                Str::of($alias)->lower()->squish()->toString(),
+            ];
             $tripTypeAlias = TripTypeAlias::query()
-                ->where('normalized_alias', $normalizedAlias)
+                ->whereIn('normalized_alias', $normalizedAliases)
                 ->lockForUpdate()
                 ->first();
 
