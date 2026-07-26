@@ -216,6 +216,13 @@ class ParserDiagnosticPersistenceTest extends TestCase
                 15,
                 ['Bluefin Tuna' => 60],
             ],
+            'current count status before the species total' => [
+                '<p>The Fortune is up to 41 Bluefin Tuna (18 between 100 and 200 lbs.) for 13 anglers on a 3 day charter. Their 2 day trip Sunday is a definite go and a light load!</p>',
+                'Fortune',
+                '3 Day',
+                13,
+                ['Bluefin Tuna' => 41],
+            ],
         ];
     }
 
@@ -229,6 +236,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
         array $expectedCounts,
     ): void {
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        config()->set('fish.ai_review.dispatch_enabled', true);
         Queue::fake();
         $payload = $this->payload($body, boatName: $boatName);
 
@@ -240,8 +248,9 @@ class ParserDiagnosticPersistenceTest extends TestCase
 
         $this->assertSame(1, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-fishermans_landing-v5', $result->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v6', $result->parserVersion);
         $this->assertSame($boatName, $report->boat->name);
+        $this->assertSame($boatName, $report->raw_boat_name);
         $this->assertSame($tripType, $report->raw_trip_type);
         $this->assertSame($anglers, $report->anglers);
         $this->assertSame(
@@ -252,6 +261,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
                 ->all(),
         );
         $this->assertDatabaseEmpty('parser_errors');
+        Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
     }
 
     public function test_seaforth_six_pack_report_is_parsed_without_diagnostics_or_ai_review(): void
@@ -330,6 +340,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
             'called without in' => ['The Pacific Dawn just called with', 'Pacific Dawn', 'pacific dawn just'],
             'caught action' => ['The Pacific Dawn just caught', 'Pacific Dawn', 'pacific dawn just'],
             'ended action' => ['The Pacific Dawn just ended with', 'Pacific Dawn', 'pacific dawn just'],
+            'current count status' => ['The Fortune is up to', 'Fortune', 'fortune is up to'],
             'legitimate name containing just' => ['The Just Reward just called in with', 'Just Reward', 'just reward just'],
         ];
     }

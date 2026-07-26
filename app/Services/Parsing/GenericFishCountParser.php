@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    public const string PARSER_VERSION = 'generic-line-v4';
+    public const string PARSER_VERSION = 'generic-line-v5';
 
     public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
 
@@ -217,7 +217,7 @@ class GenericFishCountParser
         foreach ([
             '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:AM|PM)\s+\d+\s+(?:anglers?|people|passengers?)\b/i',
             '/^(?<boat>(?:The\s+)?[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|returned|landed|finished)\b/i',
-            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:also\s+)?(?:just\s+)?(?:caught|returned|came\s+back|is\s+returning|had|has|finished(?:\s+up)?|ended|called\s+in|checked\s+in)\b/i',
+            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:also\s+)?(?:just\s+)?(?:caught|returned|came\s+back|is\s+returning|is\s+up\s+to|had|has|finished(?:\s+up)?|ended|called\s+in|checked\s+in)\b/i',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
             if (preg_match($pattern, $line, $matches)) {
