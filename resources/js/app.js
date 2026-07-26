@@ -264,10 +264,33 @@ const initializeProgressPolling = (root = document) => {
     });
 };
 
+const initializeConfirmations = (root = document) => {
+    root.querySelectorAll('form[data-confirm]').forEach((form) => {
+        if (form.dataset.confirmInitialized === 'true') {
+            return;
+        }
+
+        form.dataset.confirmInitialized = 'true';
+        form.addEventListener('submit', (event) => {
+            if (! window.confirm(form.dataset.confirm)) {
+                event.preventDefault();
+
+                return;
+            }
+
+            form.setAttribute('aria-busy', 'true');
+            form.querySelectorAll('[type="submit"]').forEach((submitter) => {
+                submitter.disabled = true;
+            });
+        });
+    });
+};
+
 const initializeFormControls = (root = document) => {
     initializeSelects(root);
     initializeDates(root);
     initializeProgressPolling(root);
+    initializeConfirmations(root);
 };
 
 if (document.readyState === 'loading') {

@@ -121,7 +121,9 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('trip-types/{tripType}', [TripTypeAliasController::class, 'updateTripType'])->name('trip-types.update');
         Route::post('trip-types/aliases', [TripTypeAliasController::class, 'store'])->name('trip-type-aliases.store');
         Route::get('notification-logs', NotificationDeliveryController::class)->name('notification-logs.index');
-        Route::get('failed-jobs', FailedJobController::class)->name('failed-jobs.index');
+        Route::resource('failed-jobs', FailedJobController::class)
+            ->only(['index', 'destroy'])
+            ->parameters(['failed-jobs' => 'failedJob']);
     });
 });
 

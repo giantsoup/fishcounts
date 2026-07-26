@@ -193,7 +193,147 @@ class AdminOperationsTest extends TestCase
             ->get(route('admin.failed-jobs.index'))
             ->assertOk()
             ->assertSee('App\\Jobs\\ScrapeSourceForDateJob')
-            ->assertSee('RuntimeException: Failed source');
+            ->assertSee('RuntimeException: Failed source')
+            ->assertSee(route('admin.failed-jobs.destroy', 'failed-job-uuid'))
+            ->assertSee('data-confirm=', false)
+            ->assertSee('name="_token"', false)
+            ->assertSee('name="_method" value="DELETE"', false)
+            ->assertSee('aria-label="Dismiss failed job failed-job-uuid"', false)
+            ->assertSee('Dismiss');
+    }
+
+    public function test_admin_can_dismiss_only_the_selected_failed_job(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        DB::table('failed_jobs')->insert([
+            [
+                'uuid' => 'selected-failed-job-uuid',
+                'connection' => 'redis',
+                'queue' => 'scraping',
+                'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+                'exception' => 'RuntimeException: Selected failure',
+                'failed_at' => now(),
+            ],
+            [
+                'uuid' => 'retained-failed-job-uuid',
+                'connection' => 'redis',
+                'queue' => 'scraping',
+                'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+                'exception' => 'RuntimeException: Retained failure',
+                'failed_at' => now(),
+            ],
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.failed-jobs.destroy', 'selected-failed-job-uuid'))
+            ->assertRedirect(route('admin.failed-jobs.index'))
+            ->assertSessionHas('status', 'Failed job dismissed.');
+
+        $this->assertDatabaseMissing('failed_jobs', ['uuid' => 'selected-failed-job-uuid']);
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'retained-failed-job-uuid']);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.failed-jobs.destroy', 'selected-failed-job-uuid'))
+            ->assertRedirect(route('admin.failed-jobs.index'))
+            ->assertSessionHas('status', 'This failed job was already dismissed.');
+
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'retained-failed-job-uuid']);
+    }
+
+    public function test_dismissing_a_missing_failed_job_is_idempotent(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'retained-failed-job-uuid',
+            'connection' => 'redis',
+            'queue' => 'scraping',
+            'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+            'exception' => 'RuntimeException: Retained failure',
+            'failed_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->delete(route('admin.failed-jobs.destroy', 'missing-failed-job-uuid'))
+            ->assertRedirect(route('admin.failed-jobs.index'))
+            ->assertSessionHas('status', 'This failed job was already dismissed.');
+
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'retained-failed-job-uuid']);
+    }
+
+    public function test_dismissing_a_failed_job_preserves_the_current_page(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $failedJobs = [];
+
+        foreach (range(1, 27) as $index) {
+            $failedJobs[] = [
+                'uuid' => "paginated-failed-job-{$index}",
+                'connection' => 'redis',
+                'queue' => 'scraping',
+                'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+                'exception' => "RuntimeException: Paginated failure {$index}",
+                'failed_at' => now()->subMinutes($index),
+            ];
+        }
+
+        DB::table('failed_jobs')->insert($failedJobs);
+
+        $destroyUrl = route('admin.failed-jobs.destroy', [
+            'failedJob' => 'paginated-failed-job-26',
+            'page' => 2,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.failed-jobs.index', ['page' => 2]))
+            ->assertOk()
+            ->assertSee($destroyUrl);
+
+        $this->actingAs($admin)
+            ->delete($destroyUrl)
+            ->assertRedirect(route('admin.failed-jobs.index', ['page' => 2]))
+            ->assertSessionHas('status', 'Failed job dismissed.');
+
+        $this->assertDatabaseMissing('failed_jobs', ['uuid' => 'paginated-failed-job-26']);
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'paginated-failed-job-27']);
+    }
+
+    public function test_normal_user_cannot_dismiss_a_failed_job(): void
+    {
+        $user = User::factory()->create();
+
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'protected-failed-job-uuid',
+            'connection' => 'redis',
+            'queue' => 'scraping',
+            'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+            'exception' => 'RuntimeException: Protected failure',
+            'failed_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->delete(route('admin.failed-jobs.destroy', 'protected-failed-job-uuid'))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'protected-failed-job-uuid']);
+    }
+
+    public function test_guest_cannot_dismiss_a_failed_job(): void
+    {
+        DB::table('failed_jobs')->insert([
+            'uuid' => 'guest-protected-failed-job-uuid',
+            'connection' => 'redis',
+            'queue' => 'scraping',
+            'payload' => json_encode(['displayName' => 'App\\Jobs\\ScrapeSourceForDateJob'], JSON_THROW_ON_ERROR),
+            'exception' => 'RuntimeException: Guest protected failure',
+            'failed_at' => now(),
+        ]);
+
+        $this->delete(route('admin.failed-jobs.destroy', 'guest-protected-failed-job-uuid'))
+            ->assertRedirect(route('login'));
+
+        $this->assertDatabaseHas('failed_jobs', ['uuid' => 'guest-protected-failed-job-uuid']);
     }
 
     public function test_admin_can_navigate_from_parser_error_to_raw_payload_and_scrape_run(): void
