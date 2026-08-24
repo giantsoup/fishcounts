@@ -15,6 +15,7 @@
                 ->values(),
         ])
         ->values();
+    $normalizedCreatedSpeciesId = filled($createdSpeciesId) ? (int) $createdSpeciesId : null;
     $normalizedSelectedSpeciesId = filled($selectedSpeciesId) ? (int) $selectedSpeciesId : null;
     $oldEnvironmentalLocationProfile = old('species_environmental_location_profile');
 @endphp
@@ -29,6 +30,7 @@
             class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0 lg:px-8"
             x-data="speciesManager"
             data-species="{{ $speciesOptions->toJson() }}"
+            @if ($normalizedCreatedSpeciesId !== null) data-created-species-id="{{ $normalizedCreatedSpeciesId }}" @endif
             data-selected-species-id="{{ $normalizedSelectedSpeciesId }}"
             @if ($oldEnvironmentalLocationProfile !== null) data-old-environmental-location-profile="{{ $oldEnvironmentalLocationProfile }}" @endif
         >
@@ -43,7 +45,7 @@
                         <p class="mt-1 text-sm text-gray-500">Choose the canonical species names used throughout counts, alerts, and fishing reports.</p>
                     </div>
 
-                    <form method="POST" action="{{ route('admin.species.store') }}" class="grid gap-3 sm:grid-cols-2 sm:items-end">
+                    <form method="POST" action="{{ route('admin.species.store') }}" class="grid gap-3 sm:grid-cols-2 sm:items-end" autocomplete="off" x-ref="createForm">
                         @csrf
                         <div>
                             <x-input-label for="species_name" value="Name" />

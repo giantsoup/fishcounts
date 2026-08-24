@@ -19,6 +19,7 @@ class BoatController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         return view('admin.boats.index', [
+            'createdBoatId' => session('created_boat_id'),
             'selectedBoatId' => old('boat_id', session('selected_boat_id')),
             'boats' => Boat::query()
                 ->with([
@@ -41,7 +42,11 @@ class BoatController extends Controller
             'is_active' => true,
         ]);
 
-        return redirect()->route('admin.boats.index')->with('status', 'Boat saved.')->with('selected_boat_id', $boat->id);
+        return redirect()
+            ->route('admin.boats.index')
+            ->with('status', 'Boat saved.')
+            ->with('created_boat_id', $boat->id)
+            ->with('selected_boat_id', $boat->id);
     }
 
     public function update(UpdateBoatRequest $request, Boat $boat): RedirectResponse

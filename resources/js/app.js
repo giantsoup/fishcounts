@@ -22,6 +22,18 @@ const scrollToEditorOnMobile = (component, editor) => {
     });
 };
 
+const resetCreateFormAndScrollToEditor = (component, createFormReference, editorReference) => {
+    component.$nextTick(() => {
+        const createForm = component.$refs[createFormReference];
+
+        createForm?.reset();
+        createForm?.querySelectorAll('select').forEach((select) => {
+            select.tomselect?.setValue(select.value, true);
+        });
+        scrollToEditorOnMobile(component, component.$refs[editorReference]);
+    });
+};
+
 const boatManager = () => ({
     boats: [],
     selectedBoatId: null,
@@ -38,6 +50,10 @@ const boatManager = () => ({
         this.bookingUrl = Object.hasOwn(this.$el.dataset, 'oldBookingUrl')
             ? this.$el.dataset.oldBookingUrl
             : (this.selectedBoat?.booking_url || '');
+
+        if (Number.parseInt(this.$el.dataset.createdBoatId, 10) === this.selectedBoatId) {
+            resetCreateFormAndScrollToEditor(this, 'createForm', 'boatEditor');
+        }
     },
     selectBoat(id) {
         this.selectedBoatId = id;
@@ -62,6 +78,10 @@ const speciesManager = () => ({
         this.environmentalLocationProfile = Object.hasOwn(this.$el.dataset, 'oldEnvironmentalLocationProfile')
             ? this.$el.dataset.oldEnvironmentalLocationProfile
             : (this.selectedSpecies?.environmental_location_profile || '');
+
+        if (Number.parseInt(this.$el.dataset.createdSpeciesId, 10) === this.selectedSpeciesId) {
+            resetCreateFormAndScrollToEditor(this, 'createForm', 'speciesEditor');
+        }
     },
     selectSpecies(id) {
         this.selectedSpeciesId = id;
@@ -86,6 +106,10 @@ const tripTypeManager = () => ({
         this.orderSortOrder = Object.hasOwn(this.$el.dataset, 'oldOrderSortOrder')
             ? this.$el.dataset.oldOrderSortOrder
             : (this.selectedTripType?.sort_order ?? '');
+
+        if (Number.parseInt(this.$el.dataset.createdTripTypeId, 10) === this.selectedTripTypeId) {
+            resetCreateFormAndScrollToEditor(this, 'createForm', 'tripTypeEditor');
+        }
     },
     selectTripType(id) {
         this.selectedTripTypeId = id;

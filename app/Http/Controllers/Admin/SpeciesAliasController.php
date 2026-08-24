@@ -18,6 +18,7 @@ class SpeciesAliasController extends Controller
         abort_unless(auth()->user()?->isAdmin(), 403);
 
         return view('admin.species-aliases.index', [
+            'createdSpeciesId' => session('created_species_id'),
             'selectedSpeciesId' => old('species_id', session('selected_species_id')),
             'environmentalLocationProfiles' => $this->environmentalLocationProfiles(),
             'species' => Species::query()
@@ -41,6 +42,7 @@ class SpeciesAliasController extends Controller
         return redirect()
             ->route('admin.species-aliases.index')
             ->with('status', 'Species saved.')
+            ->with('created_species_id', $species->id)
             ->with('selected_species_id', $species->id);
     }
 

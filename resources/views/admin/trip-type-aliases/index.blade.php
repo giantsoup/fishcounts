@@ -14,6 +14,7 @@
                 ->values(),
         ])
         ->values();
+    $normalizedCreatedTripTypeId = filled($createdTripTypeId) ? (int) $createdTripTypeId : null;
     $normalizedSelectedTripTypeId = filled($selectedTripTypeId) ? (int) $selectedTripTypeId : null;
     $oldOrderSortOrder = old('order_sort_order');
 @endphp
@@ -28,6 +29,7 @@
             class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0 lg:px-8"
             x-data="tripTypeManager"
             data-trip-types="{{ $tripTypeOptions->toJson() }}"
+            @if ($normalizedCreatedTripTypeId !== null) data-created-trip-type-id="{{ $normalizedCreatedTripTypeId }}" @endif
             data-selected-trip-type-id="{{ $normalizedSelectedTripTypeId }}"
             @if ($oldOrderSortOrder !== null) data-old-order-sort-order="{{ $oldOrderSortOrder }}" @endif
         >
@@ -42,7 +44,7 @@
                         <p class="mt-1 text-sm text-gray-500">Choose the canonical trip names and display order used throughout counts, alerts, and fishing reports.</p>
                     </div>
 
-                    <form method="POST" action="{{ route('admin.trip-types.store') }}" class="grid gap-3 sm:grid-cols-[minmax(12rem,1fr)_7rem] sm:items-end">
+                    <form method="POST" action="{{ route('admin.trip-types.store') }}" class="grid gap-3 sm:grid-cols-[minmax(12rem,1fr)_7rem] sm:items-end" autocomplete="off" x-ref="createForm">
                         @csrf
                         <div>
                             <x-input-label for="trip_type_name" value="Name" />

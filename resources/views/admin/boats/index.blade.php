@@ -15,6 +15,7 @@
                 ->values(),
         ])
         ->values();
+    $normalizedCreatedBoatId = filled($createdBoatId) ? (int) $createdBoatId : null;
     $normalizedSelectedBoatId = filled($selectedBoatId) ? (int) $selectedBoatId : null;
     $oldBookingUrl = old('booking_url');
 @endphp
@@ -29,6 +30,7 @@
             class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0 lg:px-8"
             x-data="boatManager"
             data-boats="{{ $boatOptions->toJson() }}"
+            @if ($normalizedCreatedBoatId !== null) data-created-boat-id="{{ $normalizedCreatedBoatId }}" @endif
             data-selected-boat-id="{{ $normalizedSelectedBoatId }}"
             @if ($oldBookingUrl !== null) data-old-booking-url="{{ $oldBookingUrl }}" @endif
         >
@@ -43,7 +45,7 @@
                         <p class="mt-1 text-sm text-gray-500">Choose the canonical boat name used throughout counts, alerts, and booking links.</p>
                     </div>
 
-                    <form method="POST" action="{{ route('admin.boats.store') }}" class="grid gap-3 sm:grid-cols-2 sm:items-end">
+                    <form method="POST" action="{{ route('admin.boats.store') }}" class="grid gap-3 sm:grid-cols-2 sm:items-end" autocomplete="off" x-ref="createForm">
                         @csrf
                         <div>
                             <x-input-label for="boat_name" value="Name" />
@@ -53,7 +55,7 @@
                         <div>
                             <x-input-label for="landing_id" value="Landing" />
                             <x-form.select id="landing_id" name="landing_id" class="mt-1 block w-full">
-                                <option value="">Unknown landing</option>
+                                <option value="" @selected((string) old('landing_id') === '')>Unknown landing</option>
                                 @foreach ($landings as $landing)
                                     <option value="{{ $landing->id }}" @selected((string) old('landing_id') === (string) $landing->id)>{{ $landing->name }}</option>
                                 @endforeach

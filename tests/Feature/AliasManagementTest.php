@@ -60,7 +60,15 @@ class AliasManagementTest extends TestCase
                 'landing_id' => $landing->id,
             ])
             ->assertRedirect(route('admin.boats.index'))
-            ->assertSessionHas('status', 'Boat saved.');
+            ->assertSessionHas('status', 'Boat saved.')
+            ->assertSessionHas(
+                'created_boat_id',
+                fn (int $boatId): bool => Boat::query()->whereKey($boatId)->where('name', 'New Seaforth')->exists(),
+            )
+            ->assertSessionHas(
+                'selected_boat_id',
+                fn (int $boatId): bool => Boat::query()->whereKey($boatId)->where('name', 'New Seaforth')->exists(),
+            );
 
         $this->assertDatabaseHas('boats', [
             'landing_id' => $landing->id,
@@ -68,6 +76,16 @@ class AliasManagementTest extends TestCase
             'slug' => 'new-seaforth',
             'is_active' => true,
         ]);
+
+        $boat = Boat::query()->where('slug', 'new-seaforth')->firstOrFail();
+        $page = $this->get(route('admin.boats.index'))->assertOk();
+
+        $page
+            ->assertSee('data-created-boat-id="'.$boat->id.'"', false)
+            ->assertSee('data-selected-boat-id="'.$boat->id.'"', false);
+
+        $this->assertSame('', $this->domAttribute($page, '//*[@id="boat_name"]', 'value'));
+        $this->assertSame('', $this->domAttribute($page, '//*[@id="landing_id"]/option[@selected]', 'value'));
     }
 
     public function test_admin_can_consolidate_existing_boat_variant(): void
@@ -246,16 +264,33 @@ class AliasManagementTest extends TestCase
     public function test_boat_cannot_be_created_from_an_existing_alias(): void
     {
         $admin = User::factory()->admin()->create();
+        $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
+        $landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Seaforth Landing', 'slug' => 'seaforth-landing']);
         $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
         BoatAlias::query()->create(['boat_id' => $boat->id, 'alias' => 'The Dolphin', 'normalized_alias' => 'the dolphin']);
 
         $this->actingAs($admin)
             ->from(route('admin.boats.index'))
-            ->post(route('admin.boats.store'), ['boat_name' => 'The Dolphin!'])
+            ->post(route('admin.boats.store'), [
+                'boat_name' => 'The Dolphin!',
+                'landing_id' => $landing->id,
+            ])
             ->assertRedirect(route('admin.boats.index'))
-            ->assertSessionHasErrors('boat_name');
+            ->assertSessionHasErrors('boat_name')
+            ->assertSessionMissing('created_boat_id')
+            ->assertSessionHasInput('boat_name', 'The Dolphin!')
+            ->assertSessionHasInput('landing_id', $landing->id);
 
         $this->assertSame(1, Boat::query()->count());
+
+        $page = $this->get(route('admin.boats.index'))->assertOk();
+
+        $page->assertDontSee('data-created-boat-id', false);
+        $this->assertSame('The Dolphin!', $this->domAttribute($page, '//*[@id="boat_name"]', 'value'));
+        $this->assertSame(
+            (string) $landing->id,
+            $this->domAttribute($page, '//*[@id="landing_id"]/option[@selected]', 'value'),
+        );
     }
 
     public function test_admin_can_view_species_management_page(): void
@@ -328,6 +363,10 @@ class AliasManagementTest extends TestCase
             ->assertRedirect(route('admin.species-aliases.index'))
             ->assertSessionHas('status', 'Species saved.')
             ->assertSessionHas(
+                'created_species_id',
+                fn (int $speciesId): bool => Species::query()->whereKey($speciesId)->where('name', 'Soupfin Shark')->exists(),
+            )
+            ->assertSessionHas(
                 'selected_species_id',
                 fn (int $speciesId): bool => Species::query()->whereKey($speciesId)->where('name', 'Soupfin Shark')->exists(),
             );
@@ -340,10 +379,17 @@ class AliasManagementTest extends TestCase
         ]);
 
         $species = Species::query()->where('slug', 'soupfin-shark')->firstOrFail();
+        $page = $this->get(route('admin.species-aliases.index'))->assertOk();
 
-        $this->get(route('admin.species-aliases.index'))
-            ->assertOk()
+        $page
+            ->assertSee('data-created-species-id="'.$species->id.'"', false)
             ->assertSee('data-selected-species-id="'.$species->id.'"', false);
+
+        $this->assertSame('', $this->domAttribute($page, '//*[@id="species_name"]', 'value'));
+        $this->assertSame(
+            config('fish.conditions.location_profile'),
+            $this->domAttribute($page, '//*[@id="new_species_environmental_location_profile"]/option[@selected]', 'value'),
+        );
     }
 
     public function test_admin_can_update_a_species_condition_profile(): void
@@ -395,9 +441,22 @@ class AliasManagementTest extends TestCase
             ->from(route('admin.species-aliases.index'))
             ->post(route('admin.species.store'), [
                 'name' => 'Mako Shark!',
+                'environmental_location_profile' => 'coronado_islands',
             ])
             ->assertRedirect(route('admin.species-aliases.index'))
-            ->assertSessionHasErrors('name');
+            ->assertSessionHasErrors('name')
+            ->assertSessionMissing('created_species_id')
+            ->assertSessionHasInput('name', 'Mako Shark!')
+            ->assertSessionHasInput('environmental_location_profile', 'coronado_islands');
+
+        $page = $this->get(route('admin.species-aliases.index'))->assertOk();
+
+        $page->assertDontSee('data-created-species-id', false);
+        $this->assertSame('Mako Shark!', $this->domAttribute($page, '//*[@id="species_name"]', 'value'));
+        $this->assertSame(
+            'coronado_islands',
+            $this->domAttribute($page, '//*[@id="new_species_environmental_location_profile"]/option[@selected]', 'value'),
+        );
     }
 
     public function test_species_and_trip_aliases_must_contain_letters_or_numbers(): void
@@ -576,6 +635,10 @@ class AliasManagementTest extends TestCase
             ->assertRedirect(route('admin.trip-type-aliases.index'))
             ->assertSessionHas('status', 'Trip type saved.')
             ->assertSessionHas(
+                'created_trip_type_id',
+                fn (int $tripTypeId): bool => TripType::query()->whereKey($tripTypeId)->where('name', '3.5 Day')->exists(),
+            )
+            ->assertSessionHas(
                 'selected_trip_type_id',
                 fn (int $tripTypeId): bool => TripType::query()->whereKey($tripTypeId)->where('name', '3.5 Day')->exists(),
             );
@@ -588,10 +651,14 @@ class AliasManagementTest extends TestCase
         ]);
 
         $tripType = TripType::query()->where('slug', '35-day')->firstOrFail();
+        $page = $this->get(route('admin.trip-type-aliases.index'))->assertOk();
 
-        $this->get(route('admin.trip-type-aliases.index'))
-            ->assertOk()
+        $page
+            ->assertSee('data-created-trip-type-id="'.$tripType->id.'"', false)
             ->assertSee('data-selected-trip-type-id="'.$tripType->id.'"', false);
+
+        $this->assertSame('', $this->domAttribute($page, '//*[@id="trip_type_name"]', 'value'));
+        $this->assertSame('', $this->domAttribute($page, '//*[@id="sort_order"]', 'value'));
     }
 
     public function test_admin_can_update_trip_type_order(): void
@@ -750,9 +817,19 @@ class AliasManagementTest extends TestCase
             ->from(route('admin.trip-type-aliases.index'))
             ->post(route('admin.trip-types.store'), [
                 'name' => 'Full Day!',
+                'sort_order' => 7,
             ])
             ->assertRedirect(route('admin.trip-type-aliases.index'))
-            ->assertSessionHasErrors('name');
+            ->assertSessionHasErrors('name')
+            ->assertSessionMissing('created_trip_type_id')
+            ->assertSessionHasInput('name', 'Full Day!')
+            ->assertSessionHasInput('sort_order', 7);
+
+        $page = $this->get(route('admin.trip-type-aliases.index'))->assertOk();
+
+        $page->assertDontSee('data-created-trip-type-id', false);
+        $this->assertSame('Full Day!', $this->domAttribute($page, '//*[@id="trip_type_name"]', 'value'));
+        $this->assertSame('7', $this->domAttribute($page, '//*[@id="sort_order"]', 'value'));
     }
 
     public function test_manager_data_attributes_are_parseable_and_escape_hostile_labels(): void
