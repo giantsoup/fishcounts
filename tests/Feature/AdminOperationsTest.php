@@ -11,7 +11,12 @@ use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
+use App\Models\Species;
+use App\Models\TripType;
 use App\Models\User;
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -384,6 +389,69 @@ class AdminOperationsTest extends TestCase
             ->assertOk()
             ->assertSee(route('admin.scrape-runs.show', $scrapeRun))
             ->assertSee(route('admin.scrape-runs.index'));
+    }
+
+    public function test_parser_error_alias_selects_require_an_explicit_existing_item_selection(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $source = ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+
+        Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+
+        foreach ([
+            ['unknown_boat_alias', 'boat', 'The Dolphin'],
+            ['unknown_species_alias', 'species', 'Yellows'],
+            ['unknown_trip_type_alias', 'trip_type', 'All Day'],
+        ] as [$errorType, $rawField, $rawValue]) {
+            ParserError::query()->create([
+                'scrape_source_id' => $source->id,
+                'target_date' => '2026-07-10',
+                'error_type' => $errorType,
+                'raw_field' => $rawField,
+                'raw_value' => $rawValue,
+                'message' => "Unknown {$rawField} alias [{$rawValue}].",
+            ]);
+        }
+
+        $response = $this->actingAs($admin)
+            ->get(route('admin.parser-errors.index'))
+            ->assertOk();
+        $document = new DOMDocument;
+        $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+        $xpath = new DOMXPath($document);
+
+        foreach ([
+            'boat_id' => 'Select existing boat',
+            'species_id' => 'Select existing species',
+            'trip_type_id' => 'Select existing trip type',
+        ] as $field => $placeholder) {
+            $selects = $xpath->query("//select[@name='{$field}']");
+
+            $this->assertNotFalse($selects);
+            $this->assertCount(1, $selects);
+            $select = $selects->item(0);
+            $this->assertInstanceOf(DOMElement::class, $select);
+            $this->assertTrue($select->hasAttribute('required'));
+
+            $options = $select->getElementsByTagName('option');
+            $this->assertGreaterThan(1, $options->count());
+            $placeholderOption = $options->item(0);
+            $this->assertInstanceOf(DOMElement::class, $placeholderOption);
+            $this->assertSame('', $placeholderOption->getAttribute('value'));
+            $this->assertSame($placeholder, str($placeholderOption->textContent)->trim()->toString());
+
+            $selectedCanonicalOptions = $xpath->query("//select[@name='{$field}']/option[@value != '' and @selected]");
+
+            $this->assertNotFalse($selectedCanonicalOptions);
+            $this->assertCount(0, $selectedCanonicalOptions);
+        }
     }
 
     public function test_admin_can_dismiss_parser_error_without_creating_an_alias(): void

@@ -111,7 +111,8 @@
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">
                                     <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
-                                    <x-form.select name="boat_id" class="text-sm">
+                                    <x-form.select name="boat_id" class="text-sm" required>
+                                        <option value="">Select existing boat</option>
                                         @foreach ($boats as $boat)
                                             <option value="{{ $boat->id }}">{{ $boat->name }}</option>
                                         @endforeach
@@ -123,7 +124,8 @@
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">
                                     <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
-                                    <x-form.select name="species_id" class="text-sm">
+                                    <x-form.select name="species_id" class="text-sm" required>
+                                        <option value="">Select existing species</option>
                                         @foreach ($species as $item)
                                             <option value="{{ $item->id }}">{{ $item->name }}</option>
                                         @endforeach
@@ -135,7 +137,8 @@
                                     @csrf
                                     <input type="hidden" name="alias" value="{{ $error->raw_value }}">
                                     <input type="hidden" name="parser_error_id" value="{{ $error->id }}">
-                                    <x-form.select name="trip_type_id" class="text-sm">
+                                    <x-form.select name="trip_type_id" class="text-sm" required>
+                                        <option value="">Select existing trip type</option>
                                         @foreach ($tripTypes as $tripType)
                                             <option value="{{ $tripType->id }}">{{ $tripType->name }}</option>
                                         @endforeach
