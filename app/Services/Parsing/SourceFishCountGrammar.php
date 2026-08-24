@@ -10,8 +10,19 @@ class SourceFishCountGrammar
     {
         $line = Str::of($line)
             ->replace("\u{00A0}", ' ')
+            ->replace("\u{200B}", '')
             ->replaceMatches('/\bCalico\s*\(\s*Kelp\s*\)\s*Bass\b/i', 'Calico Bass')
             ->replaceMatches('/\bfore\s+their\b/i', 'for their')
+            ->replaceMatches('/\bfo\s+their\b/i', 'for their')
+            ->replaceMatches('/\babd\b/i', 'and')
+            ->replaceMatches('/\bans(?=\d)/i', 'and ')
+            ->replaceMatches('/\breturened\b/i', 'returned')
+            ->replaceMatches('/\bdo\s+far\b/i', 'so far')
+            ->replaceMatches('/\b([AP])\s+M\b/i', fn (array $matches): string => Str::upper($matches[1]).'M')
+            ->replaceMatches('/(?<=\d\s)quality\s+(?=[A-Za-z])/i', '')
+            ->replaceMatches('/\s+so\s+far(?:\s+still\s+fishing)?(?=\s+(?:on|for|with)\b|[.!]|$)/i', '')
+            ->replaceMatches('/\s+to\s+start\s+the\s+trip(?=[.!]|$)/i', '')
+            ->replaceMatches('/\(\s*\d+\s*@\s*\d+\s+to\s+\d+#\s*\)/i', '')
             ->replaceMatches('/\s+and\s+hooked\s+many\s+more\b/i', '')
             ->toString();
 
@@ -49,6 +60,12 @@ class SourceFishCountGrammar
 
         $line = preg_replace_callback(
             '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+and\s+released\s+(?<released>\d+)\b(?=\s*(?:[,.;!]|$)|\s+(?:for|with)\s+\d+\s+(?:anglers?|people|passengers?)\b)/i',
+            fn (array $matches): string => "{$matches['retained']} {$matches['species']} ({$matches['released']} released)",
+            $line,
+        ) ?? $line;
+
+        $line = preg_replace_callback(
+            '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+with\s+(?<released>\d+)\s+released\b/i',
             fn (array $matches): string => "{$matches['retained']} {$matches['species']} ({$matches['released']} released)",
             $line,
         ) ?? $line;

@@ -87,6 +87,31 @@ class CountsAndScoresIndexTest extends TestCase
             ->assertSee('12 Rockfish');
     }
 
+    public function test_counts_index_renders_compact_mobile_cards_and_a_desktop_table(): void
+    {
+        $user = User::factory()->create();
+        $context = $this->countContext();
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        $report = $this->tripReport($context, '2026-06-15', true, 20);
+
+        SpeciesCount::query()->create([
+            'trip_report_id' => $report->id,
+            'species_id' => $species->id,
+            'count' => 30,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('counts.index', [
+                'from' => '2026-06-15',
+                'to' => '2026-06-15',
+            ]))
+            ->assertOk()
+            ->assertSee('<div class="divide-y divide-gray-100 md:hidden">', false)
+            ->assertSee('<article class="px-4 py-4">', false)
+            ->assertSee('<div class="hidden overflow-x-auto md:block">', false)
+            ->assertSee('<table class="min-w-full divide-y divide-gray-200 text-sm">', false);
+    }
+
     public function test_counts_index_filters_counts_and_excludes_non_primary_reports(): void
     {
         $user = User::factory()->create();
