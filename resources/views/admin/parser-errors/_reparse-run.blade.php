@@ -51,11 +51,11 @@
                 <dd class="font-semibold text-gray-900">{{ $latestReparseRun->initial_open_errors }}</dd>
             </div>
             <div>
-                <dt class="text-xs font-medium uppercase text-gray-500">Structural remaining</dt>
+                <dt class="text-xs font-medium uppercase text-gray-500">Structural remaining in batch</dt>
                 <dd class="font-semibold text-gray-900">{{ $latestReparseRun->remaining_structural_errors ?? 'Pending' }}</dd>
             </div>
             <div>
-                <dt class="text-xs font-medium uppercase text-gray-500">Alias remaining</dt>
+                <dt class="text-xs font-medium uppercase text-gray-500">Aliases remaining in batch</dt>
                 <dd class="font-semibold text-gray-900">{{ $latestReparseRun->remaining_alias_errors ?? 'Pending' }}</dd>
             </div>
         </dl>

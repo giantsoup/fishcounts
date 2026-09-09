@@ -3,25 +3,25 @@
 namespace App\Actions\Parsing;
 
 use App\DTOs\StartParserReparseRunResult;
-use App\Enums\ParserReparseItemMode;
 use App\Enums\ParserReparseRunStatus;
 use App\Jobs\DispatchParserReparseRunJob;
-use App\Models\ParserError;
 use App\Models\ParserReparseRun;
-use App\Models\RawScrapePayload;
 use App\Models\User;
-use Illuminate\Support\Collection;
+use App\Services\Parsing\ParserReparsePlanner;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class StartParserReparseRun
 {
     public const LOCK_KEY = 'parser-reparse-run:start';
 
-    public function handle(User $requester): StartParserReparseRunResult
+    public function __construct(private readonly ParserReparsePlanner $planner) {}
+
+    public function handle(User $requester, ?int $sourceId = null, ?string $from = null, ?string $to = null, ?string $fingerprint = null): StartParserReparseRunResult
     {
-        $result = Cache::lock(self::LOCK_KEY, 300)->block(15, function () use ($requester): StartParserReparseRunResult {
-            return DB::transaction(function () use ($requester): StartParserReparseRunResult {
+        $result = Cache::lock(self::LOCK_KEY, 300)->block(15, function () use ($requester, $sourceId, $from, $to, $fingerprint): StartParserReparseRunResult {
+            return DB::transaction(function () use ($requester, $sourceId, $from, $to, $fingerprint): StartParserReparseRunResult {
                 $activeRun = ParserReparseRun::query()
                     ->whereIn('status', [ParserReparseRunStatus::Pending, ParserReparseRunStatus::Running])
                     ->lockForUpdate()
@@ -32,31 +32,23 @@ class StartParserReparseRun
                     return new StartParserReparseRunResult($activeRun, false);
                 }
 
-                $openErrors = ParserError::query()->open();
-                $initialOpenErrors = (clone $openErrors)->count();
-                $initialAliasErrors = (clone $openErrors)->aliases()->count();
-                $affectedPayloadIds = (clone $openErrors)
-                    ->whereNotNull('raw_scrape_payload_id')
-                    ->distinct()
-                    ->pluck('raw_scrape_payload_id');
-                $affectedPayloads = RawScrapePayload::query()
-                    ->whereKey($affectedPayloadIds)
-                    ->orderBy('target_date')
-                    ->orderBy('scrape_source_id')
-                    ->orderBy('fetched_at')
-                    ->orderBy('id')
-                    ->get(['id', 'scrape_source_id', 'target_date', 'fetched_at']);
+                $plan = $this->planner->preview($sourceId, $from, $to);
+                if ($fingerprint !== null && ! hash_equals($plan['fingerprint'], $fingerprint)) {
+                    throw ValidationException::withMessages(['fingerprint' => 'The affected data changed. Preview the selection again before starting.']);
+                }
+                $initialOpenErrors = $plan['open_errors'];
+                $initialAliasErrors = $plan['alias_errors'];
 
                 $run = ParserReparseRun::query()->create([
                     'requested_by_user_id' => $requester->getKey(),
                     'initial_open_errors' => $initialOpenErrors,
                     'initial_alias_errors' => $initialAliasErrors,
                     'initial_structural_errors' => $initialOpenErrors - $initialAliasErrors,
-                    'initial_payloads' => $affectedPayloads->count(),
-                    'affected_dates' => $affectedPayloads->pluck('target_date')->map->toDateString()->unique()->count(),
+                    'initial_payloads' => $plan['payloads'],
+                    'affected_dates' => $plan['dates'],
                 ]);
 
-                $this->createManifest($run, $affectedPayloads);
+                $run->items()->createMany($plan['items']->all());
                 $totalItems = $run->items()->count();
 
                 $run->update([
@@ -77,43 +69,5 @@ class StartParserReparseRun
         }
 
         return $result;
-    }
-
-    /** @param Collection<int, RawScrapePayload> $affectedPayloads */
-    private function createManifest(ParserReparseRun $run, Collection $affectedPayloads): void
-    {
-        $sequence = 0;
-
-        foreach ($affectedPayloads->groupBy(fn (RawScrapePayload $payload): string => $payload->scrape_source_id.'|'.$payload->target_date->toDateString()) as $group) {
-            $affectedPayload = $group->last();
-            $newestPayload = RawScrapePayload::query()
-                ->where('scrape_source_id', $affectedPayload->scrape_source_id)
-                ->whereDate('target_date', $affectedPayload->target_date)
-                ->latest('fetched_at')
-                ->latest('id')
-                ->first(['id', 'scrape_source_id', 'target_date']);
-
-            if ($newestPayload === null) {
-                continue;
-            }
-
-            foreach ($group->where('id', '!=', $newestPayload->id) as $supersededPayload) {
-                $run->items()->create([
-                    'raw_scrape_payload_id' => $supersededPayload->id,
-                    'scrape_source_id' => $supersededPayload->scrape_source_id,
-                    'target_date' => $supersededPayload->target_date,
-                    'mode' => ParserReparseItemMode::DiagnosticsOnly,
-                    'sequence' => ++$sequence,
-                ]);
-            }
-
-            $run->items()->create([
-                'raw_scrape_payload_id' => $newestPayload->id,
-                'scrape_source_id' => $newestPayload->scrape_source_id,
-                'target_date' => $newestPayload->target_date,
-                'mode' => ParserReparseItemMode::Authoritative,
-                'sequence' => ++$sequence,
-            ]);
-        }
     }
 }

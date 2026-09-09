@@ -2,27 +2,11 @@
 
 namespace App\Http\Requests\Admin;
 
-use App\Models\ParserReparseRun;
-use Illuminate\Contracts\Validation\ValidationRule;
-use Illuminate\Foundation\Http\FormRequest;
-
-class StartParserReparseRunRequest extends FormRequest
+class StartParserReparseRunRequest extends PreviewParserReparseRunRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->can('create', ParserReparseRun::class) ?? false;
-    }
-
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, ValidationRule|array<mixed>|string>
-     */
+    /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [];
+        return [...parent::rules(), 'fingerprint' => ['required', 'string', 'size:64']];
     }
 }

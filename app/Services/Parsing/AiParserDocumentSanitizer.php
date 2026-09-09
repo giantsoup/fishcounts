@@ -3,6 +3,7 @@
 namespace App\Services\Parsing;
 
 use App\DTOs\RawPayloadData;
+use App\Exceptions\NoPublicFishCountTextException;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
@@ -36,7 +37,7 @@ final class AiParserDocumentSanitizer
         $sanitized = $lines->implode("\n");
 
         if ($sanitized === '') {
-            throw new UnexpectedValueException('The scraped payload contained no public fish-count text.');
+            throw new NoPublicFishCountTextException('The scraped payload contained no public fish-count text.');
         }
 
         $maximumBytes = max(1, (int) config('fish.ai_parsing.limits.max_input_tokens'));
@@ -86,7 +87,7 @@ final class AiParserDocumentSanitizer
             $blocks = $this->hmLandingRows($xpath, $root, $catalogTerms);
 
             if ($blocks === []) {
-                throw new UnexpectedValueException('The scraped payload contained no public fish-count text.');
+                throw new NoPublicFishCountTextException('The scraped payload contained no public fish-count text.');
             }
 
             return $this->identifiedBlocks($blocks);
@@ -95,7 +96,7 @@ final class AiParserDocumentSanitizer
             $blocks = $this->sportfishingReportRows($xpath, $root, $catalogTerms);
 
             if ($blocks === []) {
-                throw new UnexpectedValueException('The scraped payload contained no public fish-count text.');
+                throw new NoPublicFishCountTextException('The scraped payload contained no public fish-count text.');
             }
 
             return $this->identifiedBlocks($blocks);
@@ -127,7 +128,7 @@ final class AiParserDocumentSanitizer
 
         $blocks = array_values(array_unique(array_filter($blocks)));
         if ($blocks === []) {
-            throw new UnexpectedValueException('The scraped payload contained no public fish-count text.');
+            throw new NoPublicFishCountTextException('The scraped payload contained no public fish-count text.');
         }
 
         return $this->identifiedBlocks($blocks);

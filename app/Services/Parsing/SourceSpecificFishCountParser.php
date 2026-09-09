@@ -49,7 +49,22 @@ class SourceSpecificFishCountParser
 
     private function parseReportFeedPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        return $this->parseStructuredPayload($payload, "source-specific-{$payload->sourceKey}-v6");
+        $scopedBody = $this->documentScope->forPayload($payload);
+        $scopedPayload = new RawPayloadData(
+            sourceKey: $payload->sourceKey,
+            targetDate: $payload->targetDate,
+            url: $payload->url,
+            body: $scopedBody,
+            metadata: $payload->metadata,
+        );
+
+        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v7");
+
+        if ($scopedBody !== '' && $scopedBody !== $payload->body && $parsed->tripReports->isEmpty()) {
+            return new ParsedFishCountCollection($parsed->tripReports, $parsed->parserVersion, 'aggregate-only');
+        }
+
+        return $parsed;
     }
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection

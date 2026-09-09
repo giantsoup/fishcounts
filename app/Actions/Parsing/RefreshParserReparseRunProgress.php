@@ -6,6 +6,7 @@ use App\Enums\ParserReparseItemStatus;
 use App\Enums\ParserReparseRunStatus;
 use App\Models\ParserError;
 use App\Models\ParserReparseRun;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 
 class RefreshParserReparseRunProgress
@@ -37,7 +38,12 @@ class RefreshParserReparseRunProgress
             ];
 
             if ($isFinished) {
-                $remaining = ParserError::query()->open();
+                $remaining = ParserError::query()->open()->whereNotNull('raw_scrape_payload_id')->whereExists(function (QueryBuilder $query) use ($run): void {
+                    $query->selectRaw('1')->from('parser_reparse_items')
+                        ->where('parser_reparse_run_id', $run->id)
+                        ->whereColumn('parser_reparse_items.scrape_source_id', 'parser_errors.scrape_source_id')
+                        ->whereColumn('parser_reparse_items.target_date', 'parser_errors.target_date');
+                });
                 $remainingOpen = (clone $remaining)->count();
                 $remainingAliases = (clone $remaining)->aliases()->count();
                 $attributes += [

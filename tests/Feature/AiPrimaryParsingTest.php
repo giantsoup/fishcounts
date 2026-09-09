@@ -988,6 +988,101 @@ class AiPrimaryParsingTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_known_dock_totals_history_completes_without_an_ai_attempt_or_fallback(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $source = ScrapeSource::query()->where('slug', 'sandiego_fish_reports')->firstOrFail();
+        $source->update(['parser_engine' => ParserEngine::Ai]);
+        $run = ScrapeRun::query()->create([
+            'scrape_source_id' => $source->id,
+            'run_type' => ScrapeRunType::Manual,
+            'target_date' => '2026-09-08',
+        ]);
+        $body = file_get_contents(base_path('tests/Fixtures/Parsing/sandiego-dock-totals-history.html'));
+        $payload = RawScrapePayload::query()->create([
+            'scrape_run_id' => $run->id,
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-09-08',
+            'url' => 'https://www.sandiegofishreports.com/dock_totals/index.php?date=2026-09-08',
+            'payload' => $body,
+            'payload_hash' => hash('sha256', $body),
+            'fetched_at' => now(),
+        ]);
+        Http::fake();
+        Queue::fake();
+        $options = new ParseRawPayloadOptions(parserEngine: ParserEngine::Ai, executionKey: 'known-aggregate-only');
+
+        $result = app(ParseRawPayloadAction::class)->handleWithOptions($payload->id, $options);
+        app(ParseRawPayloadAction::class)->handleWithOptions($payload->id, $options);
+
+        $execution = ParserExecution::query()->sole();
+        $this->assertSame(0, $result->parsedReportCount);
+        $this->assertSame(0, $result->diagnosticCount);
+        $this->assertSame('source-specific-sandiego_fish_reports-v7', $result->parserVersion);
+        $this->assertSame(ParserEngine::Ai, $execution->requested_engine);
+        $this->assertSame(ParserEngine::Deterministic, $execution->selected_engine);
+        $this->assertSame('completed', $execution->status);
+        $this->assertSame('aggregate-only', $execution->deterministic_snapshot['format']);
+        $this->assertNull($execution->fallback_category);
+        $this->assertNull($execution->fallback_message);
+        $this->assertNull($execution->failure_category);
+        $this->assertSame(0, $execution->attempts);
+        $this->assertSame(0, $execution->cost_micros);
+        $this->assertSame($execution->id, $payload->refresh()->authoritative_parser_execution_id);
+        $this->assertDatabaseCount('trip_reports', 0);
+        $this->assertDatabaseCount('parser_errors', 0);
+        $this->assertDatabaseCount('ai_budget_reservations', 0);
+        Queue::assertNotPushed(DispatchParserDiagnosticReviewBatchesJob::class);
+        Http::assertNothingSent();
+    }
+
+    public function test_unrecognized_individual_text_beside_dock_totals_is_still_sent_to_ai(): void
+    {
+        $payload = $this->payload();
+        $source = ScrapeSource::query()->where('slug', 'sandiego_fish_reports')->firstOrFail();
+        $source->update(['parser_engine' => ParserEngine::Ai]);
+        $payload->scrapeRun->update(['scrape_source_id' => $source->id]);
+        $body = str_replace(
+            '</body>',
+            '<p>Dolphin — Yellowtail: 40</p></body>',
+            file_get_contents(base_path('tests/Fixtures/Parsing/sandiego-dock-totals-history.html')),
+        );
+        $payload->update([
+            'scrape_source_id' => $source->id,
+            'payload' => $body,
+            'payload_hash' => hash('sha256', $body),
+        ]);
+        $response = $this->providerResponse(40);
+        $response['output'][0]['content'][0]['text'] = json_encode(['reports' => []], JSON_THROW_ON_ERROR);
+        Http::fake(['*/responses' => Http::response($response, 200)]);
+        Queue::fake();
+
+        app(ParseRawPayloadAction::class)->handleWithOptions(
+            $payload->id,
+            new ParseRawPayloadOptions(parserEngine: ParserEngine::Ai, executionKey: 'aggregate-with-unrecognized-individual'),
+        );
+
+        $execution = ParserExecution::query()->sole();
+        $this->assertSame('aggregate-only', $execution->deterministic_snapshot['format']);
+        $this->assertSame([], $execution->deterministic_snapshot['reports']);
+        $this->assertSame(ParserEngine::Ai, $execution->selected_engine);
+        $this->assertNull($execution->fallback_category);
+        $this->assertSame(1, $execution->attempts);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_contains(json_encode($request->data(), JSON_UNESCAPED_UNICODE), 'Yellowtail: 40'));
+
+        config()->set('fish.ai_parsing.limits.max_input_tokens', 1);
+        app(ParseRawPayloadAction::class)->handleWithOptions(
+            $payload->id,
+            new ParseRawPayloadOptions(parserEngine: ParserEngine::Ai, executionKey: 'aggregate-with-input-limit'),
+        );
+
+        $limitedExecution = ParserExecution::query()->latest('id')->firstOrFail();
+        $this->assertSame(ParserEngine::Deterministic, $limitedExecution->selected_engine);
+        $this->assertSame('input_limit', $limitedExecution->fallback_category);
+        Http::assertSentCount(1);
+    }
+
     public function test_empty_ai_result_falls_back_when_deterministic_parser_found_reports(): void
     {
         $this->seed(DatabaseSeeder::class);

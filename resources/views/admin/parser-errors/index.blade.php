@@ -2,14 +2,9 @@
     <x-slot name="header">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" x-data>
             <h2 class="font-semibold text-xl text-gray-800">Parser errors</h2>
-            <x-primary-button
-                id="parser-reparse-button"
-                type="button"
-                :disabled="$hasActiveReparseRun || $reparseOpenErrorCount === 0"
-                x-on:click.prevent="$dispatch('open-modal', 'confirm-parser-reparse')"
-            >
+            <a id="parser-reparse-button" href="{{ route('admin.parser-errors.reparse-runs.preview') }}" class="inline-flex items-center rounded-md bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white hover:bg-gray-700">
                 Reparse open errors
-            </x-primary-button>
+            </a>
         </div>
     </x-slot>
 
@@ -477,26 +472,4 @@
         </div>
     </div>
 
-    <x-modal name="confirm-parser-reparse" focusable>
-        <form method="POST" action="{{ route('admin.parser-errors.reparse-runs.store') }}" class="p-6" x-data="{ submitting: false }" x-on:submit="submitting ? $event.preventDefault() : submitting = true">
-            @csrf
-            <h2 class="text-lg font-semibold text-gray-900">Reparse all open parser errors?</h2>
-            <p class="mt-2 text-sm text-gray-600">
-                This will reevaluate {{ $reparsePayloadCount }} affected saved payload(s) across {{ $reparseDateCount }} date(s) behind {{ $reparseOpenErrorCount }} open error(s). The newest payload for each affected source and date is also included when needed.
-            </p>
-            <ul class="mt-4 list-disc space-y-2 ps-5 text-sm text-gray-700">
-                <li>No sources will be scraped.</li>
-                <li>Canonical aliases will not be created or dismissed. Legitimate alias errors will remain open.</li>
-                <li>Parser-version changes may invalidate stale report overrides before the payload is evaluated.</li>
-            </ul>
-            <p class="mt-4 text-sm text-gray-600">The newest payload for every affected source and date will remain authoritative.</p>
-
-            <div class="mt-6 flex justify-end gap-3">
-                <x-secondary-button type="button" x-on:click="$dispatch('close')" x-bind:disabled="submitting">Cancel</x-secondary-button>
-                <x-primary-button type="submit" x-bind:disabled="submitting">
-                    <span x-text="submitting ? 'Queueing…' : 'Queue reparse'">Queue reparse</span>
-                </x-primary-button>
-            </div>
-        </form>
-    </x-modal>
 </x-app-layout>

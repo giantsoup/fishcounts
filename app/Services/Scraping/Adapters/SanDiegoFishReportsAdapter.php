@@ -13,6 +13,6 @@ class SanDiegoFishReportsAdapter extends AbstractHttpFishCountAdapter
 
     protected function pathForDate(CarbonImmutable $date): string
     {
-        return '/dock_totals/index.php';
+        return '/dock_totals/index.php?date='.$date->format('Y-m-d');
     }
 }

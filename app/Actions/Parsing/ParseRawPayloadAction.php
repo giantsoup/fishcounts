@@ -6,9 +6,11 @@ use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedTripReportData;
 use App\DTOs\ParseRawPayloadOptions;
 use App\DTOs\ParseRawPayloadResult;
+use App\DTOs\RawPayloadData;
 use App\Enums\ParserEngine;
 use App\Exceptions\AiParserProviderResponseException;
 use App\Exceptions\AiParserRateLimitExceededException;
+use App\Exceptions\NoPublicFishCountTextException;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
 use App\Models\AiBudgetReservation;
@@ -16,6 +18,8 @@ use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
 use App\Models\ParserExecution;
 use App\Models\RawScrapePayload;
+use App\Services\Parsing\AiParserCatalog;
+use App\Services\Parsing\AiParserDocumentSanitizer;
 use App\Services\Parsing\AiPrimaryParser;
 use App\Services\Parsing\ParsedCollectionSnapshot;
 use App\Services\Parsing\ParsedReportValidator;
@@ -39,6 +43,8 @@ class ParseRawPayloadAction
         private readonly ParserReportOverrideApplier $overrideApplier,
         private readonly AiPrimaryParser $aiParser,
         private readonly ParsedCollectionSnapshot $snapshot,
+        private readonly AiParserDocumentSanitizer $sanitizer,
+        private readonly AiParserCatalog $catalog,
     ) {}
 
     public function handle(
@@ -110,13 +116,14 @@ class ParseRawPayloadAction
         $parsed = $deterministic;
         $aiResult = null;
         $fallbackCategory = null;
+        $shouldParseWithAi = $options->parserEngine === ParserEngine::Ai && ! $this->containsOnlyRecognizedAggregates($rawPayload, $deterministic);
 
-        if ($options->parserEngine === ParserEngine::Ai
+        if ($shouldParseWithAi
             && $execution->status === 'ready'
             && is_array($execution->ai_snapshot)) {
             $parsed = $this->snapshot->restore($execution->ai_snapshot);
             $selectedEngine = ParserEngine::Ai;
-        } elseif ($options->parserEngine === ParserEngine::Ai && $execution->status !== 'failed') {
+        } elseif ($shouldParseWithAi && $execution->status !== 'failed') {
             try {
                 $aiResult = $this->aiParser->parse($execution, $payload, $rawPayload, $deterministic);
                 $parsed = $aiResult->parsed;
@@ -158,7 +165,7 @@ class ParseRawPayloadAction
                         'failure_message' => $fallbackMessage,
                     ]);
             }
-        } elseif ($options->parserEngine === ParserEngine::Ai) {
+        } elseif ($shouldParseWithAi) {
             $fallbackCategory = $execution->failure_category ?? $execution->fallback_category ?? 'attempts_exhausted';
         }
 
@@ -232,6 +239,23 @@ class ParseRawPayloadAction
             diagnosticCount: $diagnosticCount,
             shouldDispatchDeduplication: $options->dispatchDeduplication,
         );
+    }
+
+    private function containsOnlyRecognizedAggregates(RawPayloadData $rawPayload, ?ParsedFishCountCollection $deterministic): bool
+    {
+        if ($deterministic?->format !== 'aggregate-only') {
+            return false;
+        }
+
+        try {
+            $this->sanitizer->sanitize($rawPayload, $this->catalog->active());
+        } catch (NoPublicFishCountTextException) {
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+
+        return false;
     }
 
     private function execution(RawScrapePayload $payload, ParseRawPayloadOptions $options): ParserExecution

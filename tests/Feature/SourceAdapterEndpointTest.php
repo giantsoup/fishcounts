@@ -34,7 +34,7 @@ class SourceAdapterEndpointTest extends TestCase
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.fishermanslanding.com/fishcounts.php');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.pointlomasportfishing.com/fishcounts.php');
-        Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sandiegofishreports.com/dock_totals/index.php');
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sandiegofishreports.com/dock_totals/index.php?date=2026-06-17');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.fishcounts.com/hmlanding/fishcounts.php');
         Http::assertSent(fn ($request): bool => $request->url() === 'https://www.sportfishingreport.com/dock_totals/boats.php?date=2026-06-17');
     }

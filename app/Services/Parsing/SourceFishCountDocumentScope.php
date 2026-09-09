@@ -18,8 +18,41 @@ final class SourceFishCountDocumentScope
             'fishermans_landing' => $this->fishermansLandingTargetDateHtml($payload->body, $payload->targetDate) ?? '',
             'hm_landing' => $this->hmLandingTargetDateHtml($payload->body, $payload->targetDate) ?? '',
             'sportfishingreport_landing_pages' => $this->sportfishingReportSanDiegoPanelHtml($payload->body) ?? '',
+            'sandiego_fish_reports' => $this->sanDiegoIndividualReportsHtml($payload->body),
             default => $payload->body,
         };
+    }
+
+    private function sanDiegoIndividualReportsHtml(string $html): string
+    {
+        if (! str_contains($html, '<')) {
+            return $html;
+        }
+
+        $document = $this->document($html);
+        if (! $document instanceof DOMDocument) {
+            return '';
+        }
+
+        $xpath = new DOMXPath($document);
+        $aggregateNodes = $xpath->query(
+            '//*[contains(concat(" ", normalize-space(@class), " "), " rf-dock-grid ")'
+            .' or contains(concat(" ", normalize-space(@class), " "), " rf-dock-card ")'
+            .' or contains(concat(" ", normalize-space(@class), " "), " rf-dtot ")'
+            .' or contains(concat(" ", normalize-space(@class), " "), " rf-dtot-table ")'
+            .' or contains(concat(" ", normalize-space(@class), " "), " rf-dhist ")'
+            .' or contains(concat(" ", normalize-space(@class), " "), " rf-dhist-table ")]',
+        );
+
+        if ($aggregateNodes === false || $aggregateNodes->length === 0) {
+            return $html;
+        }
+
+        foreach (iterator_to_array($aggregateNodes) as $aggregateNode) {
+            $aggregateNode->parentNode?->removeChild($aggregateNode);
+        }
+
+        return $document->saveHTML() ?: '';
     }
 
     public function sportfishingReportSanDiegoPanelHtml(string $html): ?string

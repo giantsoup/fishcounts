@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ParserDiagnosticReviewActionType;
 use App\Enums\ParserErrorResolutionType;
-use App\Enums\ParserReparseRunStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DismissParserErrorRequest;
 use App\Models\Boat;
@@ -53,10 +52,6 @@ class ParserErrorController extends Controller
             ->withQueryString();
         $latestReparseRun = ParserReparseRun::query()->with('requester')->latest('id')->first();
 
-        if ($latestReparseRun?->status === ParserReparseRunStatus::Succeeded) {
-            $latestReparseRun = null;
-        }
-        $openErrors = ParserError::query()->open();
         $errorCounts = ParserError::query()
             ->toBase()
             ->selectRaw('count(*) as total_count')
@@ -85,9 +80,6 @@ class ParserErrorController extends Controller
             'hasActiveReparseRun' => $latestReparseRun?->status->isActive() ?? false,
             'openErrorCount' => $openErrorCount,
             'allErrorCount' => (int) $errorCounts->total_count,
-            'reparseOpenErrorCount' => $openErrorCount,
-            'reparsePayloadCount' => (clone $openErrors)->whereNotNull('raw_scrape_payload_id')->distinct()->count('raw_scrape_payload_id'),
-            'reparseDateCount' => (clone $openErrors)->whereNotNull('raw_scrape_payload_id')->distinct()->count('target_date'),
         ]);
     }
 

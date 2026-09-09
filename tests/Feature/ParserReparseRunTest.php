@@ -27,6 +27,7 @@ use App\Models\RawScrapePayload;
 use App\Models\ScrapeRun;
 use App\Models\ScrapeSource;
 use App\Models\User;
+use App\Services\Parsing\ParserReparsePlanner;
 use App\Services\Parsing\TripReportNormalizer;
 use Database\Seeders\DatabaseSeeder;
 use DateTimeInterface;
@@ -57,7 +58,10 @@ class ParserReparseRunTest extends TestCase
             ->assertOk()
             ->assertSee('Reparse open errors')
             ->assertSee('aria-label="Open parser errors: 1"', false)
-            ->assertSee('aria-label="All parser errors: 2"', false)
+            ->assertSee('aria-label="All parser errors: 2"', false);
+
+        $this->actingAs($admin)->get(route('admin.parser-errors.reparse-runs.preview', ['preview' => 1]))
+            ->assertOk()
             ->assertSee('No sources will be scraped.')
             ->assertSee('Canonical aliases will not be created or dismissed.')
             ->assertSee('Parser-version changes may invalidate stale report overrides');
@@ -75,13 +79,13 @@ class ParserReparseRunTest extends TestCase
             ->gatherMiddleware();
 
         $this->assertContains('web', $middleware);
-        $this->assertContains('throttle:3,1', $middleware);
+        $this->assertContains('throttle:3,1,parser-reparse-write:', $middleware);
 
         $pollMiddleware = app('router')
             ->getRoutes()
             ->getByName('admin.parser-errors.reparse-runs.poll')
             ->gatherMiddleware();
-        $this->assertContains('throttle:60,1', $pollMiddleware);
+        $this->assertContains('throttle:60,1,parser-reparse-poll:', $pollMiddleware);
     }
 
     public function test_duplicate_submissions_return_one_active_run_and_queue_one_coordinator(): void
@@ -91,8 +95,8 @@ class ParserReparseRunTest extends TestCase
         $payload = $this->payload($this->source(), '2026-07-20', 'duplicate submission');
         $this->parserError($payload, 'unaccounted_numeric_tokens');
 
-        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.store'))->assertRedirect();
-        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.store'))->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.store'), ['fingerprint' => app(ParserReparsePlanner::class)->preview()['fingerprint']])->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.store'), ['fingerprint' => app(ParserReparsePlanner::class)->preview()['fingerprint']])->assertRedirect();
 
         $this->assertSame(1, ParserReparseRun::query()->count());
         Queue::assertPushed(DispatchParserReparseRunJob::class, 1);
@@ -119,7 +123,7 @@ class ParserReparseRunTest extends TestCase
         $items = $result->run->items()->orderBy('sequence')->get();
 
         $this->assertTrue($result->created);
-        $this->assertSame(3, $result->run->initial_open_errors);
+        $this->assertSame(2, $result->run->initial_open_errors);
         $this->assertSame(2, $result->run->initial_payloads);
         $this->assertSame(
             [
@@ -467,7 +471,7 @@ class ParserReparseRunTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_succeeded_run_is_retired_from_the_page_and_polling_panel(): void
+    public function test_succeeded_run_keeps_the_results_visible_on_the_page_and_polling_panel(): void
     {
         $admin = User::factory()->admin()->create();
         $run = ParserReparseRun::query()->create([
@@ -481,15 +485,15 @@ class ParserReparseRunTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.parser-errors.index'))
             ->assertOk()
-            ->assertDontSee('Reparse run #'.$run->id)
-            ->assertDontSee(route('admin.parser-errors.reparse-runs.poll', $run));
+            ->assertSee('Reparse run #'.$run->id)
+            ->assertSee(route('admin.parser-errors.reparse-runs.poll', $run));
 
         $this->actingAs($admin)
             ->getJson(route('admin.parser-errors.reparse-runs.poll', $run))
             ->assertOk()
             ->assertJsonPath('has_active_reparse', false)
-            ->assertJsonPath('show_reparse_run', false)
-            ->assertJsonPath('html', '');
+            ->assertJsonPath('show_reparse_run', true)
+            ->assertSee('Reparse run #'.$run->id, false);
     }
 
     public function test_failed_run_remains_visible_for_retry(): void

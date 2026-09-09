@@ -766,7 +766,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Point Loma Sportfishing', $report->landingName);
         $this->assertSame('3/4 Day', $report->tripTypeName);
         $this->assertSame(28, $report->anglers);
-        $this->assertSame('source-specific-sandiego_fish_reports-v6', $report->metadata['parser']);
+        $this->assertSame('source-specific-sandiego_fish_reports-v7', $report->metadata['parser']);
         $this->assertSame('Rockfish', $report->speciesCounts[1]->speciesName);
         $this->assertSame(140, $report->speciesCounts[1]->count);
     }
