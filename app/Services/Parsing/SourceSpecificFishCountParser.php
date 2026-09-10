@@ -124,7 +124,7 @@ class SourceSpecificFishCountParser
             regionName: 'San Diego',
             landingName: $landing,
             boatName: $boat,
-            tripTypeName: $tripType,
+            tripTypeName: $tripType !== '' ? $tripType : null,
             anglers: $anglers,
             rawFishCountText: $rawCounts,
             speciesCounts: $speciesCounts->all(),
