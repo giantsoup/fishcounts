@@ -219,7 +219,7 @@ return [
         'job_timeout_seconds' => (int) env('FISH_AI_PARSING_JOB_TIMEOUT', 300),
         'lock_seconds' => (int) env('FISH_AI_PARSING_LOCK_SECONDS', 330),
         'rate_limit_per_minute' => (int) env('FISH_AI_PARSING_RATE_LIMIT_PER_MINUTE', 5),
-        'prompt_version' => env('FISH_AI_PARSING_PROMPT_VERSION', 'v4'),
+        'prompt_version' => env('FISH_AI_PARSING_PROMPT_VERSION', 'v5'),
         'schema_version' => env('FISH_AI_PARSING_SCHEMA_VERSION', 'v2'),
         'sanitizer_version' => env('FISH_AI_PARSING_SANITIZER_VERSION', 'v2'),
         'catalog_version' => env('FISH_AI_PARSING_CATALOG_VERSION', 'v1'),
