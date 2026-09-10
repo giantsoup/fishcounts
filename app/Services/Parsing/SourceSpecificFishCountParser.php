@@ -383,12 +383,12 @@ class SourceSpecificFishCountParser
     {
         $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half\s+Day|Full\s+Day\s+Coronado\s+Islands|Full\s+Day|Overnight|Twilight';
         $returnPhrase = '(?:also\s+)?(?:returned|ended|arrived)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
-        $statusPhrase = '(?:(?:just\s+)?checked\s+in\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|reported\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
-        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+(?:a|the|their)\s+)?(?:(?<period_after>AM|PM)\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
+        $statusPhrase = '(?:started\s+off\s+day\s+(?:\d+|one|two|three|four)\s+of\s+their\s+|(?:just\s+)?checked\s+in\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|reported\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
+        $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening|night))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+(?:a|the|their)\s+)?(?:(?<period_after>AM|PM)\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
         $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned|ended)(?:\s+from\s+their)?\s+)?';
 
         return '/(?:^|(?<=[.!?])\s+)The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\'s)?\s+(?:'
-            .$statusPhrase.'(?:(?<period_status>AM|PM)\s+)?(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
+            .$statusPhrase.'(?:(?<period_status>AM|PM|morning|afternoon)\s+)?(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
             .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
             .'|charter\s+group(?:\s+today)?\s+went\s+offshore\s+for\s+their\s+(?<trip_charter>'.$tripPattern.')\s+trip\s+and\s+returned\s+'
             .')(?:with|wth|caught|landed|had)\b/i';
@@ -452,8 +452,12 @@ class SourceSpecificFishCountParser
             ->toString();
 
         return $period !== null
-            ? $normalized.' '.Str::upper($period)
-            : $normalized;
+            ? $normalized.' '.match (Str::lower($period)) {
+                'morning' => 'AM',
+                'afternoon' => 'PM',
+                default => Str::upper($period),
+            }
+        : $normalized;
     }
 
     private function fishCountNarrativeText(string $text): string
