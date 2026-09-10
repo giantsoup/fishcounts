@@ -94,6 +94,8 @@ final class OpenAiFishCountParser
                 'When a landing source report block omits the landing name, leave raw_landing_name null; the application owns the authoritative source landing.',
                 'In tabular blocks, the third tab-separated cell is the angler count even when the word anglers is omitted. Preserve explicit limit counts and parenthetical released counts exactly.',
                 'Do not infer the authoritative source or date. The application owns both.',
+                'Apply the owner-approved missing-quantity rule: in a catch list such as 54 Yellowtail and Stripped Marlin, retain 54 Yellowtail and infer 1 Striped Marlin. Preserve explicit numbers and cite the original text; never invent evidence spans.',
+                'For a counted species written only as Yellow, use the opposite of explicitly counted Yellowtail or Yellowfin Tuna in that same report when exactly one is present. If both or neither are present, omit Yellow from species_counts. Never use another boat or trip for this context. Keep the full original report in raw_fish_count_text.',
                 'Retained and released counts must be non-negative integers. Do not merge distinct trips.',
             ]),
             'input' => [[

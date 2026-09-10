@@ -6,6 +6,8 @@ use Illuminate\Support\Str;
 
 class SourceFishCountGrammar
 {
+    public function __construct(private readonly SpeciesCountAssumptions $assumptions) {}
+
     public function normalize(string $line): string
     {
         $line = Str::of($line)
@@ -82,10 +84,12 @@ class SourceFishCountGrammar
             $line,
         ) ?? $line;
 
-        return preg_replace_callback(
+        $line = preg_replace_callback(
             '/(?<count>\d+)\s+\d+\s*(?:lbs?|pounds?)\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)(?=\s*(?:,|\.|!|$)|\s+for\b)/i',
             fn (array $matches): string => "{$matches['count']} {$matches['species']}",
             $line,
         ) ?? $line;
+
+        return $this->assumptions->normalize($line);
     }
 }

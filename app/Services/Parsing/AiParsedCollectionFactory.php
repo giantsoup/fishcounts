@@ -15,6 +15,11 @@ use UnexpectedValueException;
 
 final class AiParsedCollectionFactory
 {
+    public function __construct(
+        private readonly SpeciesCountAssumptions $assumptions,
+        private readonly GenericFishCountParser $genericParser,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $result
      * @param  array<string, mixed>  $catalog
@@ -98,8 +103,14 @@ final class AiParsedCollectionFactory
                 throw new UnexpectedValueException("AI report [{$index}] selected a boat outside the source landing.");
             }
 
-            $speciesCounts = $this->speciesCounts($report['species_counts'], $species, $evidenceSpans, $sourceBlock, $index);
             $rawFishCountText = $this->requiredString($report['raw_fish_count_text'], "report [{$index}] fish count", 8000);
+            if ($this->assumptions->normalize($sourceBlock) !== $sourceBlock) {
+                $mentionedBoats = $boats->filter(fn (array $candidate): bool => Str::contains(Str::lower($sourceBlock), Str::lower($candidate['name'])));
+                if (trim($rawFishCountText) !== trim($sourceBlock) || $mentionedBoats->count() > 1) {
+                    throw new UnexpectedValueException("AI report [{$index}] requires complete, single-boat source evidence for species assumptions.");
+                }
+            }
+            $speciesCounts = $this->speciesCounts($report['species_counts'], $species, $evidenceSpans, $sourceBlock, $index, $rawFishCountText);
             if (! $this->spansContainExactText($evidenceSpans, $rawFishCountText)) {
                 throw new UnexpectedValueException("AI report [{$index}] cited fabricated fish-count text.");
             }
@@ -184,6 +195,7 @@ final class AiParsedCollectionFactory
         array $reportEvidenceSpans,
         string $sourceBlock,
         int $reportIndex,
+        string $reportText,
     ): array {
         if (! is_array($values) || count($values) > (int) config('fish.ai_parsing.limits.max_species_per_report')) {
             throw new UnexpectedValueException("AI report [{$reportIndex}] contained invalid species counts.");
@@ -200,7 +212,7 @@ final class AiParsedCollectionFactory
             ], "species count [{$reportIndex}:{$speciesIndex}]");
             $canonical = $this->canonical($catalog, $value['canonical_species_id'], 'species', $reportIndex);
             $name = $this->requiredString($value['raw_species_name'], "species count [{$reportIndex}:{$speciesIndex}] name", 200);
-            $this->assertCanonicalName($canonical, $name, 'species', $reportIndex);
+
             $retained = $value['retained_count'];
             $released = $value['released_count'];
             $maximum = (int) config('fish.ai_parsing.limits.max_count');
@@ -216,7 +228,15 @@ final class AiParsedCollectionFactory
                 255,
                 255,
             );
-            $this->assertCountEvidence($sourceBlock, $name, $retained, $released, $reportIndex, $speciesIndex);
+            $interpretedName = Str::lower($name) === 'yellow'
+                ? $this->assumptions->yellowSpecies($reportText)
+                : $this->assumptions->speciesName($name);
+            if ($interpretedName === null) {
+                continue;
+            }
+            $this->assertCanonicalName($canonical, $interpretedName, 'species', $reportIndex);
+            $interpretedText = $this->assumptions->normalize($reportText);
+            $this->assertCountEvidence($interpretedText !== $reportText ? $interpretedText : $sourceBlock, $interpretedName, $retained, $released, $reportIndex, $speciesIndex);
             $evidence = implode(' … ', $evidenceSpans);
             $identity = (string) ($canonical['id'] ?? Str::lower($name));
             if (isset($identities[$identity])) {
@@ -224,12 +244,25 @@ final class AiParsedCollectionFactory
             }
             $identities[$identity] = true;
             $counts[] = new ParsedSpeciesCountData(
-                speciesName: $name,
+                speciesName: $interpretedName,
                 count: $retained,
                 releasedCount: $released,
                 rawText: $evidence,
                 canonicalSpeciesId: $canonical['id'] ?? null,
             );
+        }
+
+        $inferred = $this->assumptions->inferredSpecies($reportText);
+        if ($inferred !== []) {
+            foreach ($this->genericParser->parseSpeciesCounts($reportText) as $expected) {
+                if (! in_array($expected->speciesName, $inferred, true)) {
+                    continue;
+                }
+                $actual = collect($counts)->firstWhere('speciesName', $expected->speciesName);
+                if ($actual === null || $actual->count !== $expected->count || $actual->releasedCount !== $expected->releasedCount) {
+                    throw new UnexpectedValueException("AI report [{$reportIndex}] omitted or contradicted an owner-approved species assumption.");
+                }
+            }
         }
 
         return $counts;
