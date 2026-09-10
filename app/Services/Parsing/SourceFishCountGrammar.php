@@ -19,6 +19,7 @@ class SourceFishCountGrammar
             ->replaceMatches('/\s+for\s+\(\s*\d+(?:\s*(?:-|to)\s*\d+)?\s*(?:lbs?|pounds?)\.?\s*\)/i', '')
             ->replaceMatches('/\s+on\s+the\s+boat(?=[.!]|$)/i', '')
             ->replaceMatches('/\bCalico\s*\(\s*Kelp\s*\)\s*Bass\b/i', 'Calico Bass')
+            ->replaceMatches('/\b(for\s+(?:their\s+)?\d+\s+(?:anglers?|people|passengers?))\s+last\s+night\b/i', '$1')
             ->replaceMatches('/\bfore\s+their\b/i', 'for their')
             ->replaceMatches('/\bfo\s+their\b/i', 'for their')
             ->replaceMatches('/\babd\b/i', 'and')
