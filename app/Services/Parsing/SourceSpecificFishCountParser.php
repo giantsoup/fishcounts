@@ -398,6 +398,7 @@ class SourceSpecificFishCountParser
     {
         $reportText = Str::of($this->fishCountNarrativeText($line))->squish()->toString();
         $patterns = [
+            '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>Twilight)\s+trips?\s+(?:have|has)\s+had\b[^.!?]*[.!?]\s+They\s+had\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+ventured\b.*?\band\s+bagged\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+with\s+(?<anglers>\d+)\s+anglers\b.*?\bfinished\s+up\s+with\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>Full\s+Day)\s+to\s+the\s+Coronado\s+Islands,?\s+wrapped\s+up\s+with\s+(?<counts>.+)$/i',
@@ -462,7 +463,7 @@ class SourceSpecificFishCountParser
         $fishCountText = array_shift($sentences) ?? $text;
 
         foreach ($sentences as $sentence) {
-            if (preg_match('/^(?:They\s+)?also\s+(?:reported|had)\b/i', $sentence) !== 1) {
+            if (preg_match('/^(?:(?:They\s+)?also\s+(?:reported|had)|They\s+had)\b/i', $sentence) !== 1) {
                 break;
             }
 
