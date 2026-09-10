@@ -30,6 +30,7 @@ class SourceFishCountGrammar
             ->replaceMatches('/\bdo\s+far\b/i', 'so far')
             ->replaceMatches('/\b([AP])\s+M\b/i', fn (array $matches): string => Str::upper($matches[1]).'M')
             ->replaceMatches('/(?<=\d\s)quality\s+(?=[A-Za-z])/i', '')
+            ->replaceMatches('/\s+(?:and\s+)?still\s+fishing(?=\s+(?:on|for|with)\b|\s*[,.;!]|$)/i', '')
             ->replaceMatches('/\s+so\s+far(?:\s+still\s+fishing)?(?=\s+(?:on|for|with)\b|[.!]|$)/i', '')
             ->replaceMatches('/\s+to\s+start\s+the\s+trip(?=[.!]|$)/i', '')
             ->replaceMatches('/\(\s*\d+\s*@\s*\d+\s+to\s+\d+#\s*\)/i', '')
