@@ -106,7 +106,10 @@ final class AiParsedCollectionFactory
             $rawFishCountText = $this->requiredString($report['raw_fish_count_text'], "report [{$index}] fish count", 8000);
             if ($this->assumptions->normalize($sourceBlock) !== $sourceBlock) {
                 $mentionedBoats = $boats->filter(fn (array $candidate): bool => Str::contains(Str::lower($sourceBlock), Str::lower($candidate['name'])));
-                if (trim($rawFishCountText) !== trim($sourceBlock) || $mentionedBoats->count() > 1) {
+                $boatName = $mentionedBoats->first()['name'] ?? $rawBoatName;
+                $boatMentions = preg_match_all('/(?<![\\pL\\pN])'.preg_quote($boatName, '/').'(?![\\pL\\pN])/iu', $sourceBlock);
+                $tripPeriods = preg_match_all('/\\b(?:AM|PM|Twilight)\\b/i', $sourceBlock);
+                if (trim($rawFishCountText) !== trim($sourceBlock) || $mentionedBoats->count() !== 1 || $boatMentions !== 1 || $tripPeriods > 1) {
                     throw new UnexpectedValueException("AI report [{$index}] requires complete, single-boat source evidence for species assumptions.");
                 }
             }

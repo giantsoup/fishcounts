@@ -34,6 +34,11 @@ class SpeciesCountAssumptions
 
     public function yellowSpecies(string $text): ?string
     {
+        $tripPattern = '/\\b(?:(?:AM|PM)\\s+Half\\s+Day|Half\\s+Day(?:\\s+(?:AM|PM))?|(?:1\\/2|3\\/4|\\d+(?:\\.\\d+)?)\\s*Day(?:\\s+(?:AM|PM))?|Full\\s*Day|Overnight|Twilight|AM|PM)\\b/i';
+        if (preg_match_all($tripPattern, $text) > 1) {
+            return null;
+        }
+
         $text = preg_replace('/\\blimits\\s+of\\s+(Yellowtail|Yellowfin\\s+Tuna)\\s*\\(\\s*(\\d+)\\s*\\)/i', '$2 $1', $text) ?? $text;
         $text = preg_replace('/\\blimits\\s*\\(\\s*(\\d+)\\s*\\)\\s+of\\s+(Yellowtail|Yellowfin\\s+Tuna)\\b/i', '$1 $2', $text) ?? $text;
         $ending = '(?=\\s*(?:[,.;!()]|$)|\\s+(?:and|for|with|released)\\b)';

@@ -22,6 +22,13 @@ class SpeciesCountAssumptionsTest extends TestCase
         $this->assertSame($text, app(SpeciesCountAssumptions::class)->normalize($text));
     }
 
+    public function test_deterministic_policy_does_not_share_context_between_trips(): void
+    {
+        $policy = app(SpeciesCountAssumptions::class);
+        $this->assertNull($policy->yellowSpecies('Dolphin AM 12 Yellowtail. Dolphin PM 17 Yellow.'));
+        $this->assertSame('Yellowfin Tuna', $policy->yellowSpecies('Dolphin AM Half Day 12 Yellowtail, 17 Yellow.'));
+    }
+
     public function test_released_yellow_keeps_its_release_status(): void
     {
         $counts = app(GenericFishCountParser::class)->parseSpeciesCounts('4 Yellowtail, 17 Yellow Released.');

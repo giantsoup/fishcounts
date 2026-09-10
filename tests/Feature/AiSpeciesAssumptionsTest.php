@@ -50,6 +50,24 @@ class AiSpeciesAssumptionsTest extends TestCase
         app(AiParsedCollectionFactory::class)->make($payload, $raw, "[block:0001] {$text}", $result, $catalog);
     }
 
+    public function test_two_trips_by_the_same_boat_cannot_share_yellow_context(): void
+    {
+        $text = 'Dolphin Full Day 20 anglers 12 Yellowtail. Dolphin PM 20 anglers 17 Yellow.';
+        [$payload, $raw, $result, $catalog] = $this->fixture($text, 'Yellow', 2, 17);
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('single-boat source evidence');
+        app(AiParsedCollectionFactory::class)->make($payload, $raw, "[block:0001] {$text}", $result, $catalog);
+    }
+
+    public function test_am_and_pm_without_repeated_boat_name_cannot_share_context(): void
+    {
+        $text = 'Dolphin Full Day 20 anglers AM 12 Yellowtail, PM 17 Yellow.';
+        [$payload, $raw, $result, $catalog] = $this->fixture($text, 'Yellow', 2, 17);
+        $this->expectException(UnexpectedValueException::class);
+        $this->expectExceptionMessage('single-boat source evidence');
+        app(AiParsedCollectionFactory::class)->make($payload, $raw, "[block:0001] {$text}", $result, $catalog);
+    }
+
     public function test_ai_cannot_hide_an_assumption_by_truncating_raw_text(): void
     {
         $text = 'Dolphin Full Day 20 anglers 54 Yellowtail and Stripped Marlin.';
