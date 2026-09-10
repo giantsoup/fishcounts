@@ -701,7 +701,7 @@ class ParsingPipelineTest extends TestCase
         ]);
     }
 
-    public function test_sportfishing_report_fallback_rows_are_skipped_when_direct_landing_match_exists(): void
+    public function test_conflicting_half_day_fallback_rows_are_preserved_when_direct_landing_exists(): void
     {
         $context = $this->seedFallbackReferenceData();
         $directSource = $this->landingSource();
@@ -728,15 +728,17 @@ class ParsingPipelineTest extends TestCase
 
         $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
 
-        $this->assertSame(0, $created);
-        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame(1, $created);
+        $this->assertSame(2, TripReport::query()->count());
+        app(TripReportNormalizer::class)->refreshPrimaryReports($payload->target_date->toDateString());
+        $this->assertSame(2, TripReport::query()->where('is_deduped_primary', true)->count());
         $this->assertDatabaseHas('trip_reports', [
             'source_id' => $directSource->id,
             'raw_fish_count_text' => '78 Calico Bass',
         ]);
     }
 
-    public function test_later_direct_landing_import_removes_matching_sportfishing_report_fallback_rows(): void
+    public function test_later_direct_half_day_import_preserves_conflicting_fallback_evidence(): void
     {
         $this->seedFallbackReferenceData();
 
@@ -753,14 +755,16 @@ class ParsingPipelineTest extends TestCase
 
         $created = app(TripReportNormalizer::class)->replaceForPayload($directPayload, $directParsed);
 
-        $report = TripReport::query()->firstOrFail();
+        $report = TripReport::query()->where('source_id', $directSource->id)->sole();
 
         $this->assertSame(1, $created);
-        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame(2, TripReport::query()->count());
+        app(TripReportNormalizer::class)->refreshPrimaryReports($directPayload->target_date->toDateString());
+        $this->assertSame(2, TripReport::query()->where('is_deduped_primary', true)->count());
         $this->assertSame($directSource->id, $report->source_id);
         $this->assertSame(55, $report->anglers);
-        $this->assertDatabaseMissing('trip_reports', ['source_id' => $fallbackSource->id]);
-        $this->assertDatabaseMissing('species_counts', ['trip_report_id' => $fallbackReportId]);
+        $this->assertDatabaseHas('trip_reports', ['source_id' => $fallbackSource->id]);
+        $this->assertDatabaseHas('species_counts', ['trip_report_id' => $fallbackReportId]);
         $this->assertDatabaseHas('species_counts', [
             'trip_report_id' => $report->id,
             'count' => 78,
@@ -768,7 +772,7 @@ class ParsingPipelineTest extends TestCase
         ]);
     }
 
-    public function test_sportfishing_report_generic_half_day_rows_are_skipped_when_direct_half_day_variant_exists(): void
+    public function test_generic_half_day_rows_are_preserved_when_direct_session_has_different_catches(): void
     {
         $context = $this->seedFallbackReferenceData();
         $directSource = $this->landingSource();
@@ -795,15 +799,17 @@ class ParsingPipelineTest extends TestCase
 
         $created = app(TripReportNormalizer::class)->replaceForPayload($payload, $parsed);
 
-        $this->assertSame(0, $created);
-        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame(1, $created);
+        $this->assertSame(2, TripReport::query()->count());
+        app(TripReportNormalizer::class)->refreshPrimaryReports($payload->target_date->toDateString());
+        $this->assertSame(2, TripReport::query()->where('is_deduped_primary', true)->count());
         $this->assertDatabaseHas('trip_reports', [
             'source_id' => $directSource->id,
             'raw_trip_type' => '1/2 Day AM',
         ]);
     }
 
-    public function test_later_direct_half_day_variant_removes_generic_sportfishing_report_half_day_fallback_rows(): void
+    public function test_later_direct_session_preserves_generic_half_day_rows_with_different_catches(): void
     {
         $this->seedFallbackReferenceData();
 
@@ -826,14 +832,16 @@ class ParsingPipelineTest extends TestCase
 
         $created = app(TripReportNormalizer::class)->replaceForPayload($directPayload, $directParsed);
 
-        $report = TripReport::query()->firstOrFail();
+        $report = TripReport::query()->where('source_id', $directSource->id)->sole();
 
         $this->assertSame(1, $created);
-        $this->assertSame(1, TripReport::query()->count());
+        $this->assertSame(2, TripReport::query()->count());
+        app(TripReportNormalizer::class)->refreshPrimaryReports($directPayload->target_date->toDateString());
+        $this->assertSame(2, TripReport::query()->where('is_deduped_primary', true)->count());
         $this->assertSame($directSource->id, $report->source_id);
         $this->assertSame('1/2 Day AM', $report->raw_trip_type);
-        $this->assertDatabaseMissing('trip_reports', ['source_id' => $fallbackSource->id]);
-        $this->assertDatabaseMissing('species_counts', ['trip_report_id' => $fallbackReportId]);
+        $this->assertDatabaseHas('trip_reports', ['source_id' => $fallbackSource->id]);
+        $this->assertDatabaseHas('species_counts', ['trip_report_id' => $fallbackReportId]);
     }
 
     /** @return array{region: Region, landing: Landing, boat: Boat, tripType: TripType, halfDayAmTripType: TripType} */

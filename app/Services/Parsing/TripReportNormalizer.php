@@ -15,7 +15,6 @@ use App\Models\SpeciesCount;
 use App\Models\TripReport;
 use App\Models\TripType;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,6 +22,8 @@ use Illuminate\Support\Str;
 class TripReportNormalizer
 {
     private const SPORTFISHING_REPORT_SOURCE_SLUG = 'sportfishingreport_landing_pages';
+
+    private const HALF_DAY_TRIP_TYPES = ['1/2 Day', '1/2 Day AM', '1/2 Day PM', '1/2 Day Twilight'];
 
     public function __construct(
         private readonly AliasNormalizer $normalizer,
@@ -132,69 +133,39 @@ class TripReportNormalizer
 
     private function directLandingReportExists(string $date, ?int $boatId, ?int $tripTypeId): bool
     {
-        if ($boatId === null || $tripTypeId === null) {
+        if ($boatId === null || $tripTypeId === null || $this->isHalfDayTripType($tripTypeId)) {
             return false;
         }
 
-        $query = TripReport::query()
+        return TripReport::query()
             ->whereDate('trip_date', $date)
             ->where('boat_id', $boatId)
-            ->whereHas('source', fn ($query) => $query->where('source_type', SourceType::Landing->value));
-
-        return $this->whereMatchingTripType($query, $tripTypeId)->exists();
+            ->where('trip_type_id', $tripTypeId)
+            ->whereHas('source', fn ($query) => $query->where('source_type', SourceType::Landing->value))
+            ->exists();
     }
 
     private function deleteSportfishingReportFallbackReports(string $date, ?int $boatId, ?int $tripTypeId): void
     {
-        if ($boatId === null || $tripTypeId === null) {
+        if ($boatId === null || $tripTypeId === null || $this->isHalfDayTripType($tripTypeId)) {
             return;
         }
 
-        $query = TripReport::query()
+        TripReport::query()
             ->whereDate('trip_date', $date)
             ->where('boat_id', $boatId)
+            ->where('trip_type_id', $tripTypeId)
             ->whereHas('source', fn ($query) => $query->where('slug', self::SPORTFISHING_REPORT_SOURCE_SLUG))
             ->with('speciesCounts')
-            ->where(function ($query) use ($tripTypeId): void {
-                $query->where('trip_type_id', $tripTypeId);
-
-                if ($this->isHalfDayLandingVariant($tripTypeId)) {
-                    $query->orWhereHas('tripType', fn ($tripTypeQuery) => $tripTypeQuery->where('name', '1/2 Day'));
-                }
-            });
-
-        $query
             ->get()
             ->each(function (TripReport $tripReport): void {
                 $this->deleteTripReport($tripReport);
             });
     }
 
-    private function whereMatchingTripType(Builder $query, int $tripTypeId): Builder
+    private function isHalfDayTripType(int $tripTypeId): bool
     {
-        return $query->where(function ($query) use ($tripTypeId): void {
-            $query->where('trip_type_id', $tripTypeId);
-
-            if ($this->isHalfDayFallbackTripType($tripTypeId)) {
-                $query->orWhereHas('tripType', fn ($tripTypeQuery) => $tripTypeQuery->whereIn('name', ['1/2 Day AM', '1/2 Day PM']));
-            }
-        });
-    }
-
-    private function isHalfDayFallbackTripType(int $tripTypeId): bool
-    {
-        return DB::table('trip_types')
-            ->where('id', $tripTypeId)
-            ->where('name', '1/2 Day')
-            ->exists();
-    }
-
-    private function isHalfDayLandingVariant(int $tripTypeId): bool
-    {
-        return DB::table('trip_types')
-            ->where('id', $tripTypeId)
-            ->whereIn('name', ['1/2 Day AM', '1/2 Day PM'])
-            ->exists();
+        return TripType::query()->whereKey($tripTypeId)->whereIn('name', self::HALF_DAY_TRIP_TYPES)->exists();
     }
 
     private function deleteTripReport(TripReport $tripReport): void
@@ -211,55 +182,87 @@ class TripReportNormalizer
     /** @param  array<int, string>  $dates */
     public function refreshPrimaryReportsForDates(array $dates): void
     {
-        $dates = collect($dates)->filter()->unique()->values();
+        foreach (array_unique(array_filter($dates)) as $date) {
+            DB::transaction(function () use ($date): void {
+                $reports = $this->reportsForDate($date, lock: true);
+                $primaryReportIds = $this->selectPrimaryReportIds($reports);
 
-        if ($dates->isEmpty()) {
-            return;
+                $reports->pluck('id')->chunk(1000)->each(function (Collection $ids): void {
+                    TripReport::query()->whereKey($ids->all())->update(['is_deduped_primary' => false]);
+                });
+                collect($primaryReportIds)->chunk(1000)->each(function (Collection $ids): void {
+                    TripReport::query()->whereKey($ids->all())->update(['is_deduped_primary' => true]);
+                });
+            }, attempts: 3);
         }
+    }
 
-        $this->whereTripDates(TripReport::query(), $dates)
-            ->update(['is_deduped_primary' => false]);
+    /** @return array<int, int> */
+    public function previewPrimaryReportIds(string $date): array
+    {
+        return $this->selectPrimaryReportIds($this->reportsForDate($date));
+    }
 
-        $primaryReportIds = [];
-        $previousGroup = null;
-
-        foreach ($this->whereTripDates(TripReport::query(), $dates)
-            ->select(['id', 'trip_date', 'dedupe_key'])
-            ->orderBy('trip_date')
-            ->orderBy('dedupe_key')
+    /** @return Collection<int, TripReport> */
+    private function reportsForDate(string $date, bool $lock = false): Collection
+    {
+        return TripReport::query()
+            ->whereDate('trip_date', $date)
+            ->with(['source', 'tripType', 'speciesCounts'])
             ->orderByDesc('source_confidence')
             ->orderBy('source_id')
             ->orderBy('id')
-            ->cursor() as $tripReport) {
-            $group = $tripReport->trip_date->toDateString().'|'.$tripReport->dedupe_key;
-
-            if ($group === $previousGroup) {
-                continue;
-            }
-
-            $primaryReportIds[] = $tripReport->id;
-            $previousGroup = $group;
-        }
-
-        collect($primaryReportIds)
-            ->chunk(1000)
-            ->each(fn ($ids) => TripReport::query()->whereKey($ids->all())->update(['is_deduped_primary' => true]));
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->get();
     }
 
-    /** @param  Collection<int, string>  $dates */
-    private function whereTripDates(Builder $query, Collection $dates): Builder
+    /**
+     * @param  Collection<int, TripReport>  $reports
+     * @return array<int, int>
+     */
+    private function selectPrimaryReportIds(Collection $reports): array
     {
-        return $query->where(function (Builder $query) use ($dates): void {
-            $dates->each(function (string $date, int $index) use ($query): void {
-                if ($index === 0) {
-                    $query->whereDate('trip_date', $date);
+        [$halfDayReports, $otherReports] = $reports->partition(
+            fn (TripReport $report): bool => in_array($report->tripType?->name, self::HALF_DAY_TRIP_TYPES, true),
+        );
+        $duplicateIds = [];
+        $groups = $halfDayReports
+            ->filter(fn (TripReport $report): bool => $report->boat_id !== null && $report->landing_id !== null
+                && $report->speciesCounts->contains(fn (SpeciesCount $count): bool => $count->count > 0 || $count->released_count > 0))
+            ->groupBy(fn (TripReport $report): string => $report->boat_id.'|'.$report->landing_id.'|'.$this->catchSignature($report));
 
-                    return;
+        foreach ($groups as $group) {
+            $directReports = $group->filter(fn (TripReport $report): bool => $report->source->source_type === SourceType::Landing);
+            $fallbackReports = $group->filter(fn (TripReport $report): bool => $this->isSportfishingReportFallbackSource($report->source));
+            $matches = [];
+
+            foreach ($fallbackReports as $fallback) {
+                $matches[$fallback->id] = $directReports
+                    ->filter(fn (TripReport $direct): bool => ($direct->trip_type_id === $fallback->trip_type_id
+                        || $direct->tripType->name === '1/2 Day' || $fallback->tripType->name === '1/2 Day')
+                        && ($direct->anglers === null || $fallback->anglers === null || $direct->anglers === $fallback->anglers))
+                    ->pluck('id')->all();
+            }
+
+            $directMatchCounts = array_count_values(array_merge(...array_values($matches)));
+            foreach ($matches as $fallbackId => $directIds) {
+                if (count($directIds) === 1 && $directMatchCounts[$directIds[0]] === 1) {
+                    $duplicateIds[] = $fallbackId;
                 }
+            }
+        }
 
-                $query->orWhereDate('trip_date', $date);
-            });
-        });
+        return $otherReports->unique('dedupe_key')->pluck('id')
+            ->merge($halfDayReports->whereNotIn('id', $duplicateIds)->pluck('id'))->values()->all();
+    }
+
+    private function catchSignature(TripReport $report): string
+    {
+        return $report->speciesCounts
+            ->map(fn (SpeciesCount $count): string => implode(':', [
+                $count->species_id, (int) $count->is_retained_count, $count->count, $count->released_count,
+            ]))
+            ->sort()->implode('|');
     }
 
     private function storeSpeciesCount(RawScrapePayload $payload, TripReport $tripReport, ParsedSpeciesCountData $speciesCount): void
