@@ -27,6 +27,12 @@ class SourceFishCountGrammar
             ->toString();
 
         $line = preg_replace_callback(
+            '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s*\(\s*(?<released>\d+)\s+(?<released_species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+released\s*\)/i',
+            fn (array $matches): string => "{$matches['retained']} {$matches['species']}, {$matches['released']} {$matches['released_species']} Released",
+            $line,
+        ) ?? $line;
+
+        $line = preg_replace_callback(
             '/\blimits\s+of\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+for\s+(?<anglers>\d+)\s+(?:anglers?|people|passengers?),?\s+so\s+(?<retained>\d+)\s+kept\s+in\s+total,?\s+(?:and\s+)?(?<released>\d+)\s+released\b/i',
             fn (array $matches): string => "{$matches['retained']} {$matches['species']} ({$matches['released']} released) for {$matches['anglers']} anglers",
             $line,
