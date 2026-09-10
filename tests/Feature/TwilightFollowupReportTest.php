@@ -74,6 +74,15 @@ class TwilightFollowupReportTest extends TestCase
         $this->assertSame([20, 2], $parsed->tripReports->pluck('anglers')->all());
     }
 
+    public function test_complete_reports_do_not_absorb_historical_followups(): void
+    {
+        $body = '<ul><li>The Tribute finished their 1.5 Day with 10 Bluefin Tuna. They had 20 Bluefin Tuna yesterday.</li><li>The New Seaforth Twilight trips have had fun fishing. They had 4 Bonito for 2 anglers. They had 30 Bonito yesterday.</li></ul>';
+        $reports = app(SourceSpecificFishCountParser::class)->parse($this->data($body))->tripReports;
+        $this->assertSame(['Tribute', 'New Seaforth'], $reports->pluck('boatName')->all());
+        $this->assertSame(['Bluefin Tuna' => 10], collect($reports[0]->speciesCounts)->pluck('count', 'speciesName')->all());
+        $this->assertSame(['Bonito' => 4], collect($reports[1]->speciesCounts)->pluck('count', 'speciesName')->all());
+    }
+
     private function data(string $body): RawPayloadData
     {
         return new RawPayloadData('seaforth_landing', CarbonImmutable::parse('2026-08-27'), 'https://example.test/counts', $body);

@@ -461,13 +461,16 @@ class SourceSpecificFishCountParser
     {
         $sentences = preg_split('/(?<!Misc\.)(?<=[.!?])\s+(?=[A-Z]|\d+\s+of\s+the\b)/', $text) ?: [];
         $fishCountText = array_shift($sentences) ?? $text;
+        $isTwilightIntroduction = preg_match('/^The\s+[A-Z][A-Za-z0-9 \'&.-]{1,60}?\s+Twilight\s+trips?\s+(?:have|has)\s+had\b[^\d.!?]*[.!?]$/i', $fishCountText) === 1;
 
         foreach ($sentences as $sentence) {
-            if (preg_match('/^(?:(?:They\s+)?also\s+(?:reported|had)|They\s+had)\b/i', $sentence) !== 1) {
+            if (preg_match('/^(?:They\s+)?also\s+(?:reported|had)\b/i', $sentence) !== 1
+                && ! ($isTwilightIntroduction && preg_match('/^They\s+had\b/i', $sentence) === 1)) {
                 break;
             }
 
             $fishCountText .= ' '.$sentence;
+            $isTwilightIntroduction = false;
         }
 
         return $fishCountText;
