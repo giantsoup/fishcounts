@@ -32,7 +32,10 @@ class DiagnosticContextFactory
         $paragraphs = $this->fishCountParagraphs($payload);
         $rawCounts = $this->sanitizeText($report->rawFishCountText ?? '');
         $matchingParagraphs = collect($paragraphs)->filter(
-            fn (string $paragraph): bool => $rawCounts !== '' && $this->containsSourceSpan($paragraph, $rawCounts),
+            fn (string $paragraph): bool => $rawCounts !== '' && (
+                $this->containsSourceSpan($paragraph, $rawCounts)
+                || $this->sanitizeText(str_replace('|', ' ', $paragraph)) === $rawCounts
+            ),
         )->values();
         $matchingParagraph = $matchingParagraphs
             ->sort(function (string $left, string $right) use ($report): int {

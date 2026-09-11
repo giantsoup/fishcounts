@@ -116,6 +116,26 @@ class ParsedReportValidatorTest extends TestCase
         $this->assertSame(['20'], $narrativeBareToken[0]->evidence['unaccounted_tokens']);
     }
 
+    public function test_ai_numeric_token_rule_accounts_for_one_matching_angler_cell_only(): void
+    {
+        $rule = app(UnaccountedNumericTokensRule::class);
+
+        foreach ([
+            ['Dolphin | Full Day | 20 | 4 Rockfish |', []],
+            ['Dolphin | Full Day | 20 | 4 Rockfish, 20 Dorado |', ['20']],
+            ['Dolphin | Full Day | 20 | 4 Rockfish | 20 |', ['20']],
+            ['Dolphin | Full Day | 21 | 4 Rockfish |', ['21']],
+            ['Dolphin Full Day 20 anglers 4 Rockfish code 20', ['20']],
+            ['Dolphin | Full Day | 20 anglers | 4 Rockfish | 20 |', ['20']],
+            ['Dolphin | Full Day | 20 passengers | 4 Rockfish | 20 |', ['20']],
+            ['Dolphin | Full Day | 20 people | 4 Rockfish | 20 |', ['20']],
+        ] as [$paragraph, $expectedTokens]) {
+            $findings = $rule->inspect($this->data($this->report(), $paragraph, format: 'ai-structured-output'));
+
+            $this->assertSame($expectedTokens, $findings[0]->evidence['unaccounted_tokens'] ?? [], $paragraph);
+        }
+    }
+
     public function test_low_result_rule_requires_source_specific_missing_report_evidence(): void
     {
         $rule = app(EmptyOrUnexpectedlySmallResultSetRule::class);

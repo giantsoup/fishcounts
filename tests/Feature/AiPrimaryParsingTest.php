@@ -108,6 +108,73 @@ class AiPrimaryParsingTest extends TestCase
             && str_starts_with($request->header('X-Client-Request-Id')[0], 'fish-parser-'));
     }
 
+    public function test_point_loma_full_row_ai_evidence_does_not_duplicate_the_angler_count_in_diagnostics(): void
+    {
+        $payload = $this->payload();
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $source = ScrapeSource::query()->where('slug', 'point_loma_sportfishing')->firstOrFail();
+        $landing = Landing::query()->where('name', 'Point Loma Sportfishing')->firstOrFail();
+        $boat = Boat::query()->firstOrCreate(
+            ['landing_id' => $landing->id, 'slug' => 'daily-double'],
+            ['name' => 'Daily Double'],
+        );
+        $catchText = '44 Calico Bass, 11 Barred Sand Bass, 7 Bonito, 1 Sheephead, 1 Barracuda';
+        $row = "Daily Double\t1/2 Day AM\t15\t{$catchText}";
+        $body = '<table><tr><td><strong>Daily Double</strong></td><td>1/2 Day AM</td><td>15</td><td>'.$catchText.'</td></tr></table>';
+        $payload->update([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-09-10',
+            'url' => 'https://www.pointlomasportfishing.com/fishcounts.php',
+            'payload' => $body,
+            'payload_hash' => hash('sha256', $body),
+        ]);
+        $response = $this->providerResponse(40);
+        $decoded = json_decode($response['output'][0]['content'][0]['text'], true, flags: JSON_THROW_ON_ERROR);
+        $expectedCounts = ['Calico Bass' => 44, 'Sand Bass' => 11, 'Bonito' => 7, 'Sheephead' => 1, 'Barracuda' => 1];
+        $decoded['reports'][0] = [
+            'source_item_id' => 'block:0001',
+            'evidence_spans' => [$row],
+            'raw_boat_name' => 'Daily Double',
+            'canonical_boat_id' => $boat->id,
+            'raw_landing_name' => $landing->name,
+            'canonical_landing_id' => $landing->id,
+            'raw_trip_type' => '1/2 Day AM',
+            'canonical_trip_type_id' => TripType::query()->where('name', '1/2 Day AM')->firstOrFail()->id,
+            'anglers' => 15,
+            'raw_fish_count_text' => $row,
+            'species_counts' => collect($expectedCounts)->map(function (int $count, string $name): array {
+                $rawName = $name === 'Sand Bass' ? 'Barred Sand Bass' : $name;
+
+                return [
+                    'raw_species_name' => $rawName,
+                    'canonical_species_id' => Species::query()->where('name', $name)->firstOrFail()->id,
+                    'retained_count' => $count,
+                    'released_count' => 0,
+                    'evidence_spans' => ["{$count} {$rawName}"],
+                ];
+            })->values()->all(),
+        ];
+        $response['output'][0]['content'][0]['text'] = json_encode($decoded, JSON_THROW_ON_ERROR);
+        Http::fake(['*/responses' => Http::response($response, 200)]);
+        Queue::fake();
+
+        $result = app(ParseRawPayloadAction::class)->handleWithOptions(
+            $payload->id,
+            new ParseRawPayloadOptions(parserEngine: ParserEngine::Ai, executionKey: 'point-loma-full-row'),
+        );
+
+        $execution = ParserExecution::query()->sole();
+        $this->assertSame(ParserEngine::Ai, $execution->selected_engine, $execution->fallback_message ?? '');
+        $report = TripReport::query()->with('speciesCounts.species')->sole();
+        $this->assertSame(15, $report->anglers);
+        $this->assertEquals($expectedCounts, $report->speciesCounts->mapWithKeys(
+            fn (SpeciesCount $count): array => [$count->species->name => $count->count],
+        )->all());
+        $this->assertFalse($payload->parserErrors()->where('error_type', 'unaccounted_numeric_tokens')->exists());
+        $this->assertSame(0, $result->diagnosticCount);
+        Http::assertSentCount(1);
+    }
+
     public function test_provider_authentication_failure_falls_back_to_deterministic_output(): void
     {
         $payload = $this->payload();

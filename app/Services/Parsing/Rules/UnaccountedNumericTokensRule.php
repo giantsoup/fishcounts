@@ -18,7 +18,8 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             return [];
         }
 
-        $remaining = $this->sourceText($data);
+        $sourceText = $this->sourceText($data);
+        $remaining = $sourceText;
         $remaining = preg_replace([
             '/\b\d{4}-\d{2}-\d{2}\b/',
             '/\([^)]*(?:lbs?|pounds?)\b[^)]*\)/i',
@@ -35,7 +36,9 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
             }
         }
 
-        if ($data->format === 'structured-table' && $data->report->anglers !== null) {
+        if (in_array($data->format, ['structured-table', 'ai-structured-output'], true)
+            && $data->report->anglers !== null
+            && preg_match('/\b'.$data->report->anglers.'\s+(?:anglers?|people|passengers?)\b/i', $sourceText) !== 1) {
             $remaining = preg_replace(
                 '/\|\s*'.preg_quote((string) $data->report->anglers, '/').'\s*\|/u',
                 '| |',

@@ -458,6 +458,29 @@ class ParserDiagnosticPersistenceTest extends TestCase
         $this->assertSame('Sea Watch | 30 anglers | Full Day | 4 Rockfish', $paragraph);
     }
 
+    public function test_context_matches_a_complete_ai_row_without_losing_table_cell_boundaries(): void
+    {
+        $payload = new RawPayloadData(
+            sourceKey: 'point_loma_sportfishing',
+            targetDate: CarbonImmutable::parse('2026-09-10'),
+            url: 'https://www.pointlomasportfishing.com/fishcounts.php',
+            body: '<table>'
+                .'<tr><td>Daily Double</td><td>1/2 Day AM</td><td>115</td><td>4 Rockfish</td></tr>'
+                .'<tr><td>Daily Double</td><td>1/2 Day AM</td><td>15</td><td>4 Rockfish</td></tr>'
+                .'</table>',
+        );
+        $report = $this->report(
+            boat: 'Daily Double',
+            anglers: 15,
+            rawText: 'Daily Double 1/2 Day AM 15 4 Rockfish',
+        );
+
+        $this->assertSame(
+            'Daily Double | 1/2 Day AM | 15 | 4 Rockfish |',
+            app(DiagnosticContextFactory::class)->paragraphForReport($payload, $report),
+        );
+    }
+
     public function test_context_prefers_the_exact_count_span_when_identity_fields_are_unavailable(): void
     {
         $factory = app(DiagnosticContextFactory::class);
