@@ -166,6 +166,11 @@ class ParsedReportValidator
 
     private function hasSourceSpecificReportEvidence(string $paragraph, string $strategy): bool
     {
+        if (in_array($strategy, ['structured_report_row', 'party_boat_score_row'], true)
+            && preg_match('/(?:^|\|)\s*\d+\s+boats?\s*\|\s*\d+\s+trips?\s*\|/i', $paragraph) === 1) {
+            return false;
+        }
+
         $hasAnglerCount = preg_match('/\b\d+\s+(?:anglers?|people|passengers?)\b/i', $paragraph) === 1;
         $hasSpeciesCount = preg_match('/\b\d+\s+(?!(?:anglers?|people|passengers?|boats?|trips?|days?|hours?|lbs?|pounds?|oz)\b)[A-Za-z][A-Za-z .\'-]{2,}/i', $paragraph) === 1;
 

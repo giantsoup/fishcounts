@@ -120,6 +120,37 @@ class SeptemberParserRegressionTest extends TestCase
         return ['no date' => [''], 'date prefix' => ['9/17/2026 ']];
     }
 
+    #[DataProvider('aggregateRows')]
+    public function test_table_totals_do_not_hide_or_create_missing_trip_diagnostics(string $summaryRow): void
+    {
+        $payload = new RawPayloadData(
+            sourceKey: 'point_loma_sportfishing',
+            targetDate: CarbonImmutable::parse('2026-09-12'),
+            url: 'https://example.test/counts',
+            body: '<table><tr><td>Daily Double</td><td>1/2 Day AM</td><td>20 Anglers</td><td>10 Rockfish</td></tr>'
+                .'<tr><td>Mission Belle</td><td>Full Day</td><td>12 Anglers</td><td>23 Yellowtail</td></tr>'
+                .$summaryRow.'</table>',
+        );
+        $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
+        $this->assertSame(['Daily Double', 'Mission Belle'], $parsed->tripReports->pluck('boatName')->all());
+
+        $diagnostics = $this->structuralDiagnostics($payload, $parsed->tripReports->first());
+
+        $this->assertCount(1, $diagnostics);
+        $this->assertSame(ParserDiagnosticType::EmptyOrUnexpectedlySmallResultSet, $diagnostics[0]->type);
+        $this->assertSame('Mission Belle | Full Day | 12 Anglers | 23 Yellowtail |', $diagnostics[0]->context['sanitized_paragraph']);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function aggregateRows(): array
+    {
+        return [
+            'landing total' => ['<tr><td>3 Boats</td><td>4 Trips</td><td>80 Anglers</td><td>147 Barred Sand Bass, 177 Bonito, 4 Calico Bass, 3 Sheephead, 2 Skipjack Tuna, 41 Yellowfin Tuna, 40 Yellowtail</td></tr>'],
+            'dock total' => ['<tr><td>San Diego Dock Total</td><td>13 Boats</td><td>16 Trips</td><td>488 Anglers</td><td>1023 Bonito, 520 Yellowfin Tuna, 223 Sand Bass, 147 Barred Sand Bass, 84 Calico Bass, 76 Dorado, 55 Yellowtail, 31 Barracuda, 24 Sculpin, 12 Skipjack Tuna, 11 Rockfish, 7 Bullet Tuna, 5 Sheephead, 2 White Seabass, 2 Striped Marlin, 1 Pilot Fish</td></tr>'],
+            'single boat total' => ['<tr><td>1 Boat</td><td>1 Trip</td><td>12 Anglers</td><td>23 Yellowtail</td></tr>'],
+        ];
+    }
+
     /** @return array<int, ParserDiagnosticData> */
     private function structuralDiagnostics(RawPayloadData $payload, ParsedTripReportData $report): array
     {
