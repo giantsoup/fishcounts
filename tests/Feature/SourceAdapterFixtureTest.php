@@ -36,7 +36,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('Full Day', $report->tripTypeName);
         $this->assertSame(20, $report->anglers);
-        $this->assertSame('source-specific-fishermans_landing-v7', $report->metadata['parser']);
+        $this->assertSame('source-specific-fishermans_landing-v8', $report->metadata['parser']);
         $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
         $this->assertSame(40, $report->speciesCounts[0]->count);
         $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
@@ -95,7 +95,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Premier', $report->boatName);
         $this->assertSame('2026-07-22', $report->tripDate->toDateString());
         $this->assertSame(93, $report->speciesCounts[0]->count);
-        $this->assertSame('source-specific-hm_landing-v7', $parsed->parserVersion);
+        $this->assertSame('source-specific-hm_landing-v8', $parsed->parserVersion);
     }
 
     public function test_fishermans_landing_parser_only_reads_the_requested_date_section(): void
@@ -121,7 +121,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Dolphin', $report->boatName);
         $this->assertSame('2026-07-22', $report->tripDate->toDateString());
         $this->assertSame(40, $report->speciesCounts[0]->count);
-        $this->assertSame('source-specific-fishermans_landing-v7', $parsed->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v8', $parsed->parserVersion);
     }
 
     public function test_hm_landing_parser_fails_closed_without_trusted_date_markers(): void
@@ -253,7 +253,7 @@ class SourceAdapterFixtureTest extends TestCase
         $report = $parsed->tripReports->first();
 
         $this->assertCount(1, $parsed->tripReports);
-        $this->assertSame('The Sea Watch local', $report->boatName);
+        $this->assertSame('Sea Watch local', $report->boatName);
         $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('3/4 Day', $report->tripTypeName);
         $this->assertSame(28, $report->anglers);
@@ -414,7 +414,7 @@ class SourceAdapterFixtureTest extends TestCase
         ));
 
         $this->assertSame(
-            ['Dolphin', 'Islander', 'Fortune', 'Liberty', 'Pegasus', 'Constitution', 'The Dolphin'],
+            ['Dolphin', 'Islander', 'Fortune', 'Liberty', 'Pegasus', 'Constitution', 'Dolphin'],
             $parsed->tripReports->pluck('boatName')->all(),
         );
         $this->assertCount(7, $parsed->tripReports);
@@ -766,7 +766,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Point Loma Sportfishing', $report->landingName);
         $this->assertSame('3/4 Day', $report->tripTypeName);
         $this->assertSame(28, $report->anglers);
-        $this->assertSame('source-specific-sandiego_fish_reports-v7', $report->metadata['parser']);
+        $this->assertSame('source-specific-sandiego_fish_reports-v8', $report->metadata['parser']);
         $this->assertSame('Rockfish', $report->speciesCounts[1]->speciesName);
         $this->assertSame(140, $report->speciesCounts[1]->count);
     }
@@ -921,7 +921,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $dolphin->landingName);
         $this->assertSame('1/2 Day', $dolphin->tripTypeName);
         $this->assertSame(25, $dolphin->anglers);
-        $this->assertSame('source-specific-sportfishingreport-party-boat-scores-v5', $dolphin->metadata['parser']);
+        $this->assertSame('source-specific-sportfishingreport-party-boat-scores-v6', $dolphin->metadata['parser']);
         $this->assertSame('party-boat-scores', $dolphin->metadata['format']);
         $this->assertSame('fallback', $dolphin->metadata['source_role']);
         $this->assertSame('Southern Cal', $southernCal->boatName);
@@ -986,7 +986,8 @@ class SourceAdapterFixtureTest extends TestCase
             sanitizedParagraph: $paragraph,
         ));
 
-        $this->assertSame('10 Bluefin Tuna |', $paragraph);
+        $this->assertStringContainsString('27 Anglers | 2 Day Trip | | 10 Bluefin Tuna |', $paragraph);
+        $this->assertStringNotContainsString('110 Bluefin Tuna', $paragraph);
         $this->assertSame([], $diagnostics);
     }
 }

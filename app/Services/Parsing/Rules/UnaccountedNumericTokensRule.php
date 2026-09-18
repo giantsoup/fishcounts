@@ -22,6 +22,10 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
         $remaining = $sourceText;
         $remaining = preg_replace([
             '/\b\d{4}-\d{2}-\d{2}\b/',
+            '/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/',
+            '/\b\d{1,2}:\d{2}\s*(?:AM|PM)\b/i',
+            '/#\d+(?:-\d+)?(?:\/\d+)?\b/',
+            '/\b\d+(?:\.\d+)?\s*(?:-|to|\x{2013})\s*\d+(?:\.\d+)?\s*(?:lbs?|pounds?|oz)\b/iu',
             '/\([^)]*(?:lbs?|pounds?)\b[^)]*\)/i',
             '/\(\s*(?:up\s+to\s+)?\d+(?:\s*(?:-|to|\x{2013})\s*\d+)?\s*\)/iu',
             '/\b\d+(?:\.\d+|\/\d+)?\s*(?:day|hour)s?\b/i',

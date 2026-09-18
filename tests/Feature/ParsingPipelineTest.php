@@ -285,7 +285,7 @@ class ParsingPipelineTest extends TestCase
         $report = $parsed->tripReports->first();
 
         $this->assertCount(1, $parsed->tripReports);
-        $this->assertSame('The Dolphin', $report->boatName);
+        $this->assertSame('Dolphin', $report->boatName);
         $this->assertSame('1/2 Day PM', $report->tripTypeName);
         $this->assertSame(56, $report->anglers);
         $this->assertSame(['Rockfish', 'Yellowtail'], collect($report->speciesCounts)->pluck('speciesName')->all());

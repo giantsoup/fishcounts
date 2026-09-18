@@ -30,12 +30,8 @@ class DiagnosticContextFactory
     public function paragraphForReport(RawPayloadData $payload, ParsedTripReportData $report): string
     {
         $paragraphs = $this->fishCountParagraphs($payload);
-        $rawCounts = $this->sanitizeText($report->rawFishCountText ?? '');
         $matchingParagraphs = collect($paragraphs)->filter(
-            fn (string $paragraph): bool => $rawCounts !== '' && (
-                $this->containsSourceSpan($paragraph, $rawCounts)
-                || $this->sanitizeText(str_replace('|', ' ', $paragraph)) === $rawCounts
-            ),
+            fn (string $paragraph): bool => $this->paragraphMatchesReport($paragraph, $report),
         )->values();
         $matchingParagraph = $matchingParagraphs
             ->sort(function (string $left, string $right) use ($report): int {
@@ -59,12 +55,29 @@ class DiagnosticContextFactory
         ])->filter()->implode(' | '));
     }
 
+    public function paragraphMatchesReport(string $paragraph, ParsedTripReportData $report): bool
+    {
+        $rawCounts = $this->sanitizeText($report->rawFishCountText ?? '');
+
+        if ($rawCounts === '') {
+            return false;
+        }
+
+        $rawCounts = preg_replace('/^\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\s+/', '', $rawCounts) ?? $rawCounts;
+
+        return $this->containsSourceSpan($paragraph, $rawCounts)
+            || $this->sanitizeText(str_replace('|', ' ', $paragraph)) === $rawCounts;
+    }
+
     /** @return array<int, string> */
     public function fishCountParagraphs(RawPayloadData $payload): array
     {
         $body = in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)
             ? $this->documentScope->forPayload($payload)
             : $payload->body;
+        if (str_contains($body, '<')) {
+            $body = preg_replace('/\R+/', ' ', $body) ?? $body;
+        }
         $body = preg_replace('/<(script|style|head|nav|form)\b[^>]*>.*?<\/\1>/is', ' ', $body) ?? '';
         $body = preg_replace('/<div\b(?=[^>]*(?:border-top\s*:\s*1px|\bclass=[\'\"][^\'\"]*\brow\b))[^>]*>/i', "\n", $body) ?? $body;
         $body = preg_replace('/<\/(?:p|li|tr|section|article|table|h[1-6])\s*>/i', "\n", $body) ?? $body;

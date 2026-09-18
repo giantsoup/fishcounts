@@ -1085,7 +1085,7 @@ class AiPrimaryParsingTest extends TestCase
         $execution = ParserExecution::query()->sole();
         $this->assertSame(0, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-sandiego_fish_reports-v7', $result->parserVersion);
+        $this->assertSame('source-specific-sandiego_fish_reports-v8', $result->parserVersion);
         $this->assertSame(ParserEngine::Ai, $execution->requested_engine);
         $this->assertSame(ParserEngine::Deterministic, $execution->selected_engine);
         $this->assertSame('completed', $execution->status);

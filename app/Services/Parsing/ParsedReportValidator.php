@@ -136,9 +136,7 @@ class ParsedReportValidator
         return $paragraphs
             ->reject(function (string $paragraph) use ($parsed): bool {
                 return $parsed->tripReports->contains(function ($report) use ($paragraph): bool {
-                    $rawCounts = $this->contextFactory->sanitizeDiagnosticText($report->rawFishCountText ?? '');
-
-                    return $rawCounts !== '' && $this->contextFactory->containsSourceSpan($paragraph, $rawCounts);
+                    return $this->contextFactory->paragraphMatchesReport($paragraph, $report);
                 });
             })
             ->map(function (string $paragraph, int $index) use ($payload, $parsed, $paragraphs, $evidenceStrategy): ParsedReportValidationData {

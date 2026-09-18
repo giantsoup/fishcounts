@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    public const string PARSER_VERSION = 'generic-line-v6';
+    public const string PARSER_VERSION = 'generic-line-v7';
 
     public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
 
@@ -123,14 +123,15 @@ class GenericFishCountParser
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:reverse(?:d)?\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)?\s+with\s+\d+\s+(?:anglers?|people|passengers?)\b(?:\s+aboard)?/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day(?:\s+(?:am|pm))?|(?:am|pm)\s+half[-\s]+day|half[-\s]+day(?:\s+(?:am|pm))?|full\s+day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
+            ->replaceMatches('/\bfor\s+their\s+\d+\s+anglers?\s+(?:1\/2|3\/4)\s+Day\s+trip\b/i', '')
             ->replaceMatches('/\bfor their\s+[^,.]{1,40}?\s+with\s+\d+\s+anglers?\b[^,.]*/i', '')
-            ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day(?:\s+(?:am|pm))?|(?:am|pm)\s+half[-\s]+day|half[-\s]+day(?:\s+(?:am|pm))?|full\s*day|overnight|twilight)\s+(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
+            ->replaceMatches('/\bon\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day(?:\s+(?:am|pm))?|(?:am|pm)\s+half[-\s]+day|half[-\s]+day(?:\s+(?:am|pm))?|full\s*day|overnight|twilight)\s+(?:private\s+)?(?:trip|charter)\b(?:\s+(?:(?:for|with)\s+)?\d+\s+(?:anglers?|people|passengers?))?/i', '')
             ->replaceMatches('/\b(?:from\s+)?(?:their\s+|a\s+|an\s+)?(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day\s+(?:(?:trip|charter)\s+|today\s+)?(?:with|wth)\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+|a\s+|an\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s*(?:trip|charter)?\s+for\s+\d+\s+(?:anglers?|people|passengers?)\b/i', '')
             ->replaceMatches('/\bfor\s+\d+\s+(?:anglers?|people|passengers?)\s+on\s+their\s+\d+(?:\.\d+)?\s*(?:day\s+)?charter\b/i', '')
             ->replaceMatches('/\bfor\s+(?:their\s+)?\d+\s+(?:anglers?|people|passengers?)\b(?:\s+on\s+(?:their\s+|a\s+|an\s+)?(?:reverse(?:d)?\s+)?(?:(?:\d+(?:\.\d+)?|1\/2|3\/4)\s*day|half\s+day|full\s+day|overnight|twilight)\s+(?:trip|charter))?/i', '')
             ->replaceMatches('/\bwith\s+\d+\s+anglers?\s+aboard\b/i', '')
-            ->replaceMatches('/\b\d+\s+(?:anglers?|people|passengers?)\s+(?:returned\s+with|caught|landed|had)\b/i', '')
+            ->replaceMatches('/\b\d+\s+(?:anglers?|people|passengers?)\s+(?:returned\s+with|caught|landed|had|finished\s+up\s+their\s+trip\s+with)\b/i', '')
             ->replaceMatches('/\s+and\s+(?=\d+\s+)/i', ', ')
             ->toString();
 
@@ -219,15 +220,16 @@ class GenericFishCountParser
         $line = Str::of($line)->replace("\u{00A0}", ' ')->squish()->toString();
 
         foreach ([
+            '/^(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:AM|PM)\s+trip\s+(?=\d+\s+[A-Za-z])/i',
             '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:AM|PM)\s+(?:with\s+)?\d+\s+(?:anglers?|people|passengers?)\b/i',
             '/^(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+on\s+(?:a|the|their)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|captured|returned|landed|finished|called\s+in)\b/i',
             '/^(?<boat>(?:The\s+)?[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|captured|returned|landed|finished|called\s+in)\b/i',
-            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:trip\s+)?(?:also\s+)?(?:just\s+)?(?:fished|caught|captured|returned|came\s+back|is\s+returning|is\s+up\s+to|had|has|finished(?:\s+up)?|ended|called\s+in|checked\s+in)\b/i',
+            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:trip\s+)?(?:also\s+)?(?:just\s+)?(?:fished|caught|captured|returned|came\s+back|is\s+returning|is\s+up\s+to|had|has|finished(?:\s+up)?|ended|return|called(?:\s+in)?|checked\s+in)\b/i',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
             if (preg_match($pattern, $line, $matches)) {
                 return Str::of($matches['boat'])
-                    ->replaceMatches('/^(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+/i', '')
+                    ->replaceMatches('/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|The)\s+/i', '')
                     ->squish()
                     ->toString();
             }

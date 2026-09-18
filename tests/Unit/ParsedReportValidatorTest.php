@@ -136,6 +136,20 @@ class ParsedReportValidatorTest extends TestCase
         }
     }
 
+    public function test_ai_numeric_accounting_ignores_tackle_and_departure_numbers_but_keeps_missing_catches(): void
+    {
+        $rule = app(UnaccountedNumericTokensRule::class);
+        foreach ([
+            ['Dolphin | Full Day | 20 anglers | 4 Rockfish. Bring a 25-30lb live bait setup and hooks between #2-2/0.', []],
+            ['Dolphin | Full Day | 20 anglers | 4 Rockfish. Departing at 5:30AM on 9/16/26.', []],
+            ['Dolphin | Full Day | 20 anglers | 4 Rockfish, 25 Yellowtail. Bring a 25-30lb setup.', ['25']],
+            ['Dolphin | Full Day | 20 anglers | 4 Rockfish, 2 Dorado. Bring hooks between #2-2/0.', ['2']],
+        ] as [$paragraph, $expectedTokens]) {
+            $findings = $rule->inspect($this->data($this->report(), $paragraph, format: 'ai-structured-output'));
+            $this->assertSame($expectedTokens, $findings[0]->evidence['unaccounted_tokens'] ?? [], $paragraph);
+        }
+    }
+
     public function test_low_result_rule_requires_source_specific_missing_report_evidence(): void
     {
         $rule = app(EmptyOrUnexpectedlySmallResultSetRule::class);

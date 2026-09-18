@@ -15,6 +15,12 @@ class SourceFishCountGrammar
             ->replace("\u{200B}", '')
             ->replaceMatches('/\bBluefun\s+Tuna\b/i', 'Bluefin Tuna')
             ->replaceMatches('/\bFullday\b/i', 'Full Day')
+            ->replaceMatches('/\b(1\/2|3\/4)\s+trip\b/i', '$1 Day trip')
+            ->replaceMatches('/\bfor(?=\d+\s+anglers?\b)/i', 'for ')
+            ->replaceMatches('/\bon\s+a(?=\d+(?:\.\d+)?\s*day\b)/i', 'on a ')
+            ->replaceMatches('/\bona\s+(?=\d+(?:\.\d+)?\s*day\b)/i', 'on a ')
+            ->replaceMatches('/\bfpr(?=\s+\d+\s+anglers?\b)/i', 'for')
+            ->replaceMatches('/(?<=\d)\+(?=\s+released\b)/i', '')
             ->replaceMatches('/\s*\(\s*(?:up\s+to\s+)?\d+(?:\s*(?:-|to)\s*\d+)?\s*#\s*\)/i', '')
             ->replaceMatches('/\s*\(\s*fishing\s+[A-Za-z .-]+\)/i', '')
             ->replaceMatches('/\s+with\s+\d+\s+between\s+\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
@@ -32,10 +38,16 @@ class SourceFishCountGrammar
             ->replaceMatches('/(?<=\d\s)quality\s+(?=[A-Za-z])/i', '')
             ->replaceMatches('/\s+(?:and\s+)?still\s+fishing(?=\s+(?:on|for|with)\b|\s*[,.;!]|$)/i', '')
             ->replaceMatches('/\s+so\s+far(?:\s+still\s+fishing)?(?=\s+(?:on|for|with)\b|[.!]|$)/i', '')
-            ->replaceMatches('/\s+to\s+start\s+the\s+trip(?=[.!]|$)/i', '')
+            ->replaceMatches('/\s+to\s+start\s+(?:the|their)\s+trip(?=[.!]|$)/i', '')
             ->replaceMatches('/\(\s*\d+\s*@\s*\d+\s+to\s+\d+#\s*\)/i', '')
             ->replaceMatches('/\s+and\s+hooked\s+many\s+more\b/i', '')
             ->toString();
+
+        $line = preg_replace_callback(
+            '/(?<first_count>\d+)\s+(?<first_species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+and\s+(?<second_count>\d+)\s+(?<second_species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+both\s+released\b/i',
+            fn (array $matches): string => "{$matches['first_count']} {$matches['first_species']} Released, {$matches['second_count']} {$matches['second_species']} Released",
+            $line,
+        ) ?? $line;
 
         $line = preg_replace_callback(
             '/(?<retained>\d+)\s+(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s*\(\s*(?<released>\d+)\s+(?<released_species>[A-Za-z][A-Za-z .\'-]{2,40}?)\s+released\s*\)/i',
