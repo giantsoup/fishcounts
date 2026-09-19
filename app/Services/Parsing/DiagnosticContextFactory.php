@@ -72,7 +72,7 @@ class DiagnosticContextFactory
     /** @return array<int, string> */
     public function fishCountParagraphs(RawPayloadData $payload): array
     {
-        $body = in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)
+        $body = in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing', 'sportfishingreport_landing_pages'], true)
             ? $this->documentScope->forPayload($payload)
             : $payload->body;
         if (str_contains($body, '<')) {

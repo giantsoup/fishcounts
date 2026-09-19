@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v8";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v9";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -57,7 +57,7 @@ class SourceSpecificFishCountParser
             metadata: $payload->metadata,
         );
 
-        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v8");
+        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v9");
 
         if ($scopedBody !== '' && $scopedBody !== $payload->body && $parsed->tripReports->isEmpty()) {
             return new ParsedFishCountCollection($parsed->tripReports, $parsed->parserVersion, 'aggregate-only');
@@ -68,7 +68,7 @@ class SourceSpecificFishCountParser
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v6';
+        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v7';
         $panelHtml = $this->documentScope->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {

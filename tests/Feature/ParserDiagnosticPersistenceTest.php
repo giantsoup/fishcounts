@@ -248,7 +248,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
 
         $this->assertSame(1, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-fishermans_landing-v8', $result->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v9', $result->parserVersion);
         $this->assertSame($boatName, $report->boat->name);
         $this->assertSame($boatName, $report->raw_boat_name);
         $this->assertSame($tripType, $report->raw_trip_type);
@@ -489,8 +489,10 @@ class ParserDiagnosticPersistenceTest extends TestCase
             targetDate: CarbonImmutable::parse('2026-07-12'),
             url: 'https://www.sportfishingreport.com/dock_totals/boats.php',
             body: implode('', [
+                '<div class="panel"><h2>San Diego Fish Counts</h2>',
                 '<p>18 Bluefin Tuna, 24 Yellowtail, 3 Dorado, 1 Yellowfin Tuna</p>',
                 '<p>18 Bluefin Tuna</p>',
+                '</div>',
             ]),
         );
         $report = $this->report(rawText: '18 Bluefin Tuna', species: 'Bluefin Tuna', retained: 18);
