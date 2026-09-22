@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v9";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v10";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -57,7 +57,7 @@ class SourceSpecificFishCountParser
             metadata: $payload->metadata,
         );
 
-        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v9");
+        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v10");
 
         if ($scopedBody !== '' && $scopedBody !== $payload->body && $parsed->tripReports->isEmpty()) {
             return new ParsedFishCountCollection($parsed->tripReports, $parsed->parserVersion, 'aggregate-only');
@@ -68,7 +68,7 @@ class SourceSpecificFishCountParser
 
     private function parseSportfishingReportPartyBoatScoresPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v7';
+        $parserVersion = 'source-specific-sportfishingreport-party-boat-scores-v8';
         $panelHtml = $this->documentScope->sportfishingReportSanDiegoPanelHtml($payload->body);
 
         if ($panelHtml === null) {
@@ -380,9 +380,9 @@ class SourceSpecificFishCountParser
 
     private function seaforthListItemPattern(): string
     {
-        $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half\s+Day|Full\s+Day\s+Coronado\s+Islands|Full\s+Day|Overnight|Twilight';
+        $tripPattern = '(?:\d+(?:\.\d+)?|1\/2|3\/4|One|Two|Three|Four)\s*Day|Half[-\s]+Day|Full[-\s]+Day\s+Coronado\s+Islands|Full[-\s]+Day|Overnight|Twilight';
         $returnPhrase = '(?:also\s+)?(?:returned|ended|arrived)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
-        $statusPhrase = '(?:started\s+off\s+day\s+(?:\d+|one|two|three|four)\s+of\s+their\s+|(?:just\s+)?checked\s+in\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|reported\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+today(?:\'s)?\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
+        $statusPhrase = '(?:started\s+off\s+day\s+(?:\d+|one|two|three|four)\s+of\s+their\s+|(?:just\s+)?checked\s+in(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|reported\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+their\s+|wrapped\s+up\s+(?:their|today(?:\'s)?)\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
         $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening|night))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+(?:a|the|their)\s+)?(?:(?<period_after>AM|PM)\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
         $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned|ended)(?:\s+from\s+their)?\s+)?';
 
@@ -445,7 +445,8 @@ class SourceSpecificFishCountParser
             ->replaceMatches('/^Two\s+Day$/i', '2 Day')
             ->replaceMatches('/^Three\s+Day$/i', '3 Day')
             ->replaceMatches('/^Four\s+Day$/i', '4 Day')
-            ->replaceMatches('/^Half\s+Day$/i', '1/2 Day')
+            ->replaceMatches('/^Half[-\s]+Day$/i', '1/2 Day')
+            ->replaceMatches('/^Full[-\s]+Day\b/i', 'Full Day')
             ->replaceMatches('/^(1\/2|3\/4)[-\s]*Day$/i', fn (array $matches): string => $matches[1].' Day')
             ->squish()
             ->title()

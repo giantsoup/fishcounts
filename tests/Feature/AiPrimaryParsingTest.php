@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -246,6 +247,91 @@ class AiPrimaryParsingTest extends TestCase
         $this->assertSame(AiParserAttemptCostBasis::Metered, $attempt->cost_basis);
         $this->assertSame('domain_validation', $attempt->failure_stage);
         $this->assertStringContainsString('fabricated evidence', $attempt->failure_message);
+    }
+
+    #[DataProvider('partyBoatDuplicateResponses')]
+    public function test_party_boat_rows_cannot_be_split_into_duplicate_release_reports(bool $duplicate): void
+    {
+        $payload = $this->payload();
+        $source = ScrapeSource::query()->where('slug', 'sportfishingreport_landing_pages')->firstOrFail();
+        $landing = Landing::query()->where('name', 'Seaforth Sportfishing')->firstOrFail();
+        $boat = Boat::query()->firstOrCreate(['slug' => 'new-seaforth', 'landing_id' => $landing->id], ['name' => 'New Seaforth']);
+        $tripType = TripType::query()->where('name', '1/2 Day')->firstOrFail();
+        $rows = [
+            [51, ['Sand Bass' => 3, 'Sculpin' => 4, 'Sheephead' => 5, 'Yellowtail' => 2, 'Calico Bass' => 33, 'Bonito' => 55, 'Rockfish' => 3]],
+            [40, ['Sand Bass' => 3, 'Sculpin' => 1, 'Sheephead' => 20, 'Calico Bass' => 5, 'Whitefish' => 4, 'Bonito' => 65]],
+        ];
+        $body = "<div class='panel'><h2>San Diego Fish Counts</h2>";
+        $reports = [];
+        foreach ($rows as $index => [$anglers, $counts]) {
+            $catchText = collect($counts)->map(fn (int $count, string $name): string => "{$count} {$name}")->implode(', ');
+            if ($index === 0) {
+                $catchText .= ', 100 Calico Bass Released';
+            }
+            $body .= <<<HTML
+                <div style='background-color: #FFFFFF; padding: 10px; border-top: 1px solid #dedede;'>
+                    <div class="row">
+                        <div class="col-xs-12 col-md-4"><a href="/boat"><b>New Seaforth</b></a><br><a href="/landing">Seaforth Sportfishing</a><br>San Diego, CA<br><br></div>
+                        <div class="col-xs-3 col-md-2">{$anglers} Anglers</div>
+                        <div class="col-xs-3 col-md-2">1/2 Day Trip</div>
+                        <div class="col-xs-3 col-md-1">&nbsp;</div>
+                        <div class="col-xs-11 col-md-3">{$catchText}</div>
+                    </div>
+                </div>
+                HTML;
+            $reports[] = [
+                'source_item_id' => sprintf('block:%04d', $index + 1),
+                'evidence_spans' => ['New Seaforth | Seaforth Sportfishing', "{$anglers} Anglers", '1/2 Day Trip', $catchText],
+                'raw_boat_name' => 'New Seaforth', 'canonical_boat_id' => $boat->id,
+                'raw_landing_name' => $landing->name, 'canonical_landing_id' => $landing->id,
+                'raw_trip_type' => '1/2 Day', 'canonical_trip_type_id' => $tripType->id,
+                'anglers' => $anglers, 'raw_fish_count_text' => $catchText,
+                'species_counts' => collect($counts)->map(fn (int $count, string $name): array => [
+                    'raw_species_name' => $name,
+                    'canonical_species_id' => Species::query()->where('name', $name)->firstOrFail()->id,
+                    'retained_count' => $count,
+                    'released_count' => $index === 0 && $name === 'Calico Bass' ? 100 : 0,
+                    'evidence_spans' => [$name === 'Calico Bass' && $index === 0 ? $catchText : "{$count} {$name}"],
+                ])->values()->all(),
+            ];
+        }
+        $body .= '</div>';
+        $payload->update(['scrape_source_id' => $source->id, 'payload' => $body, 'payload_hash' => hash('sha256', $body)]);
+        if ($duplicate) {
+            $extra = $reports[0];
+            $extra['source_item_id'] = 'block:0001#2';
+            $extra['species_counts'] = [collect($extra['species_counts'])->firstWhere('raw_species_name', 'Calico Bass')];
+            $extra['species_counts'][0]['retained_count'] = 0;
+            $extra['raw_fish_count_text'] = '100 Calico Bass Released';
+            $reports[] = $extra;
+        }
+        $response = $this->providerResponse(40);
+        $response['output'][0]['content'][0]['text'] = json_encode(['reports' => $reports], JSON_THROW_ON_ERROR);
+        Http::fake(['*/responses' => Http::response($response, 200)]);
+        Queue::fake();
+
+        app(ParseRawPayloadAction::class)->handleWithOptions($payload->id, new ParseRawPayloadOptions(parserEngine: ParserEngine::Ai, executionKey: 'party-boat-row-identity'));
+
+        $execution = ParserExecution::query()->sole();
+        $this->assertSame($duplicate ? ParserEngine::Deterministic : ParserEngine::Ai, $execution->selected_engine, $execution->fallback_message ?? '');
+        if ($duplicate) {
+            $this->assertSame('domain_validation', $execution->fallback_category);
+            $this->assertStringContainsString('duplicated a source item', $execution->fallback_message);
+        }
+        $stored = TripReport::query()->with('speciesCounts.species')->orderByDesc('anglers')->get();
+        $this->assertCount(2, $stored);
+        foreach ($rows as $index => [$anglers, $counts]) {
+            $this->assertSame($anglers, $stored[$index]->anglers);
+            $this->assertEquals($counts, $stored[$index]->speciesCounts->mapWithKeys(fn (SpeciesCount $count): array => [$count->species->name => $count->count])->all());
+            $this->assertSame($index === 0 ? 100 : 0, $stored[$index]->speciesCounts->sum('released_count'));
+        }
+        Http::assertSentCount(1);
+    }
+
+    /** @return array<string, array{bool}> */
+    public static function partyBoatDuplicateResponses(): array
+    {
+        return ['separate rows' => [false], 'release-only duplicate' => [true]];
     }
 
     public function test_duplicate_evidence_spans_fall_back_before_persistence(): void
@@ -1085,7 +1171,7 @@ class AiPrimaryParsingTest extends TestCase
         $execution = ParserExecution::query()->sole();
         $this->assertSame(0, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-sandiego_fish_reports-v9', $result->parserVersion);
+        $this->assertSame('source-specific-sandiego_fish_reports-v10', $result->parserVersion);
         $this->assertSame(ParserEngine::Ai, $execution->requested_engine);
         $this->assertSame(ParserEngine::Deterministic, $execution->selected_engine);
         $this->assertSame('completed', $execution->status);

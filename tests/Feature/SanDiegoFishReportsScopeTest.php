@@ -18,7 +18,7 @@ class SanDiegoFishReportsScopeTest extends TestCase
         $scopedHtml = app(SourceFishCountDocumentScope::class)->forPayload($payload);
 
         $this->assertCount(0, $parsed->tripReports);
-        $this->assertSame('source-specific-sandiego_fish_reports-v9', $parsed->parserVersion);
+        $this->assertSame('source-specific-sandiego_fish_reports-v10', $parsed->parserVersion);
         $this->assertStringNotContainsString('rf-dhist-table', $scopedHtml);
         $this->assertStringNotContainsString('rf-dtot-table', $scopedHtml);
         $this->assertStringNotContainsString('rf-dock-card', $scopedHtml);

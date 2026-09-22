@@ -121,10 +121,13 @@ final class AiParsedCollectionFactory
             $landingName = $landing['name'] ?? ($payload->scrapeSource->source_type === SourceType::Landing ? $payload->scrapeSource->name : null);
             $tripTypeName = $rawTripType ?? ($tripType['name'] ?? null);
             $normalizedSourceItemId = Str::lower($sourceItemId);
-            if (isset($sourceItems[$normalizedSourceItemId])) {
+            $sourceItemKey = $rawPayload->sourceKey === 'sportfishingreport_landing_pages'
+                ? Str::before($normalizedSourceItemId, '#')
+                : $normalizedSourceItemId;
+            if (isset($sourceItems[$sourceItemKey])) {
                 throw new UnexpectedValueException("AI report [{$index}] duplicated a source item.");
             }
-            $sourceItems[$normalizedSourceItemId] = true;
+            $sourceItems[$sourceItemKey] = true;
             $identity = implode('|', [
                 $normalizedSourceItemId,
                 $boat['id'] ?? Str::lower((string) $boatName),

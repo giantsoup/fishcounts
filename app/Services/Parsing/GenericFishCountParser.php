@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    public const string PARSER_VERSION = 'generic-line-v8';
+    public const string PARSER_VERSION = 'generic-line-v9';
 
     public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
 

@@ -248,7 +248,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
 
         $this->assertSame(1, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-fishermans_landing-v9', $result->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v10', $result->parserVersion);
         $this->assertSame($boatName, $report->boat->name);
         $this->assertSame($boatName, $report->raw_boat_name);
         $this->assertSame($tripType, $report->raw_trip_type);
