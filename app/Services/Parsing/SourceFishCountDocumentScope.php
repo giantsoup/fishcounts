@@ -175,9 +175,24 @@ final class SourceFishCountDocumentScope
             $targetSection = substr($paragraphHtml, $targetOffset + $targetLength);
             if (preg_match('/(?<!\d)\d{1,2}\/\d{1,2}\/\d{4}(?!\d)/', $targetSection, $nextDate, PREG_OFFSET_CAPTURE) === 1) {
                 $targetSection = substr($targetSection, 0, $nextDate[0][1]);
+
+                return '<p>'.$targetMatch[0][0].$targetSection.'</p>';
             }
 
-            return '<p>'.$targetMatch[0][0].$targetSection.'</p>';
+            $sections = ['<p>'.$targetMatch[0][0].$targetSection.'</p>'];
+            for ($sibling = $paragraph->nextSibling; $sibling !== null; $sibling = $sibling->nextSibling) {
+                if (! $sibling instanceof DOMElement) {
+                    continue;
+                }
+                if (strtolower($sibling->tagName) !== 'p'
+                    || preg_match('/(?<!\d)\d{1,2}\/\d{1,2}\/\d{4}(?!\d)/', $sibling->textContent) === 1) {
+                    break;
+                }
+
+                $sections[] = $document->saveHTML($sibling);
+            }
+
+            return implode("\n", $sections);
         }
 
         return preg_match('/(?<!\d)\d{1,2}\/\d{1,2}\/\d{4}(?!\d)/', $html) === 1 ? null : $html;

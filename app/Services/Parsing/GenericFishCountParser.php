@@ -11,14 +11,16 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    public const string PARSER_VERSION = 'generic-line-v9';
+    public const string PARSER_VERSION = 'generic-line-v10';
 
     public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
 
     public function parse(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $text = Str::of(html_entity_decode(strip_tags($payload->body, "\n"), ENT_QUOTES | ENT_HTML5))
+        $body = preg_replace('/<br\b[^>]*>/i', "\n", $payload->body) ?? $payload->body;
+        $text = Str::of(html_entity_decode(strip_tags($body, "\n"), ENT_QUOTES | ENT_HTML5))
             ->replace("\u{00A0}", ' ')
+            ->replaceMatches('/,\s*\R\s*(?=\d+\s+[A-Za-z])/', ', ')
             ->toString();
         $lines = collect(preg_split('/\R+/', $text) ?: [])
             ->map(fn (string $line): string => trim(preg_replace('/\s+/', ' ', $line) ?? ''))
@@ -224,7 +226,7 @@ class GenericFishCountParser
             '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:AM|PM)\s+(?:with\s+)?\d+\s+(?:anglers?|people|passengers?)\b/i',
             '/^(?:The\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+on\s+(?:a|the|their)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|captured|returned|landed|had|finished|called\s+in)\b/i',
             '/^(?<boat>(?:The\s+)?[A-Z][A-Za-z0-9 \'&.-]{1,50}?)\s+(?:(?:1\/2|3\/4|\d+(?:\.\d+)?)\s*Day(?:\s+(?:AM|PM))?|(?:AM|PM)\s+Half\s+Day|Half\s+Day(?:\s+(?:AM|PM))?|Full\s+Day|Twilight)\s+(?:trip\s+)?(?:caught|captured|returned|landed|had|finished|called\s+in)\b/i',
-            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:trip\s+)?(?:also\s+)?(?:just\s+)?(?:fished|caught|captured|returned|came\s+back|is\s+returning|is\s+up\s+to|had|has|finished(?:\s+up)?|ended|return|called(?:\s+in)?|checked\s+in)\b/i',
+            '/^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*)?(?:The\s+)?(?:(?:AM|PM)\s+)?(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,50}?)(?:\'s)?\s+(?:(?:\((?:AM|PM)\)|AM|PM|Twilight|Twiligiht|Twlight)(?:\s+trip)?(?:\s+last\s+night)?\s+)?(?:trip\s+)?(?:also\s+)?(?:just\s+)?(?:fished|caught|captured|turned\s+in|returned|came\s+back|is\s+returning|is\s+up\s+to|had|has|finished(?:\s+up)?|ended|return|called(?:\s+in)?|checked\s+in)\b/i',
             '/\b(?<boat>[A-Z][A-Za-z0-9 \'&.-]{2,50}?)\s+\d\/\d\s+Day\b/',
         ] as $pattern) {
             if (preg_match($pattern, $line, $matches)) {

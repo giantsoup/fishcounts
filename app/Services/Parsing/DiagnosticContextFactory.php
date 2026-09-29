@@ -66,7 +66,10 @@ class DiagnosticContextFactory
         $rawCounts = preg_replace('/^\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})\s+/', '', $rawCounts) ?? $rawCounts;
 
         return $this->containsSourceSpan($paragraph, $rawCounts)
-            || $this->sanitizeText(str_replace('|', ' ', $paragraph)) === $rawCounts;
+            || $this->containsSourceSpan(
+                $this->sanitizeText(str_replace('|', ' ', $paragraph)),
+                $this->sanitizeText(str_replace('|', ' ', $rawCounts)),
+            );
     }
 
     /** @return array<int, string> */
@@ -82,7 +85,12 @@ class DiagnosticContextFactory
         $body = preg_replace('/<div\b(?=[^>]*(?:border-top\s*:\s*1px|\bclass=[\'\"][^\'\"]*\brow\b))[^>]*>/i', "\n", $body) ?? $body;
         $body = preg_replace('/<\/(?:p|li|tr|section|article|table|h[1-6])\s*>/i', "\n", $body) ?? $body;
         $body = preg_replace('/<\/(?:td|th|div)\s*>/i', ' | ', $body) ?? $body;
-        $body = preg_replace('/<br\s*\/?\s*>/i', "\n", $body) ?? $body;
+        $body = preg_replace('/,\s*<br\b[^>]*>\s*(?=\d+\b)/i', ', ', $body) ?? $body;
+        $body = preg_replace('/<br\b[^>]*>/i', $payload->sourceKey === 'sportfishingreport_landing_pages' ? ' | ' : "\n", $body) ?? $body;
+
+        if (in_array($payload->sourceKey, ['fishermans_landing', 'seaforth_landing'], true)) {
+            $body = preg_replace('/(?<=[.!])\s++(?=The\s++(?:<[^>]+>)*[A-Za-z][A-Za-z0-9 &\'.-]{1,60}?(?:<[^>]+>)*\s++(?:(?:AM|PM)\s++(?:trip\s++)?)?(?:caught|returned|finished|called|checked|had|turned)\b)/i', "\n", $body) ?? $body;
+        }
 
         return collect(preg_split('/\R+/', $body) ?: [])
             ->map(fn (string $paragraph): string => $this->sanitizeText($paragraph))

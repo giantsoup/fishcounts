@@ -58,9 +58,9 @@ final class AiParserDocumentSanitizer
         $previousErrors = libxml_use_internal_errors(true);
         $document = new DOMDocument;
         $isCompleteDocument = preg_match('/<!doctype\s+html|<html\b|<body\b/i', $body) === 1;
-        $loaded = $document->loadHTML($isCompleteDocument
+        $loaded = $document->loadHTML('<?xml encoding="UTF-8">'.($isCompleteDocument
             ? $body
-            : '<!DOCTYPE html><html><body><div id="ai-parser-root">'.$body.'</div></body></html>',
+            : '<!DOCTYPE html><html><body><div id="ai-parser-root">'.$body.'</div></body></html>'),
             LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
         libxml_clear_errors();
         libxml_use_internal_errors($previousErrors);

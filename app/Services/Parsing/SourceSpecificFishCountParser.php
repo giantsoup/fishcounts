@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v10";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v11";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -57,7 +57,7 @@ class SourceSpecificFishCountParser
             metadata: $payload->metadata,
         );
 
-        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v10");
+        $parsed = $this->parseStructuredPayload($scopedPayload, "source-specific-{$payload->sourceKey}-v11");
 
         if ($scopedBody !== '' && $scopedBody !== $payload->body && $parsed->tripReports->isEmpty()) {
             return new ParsedFishCountCollection($parsed->tripReports, $parsed->parserVersion, 'aggregate-only');
@@ -362,8 +362,8 @@ class SourceSpecificFishCountParser
                             landingName: 'Seaforth Sportfishing',
                             boatName: $this->normalizeSeaforthBoatName($match['boat'][0]),
                             tripTypeName: $this->normalizeSeaforthTripType(
-                                $match['trip'][0] ?? $match['trip_alt'][0] ?? $match['trip_charter'][0],
-                                $match['period_status'][0] ?? $match['period'][0] ?? $match['period_after'][0] ?? null,
+                                $match['trip'][0] ?? $match['trip_alt'][0] ?? $match['trip_charter'][0] ?? 'Half Day',
+                                $match['period_status'][0] ?? $match['period'][0] ?? $match['period_after'][0] ?? $match['period_only'][0] ?? null,
                             ),
                             anglers: $this->anglerCountFromNarrative($reportText),
                             rawFishCountText: $reportText,
@@ -390,6 +390,7 @@ class SourceSpecificFishCountParser
             .$statusPhrase.'(?:(?<period_status>AM|PM|morning|afternoon)\s+)?(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
             .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
             .'|charter\s+group(?:\s+today)?\s+went\s+offshore\s+for\s+their\s+(?<trip_charter>'.$tripPattern.')\s+trip\s+and\s+returned\s+'
+            .'|(?<period_only>AM|PM)\s+(?:trip\s+)?(?:finished(?:\s+up)?|returned)\s+'
             .')(?:with|wth|caught|landed|had)\b/i';
     }
 
@@ -400,6 +401,7 @@ class SourceSpecificFishCountParser
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>Twilight)\s+trips?\s+(?:have|has)\s+had\b[^.!?]*[.!?]\s+They\s+had\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+ventured\b.*?\band\s+bagged\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+with\s+(?<anglers>\d+)\s+anglers\b.*?\bfinished\s+up\s+with\s+(?<counts>.+)$/i',
+            '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+finished(?:\s+up)?\s+their\s+trip\s+with\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>Full\s+Day)\s+to\s+the\s+Coronado\s+Islands,?\s+wrapped\s+up\s+with\s+(?<counts>.+)$/i',
             '/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>3\/4[-\s]*Day)\s+trip\s+wrapped\s+up\b.*?\bwith\s+(?<counts>.+)$/i',
         ];
