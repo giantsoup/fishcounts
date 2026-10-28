@@ -38,7 +38,7 @@
                 <p class="text-sm text-green-700 lg:col-span-2">{{ session('status') }}</p>
             @endif
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <div class="flex flex-col gap-4">
                     <div>
                         <h3 class="font-semibold text-gray-900">Active boats</h3>
@@ -71,7 +71,7 @@
                         <button
                             type="button"
                             data-booking-url="{{ $boat->booking_url }}"
-                            class="flex min-h-14 flex-col items-center justify-center rounded border px-3 py-2 text-center transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            class="flex min-h-14 flex-col items-center justify-center rounded-sm border px-3 py-2 text-center transition focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                             :class="selectedBoatId === {{ $boat->id }} ? 'border-gray-950 bg-gray-950 text-white' : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'"
                             :aria-pressed="selectedBoatId === {{ $boat->id }}"
                             aria-controls="boat_editor"
@@ -84,7 +84,7 @@
                 </div>
             </div>
 
-            <div id="boat_editor" x-ref="boatEditor" role="region" aria-label="Boat editor" class="scroll-mt-4 overflow-hidden bg-white shadow sm:rounded-lg">
+            <div id="boat_editor" x-ref="boatEditor" role="region" aria-label="Boat editor" class="scroll-mt-4 overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <div x-show="! selectedBoat">
                     <div class="px-6 py-12 text-center">
                         <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-fc-blue-soft text-xl font-semibold text-primary">
@@ -112,7 +112,7 @@
                     </div>
 
                     <div class="grid gap-5 p-6">
-                        <form method="POST" :action="selectedBoat?.update_url" class="flex h-full flex-col rounded-lg border border-border bg-white p-5 shadow-sm">
+                        <form method="POST" :action="selectedBoat?.update_url" class="flex h-full flex-col rounded-lg border border-border bg-white p-5 shadow-xs">
                             @csrf
                             @method('PUT')
                             <input type="hidden" name="boat_id" :value="selectedBoatId">
@@ -136,7 +136,7 @@
                             </div>
                         </form>
 
-                        <form method="POST" action="{{ route('admin.boat-aliases.store') }}" class="flex h-full flex-col rounded-lg border border-border bg-white p-5 shadow-sm">
+                        <form method="POST" action="{{ route('admin.boat-aliases.store') }}" class="flex h-full flex-col rounded-lg border border-border bg-white p-5 shadow-xs">
                             @csrf
                             <input type="hidden" name="boat_id" :value="selectedBoatId">
 

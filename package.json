@@ -1,25 +1,30 @@
 {
+    "name": "fishcounts",
     "$schema": "https://www.schemastore.org/package.json",
     "private": true,
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "check:platform": "node .github/scripts/check-native-bindings.mjs"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.2",
         "@tailwindcss/vite": "^4.0.0",
         "alpinejs": "^3.4.2",
-        "autoprefixer": "^10.4.2",
         "concurrently": "^10.0.3",
         "laravel-vite-plugin": "^3.1",
-        "postcss": "^8.4.31",
-        "tailwindcss": "^3.1.0",
+        "tailwindcss": "^4.3",
         "vite": "^8.0.0"
     },
     "dependencies": {
         "@alpinejs/mask": "^3.15.12",
         "flatpickr": "^4.6.13",
         "tom-select": "^2.6.1"
-    }
+    },
+    "engines": {
+        "node": ">=26.13.0 <27",
+        "npm": ">=12.2.1 <13"
+    },
+    "packageManager": "npm@12.2.1"
 }

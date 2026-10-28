@@ -6,10 +6,10 @@
     <div class="py-8">
         <div class="mx-auto max-w-3xl space-y-6 sm:px-6 lg:px-8">
             @if (session('status'))
-                <p class="rounded-md bg-white p-4 text-sm text-green-700 shadow">{{ session('status') }}</p>
+                <p class="rounded-md bg-white p-4 text-sm text-green-700 shadow-sm">{{ session('status') }}</p>
             @endif
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <form method="POST" action="{{ route('admin.users.update', $user) }}" class="space-y-5">
                     @csrf
                     @method('PUT')
@@ -52,7 +52,7 @@
             </div>
 
             @canany(['sendPasswordResetLink', 'delete'], $user)
-                <section class="space-y-6 bg-white p-6 shadow sm:rounded-lg">
+                <section class="space-y-6 bg-white p-6 shadow-sm sm:rounded-lg">
                     <header>
                         <h3 class="text-lg font-medium text-gray-900">Account access</h3>
                         <p class="mt-1 text-sm text-gray-600">Manage password setup and permanent account removal.</p>

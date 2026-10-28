@@ -12,7 +12,7 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <form method="GET" action="{{ route('scores.index') }}" class="grid gap-4 md:grid-cols-5">
                     <div>
                         <label for="from" class="block text-sm font-medium text-gray-700">From</label>
@@ -58,7 +58,7 @@
                 </form>
             </div>
 
-            <div class="bg-white shadow sm:rounded-lg overflow-hidden">
+            <div class="bg-white shadow-sm sm:rounded-lg overflow-hidden">
                 @if (session('status'))
                     <p class="border-b border-gray-200 px-4 py-3 text-sm text-green-700">{{ session('status') }}</p>
                 @endif
@@ -114,7 +114,7 @@
                                             @csrf
                                             <button
                                                 type="submit"
-                                                class="inline-flex min-w-24 items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-widest text-surface shadow-sm transition ease-in-out duration-150 hover:bg-link focus:bg-link focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 active:bg-primary"
+                                                class="inline-flex min-w-24 items-center justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-xs font-semibold uppercase tracking-widest text-surface shadow-xs transition ease-in-out duration-150 hover:bg-link focus:bg-link focus:outline-hidden focus:ring-2 focus:ring-focus focus:ring-offset-2 active:bg-primary"
                                                 onclick="return confirm(@js("Resend this hot bite email to {$score->alertRule->user->email}?"))"
                                             >
                                                 Resend

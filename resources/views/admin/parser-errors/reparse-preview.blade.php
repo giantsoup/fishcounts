@@ -5,7 +5,7 @@
 
     <div class="py-8">
         <div class="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8">
-            <section class="bg-white p-6 shadow sm:rounded-lg">
+            <section class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <a class="text-sm text-blue-700" href="{{ route('admin.parser-errors.index') }}">Back to parser errors</a>
                 <h3 class="mt-4 text-lg font-semibold text-gray-900">Choose the repair scope</h3>
                 <p class="mt-2 text-sm text-gray-600">Preview the saved payloads and stored trips affected before starting a batch.</p>
@@ -46,7 +46,7 @@
             </section>
 
             @if ($plan !== null)
-                <section class="bg-white p-6 shadow sm:rounded-lg" aria-labelledby="reparse-preview-heading">
+                <section class="bg-white p-6 shadow-sm sm:rounded-lg" aria-labelledby="reparse-preview-heading">
                     <h3 id="reparse-preview-heading" class="text-lg font-semibold text-gray-900">Batch preview</h3>
                     <p class="mt-2 text-sm text-gray-700">
                         {{ Number::format($plan['open_errors']) }} open errors across {{ Number::format($plan['payloads']) }} affected saved {{ Str::plural('payload', $plan['payloads']) }} and {{ Number::format($plan['dates']) }} {{ Str::plural('date', $plan['dates']) }}.

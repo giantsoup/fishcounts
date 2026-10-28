@@ -11,10 +11,10 @@
     <div class="py-8">
         <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
             @if (session('status'))
-                <p class="rounded-md bg-white p-4 text-sm text-green-700 shadow">{{ session('status') }}</p>
+                <p class="rounded-md bg-white p-4 text-sm text-green-700 shadow-sm">{{ session('status') }}</p>
             @endif
 
-            <div class="overflow-hidden bg-white shadow sm:rounded-lg">
+            <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <table class="min-w-full divide-y divide-gray-200 text-sm">
                     <thead class="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                         <tr>

@@ -14,7 +14,7 @@
                 </div>
             @endif
 
-            <section id="condition-backfill" class="overflow-hidden bg-white shadow sm:rounded-lg">
+            <section id="condition-backfill" class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <div class="border-b border-gray-200 px-6 py-5">
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -122,7 +122,7 @@
                 </div>
             </section>
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <form method="GET" action="{{ route('admin.conditions.index') }}" class="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
                     <div>
                         <label for="from" class="block text-sm font-medium text-gray-700">From</label>
@@ -193,7 +193,7 @@
                 </form>
             </div>
 
-            <section class="bg-white shadow sm:rounded-lg overflow-hidden">
+            <section class="bg-white shadow-sm sm:rounded-lg overflow-hidden">
                 <div class="border-b border-gray-200 px-4 py-4">
                     <h3 class="font-semibold text-gray-900">Daily summaries</h3>
                 </div>
@@ -275,7 +275,7 @@
                 </div>
             </section>
 
-            <section class="bg-white shadow sm:rounded-lg overflow-hidden">
+            <section class="bg-white shadow-sm sm:rounded-lg overflow-hidden">
                 <div class="border-b border-gray-200 px-4 py-4">
                     <h3 class="font-semibold text-gray-900">Normalized observations</h3>
                 </div>
@@ -344,7 +344,7 @@
 
                 @forelse ($payloads as $payload)
                     @php($payloadLocationType = data_get($payload, 'location_type.value', $payload->location_type))
-                    <details class="bg-white p-4 shadow sm:rounded-lg">
+                    <details class="bg-white p-4 shadow-sm sm:rounded-lg">
                         <summary class="cursor-pointer text-sm font-medium text-gray-900">
                             #{{ $payload->id }} · {{ $profileLabels[$payload->location_profile] ?? str($payload->location_profile)->replace('_', ' ')->headline() }} · {{ str($payloadLocationType)->headline() }} · {{ $payload->environmentalSource->name }} · {{ $payload->observed_date->format('n/j/Y') }} · HTTP {{ $payload->http_status ?? 'n/a' }}
                         </summary>
@@ -376,13 +376,13 @@
                             </div>
                         </dl>
 
-                        <pre class="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded bg-gray-50 p-4 text-xs text-gray-800">{{ $payload->payload }}</pre>
+                        <pre class="mt-4 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-sm bg-gray-50 p-4 text-xs text-gray-800">{{ $payload->payload }}</pre>
                     </details>
                 @empty
-                    <div class="bg-white p-6 text-center text-sm text-gray-500 shadow sm:rounded-lg">No raw payloads match the current filters.</div>
+                    <div class="bg-white p-6 text-center text-sm text-gray-500 shadow-sm sm:rounded-lg">No raw payloads match the current filters.</div>
                 @endforelse
 
-                <div class="bg-white px-4 py-3 shadow sm:rounded-lg">
+                <div class="bg-white px-4 py-3 shadow-sm sm:rounded-lg">
                     {{ $payloads->links() }}
                 </div>
             </section>

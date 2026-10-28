@@ -16,7 +16,7 @@
 
     <div class="py-6 sm:py-8">
         <div class="mx-auto max-w-[1480px] space-y-5 sm:px-6 lg:px-8">
-            <section class="bg-white px-4 py-4 shadow sm:rounded-lg sm:px-5">
+            <section class="bg-white px-4 py-4 shadow-sm sm:rounded-lg sm:px-5">
                 <div class="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Trips</p>
@@ -47,7 +47,7 @@
                 @endif
             </section>
 
-            <section class="bg-white px-4 py-5 shadow sm:rounded-lg sm:p-6">
+            <section class="bg-white px-4 py-5 shadow-sm sm:rounded-lg sm:p-6">
                 <form method="GET" action="{{ route('counts.index') }}" class="grid gap-4 md:grid-cols-6">
                     <div>
                         <label for="from" class="block text-sm font-medium text-gray-700">From</label>
@@ -107,7 +107,7 @@
                 </form>
             </section>
 
-            <section class="overflow-hidden bg-white shadow sm:rounded-lg">
+            <section class="overflow-hidden bg-white shadow-sm sm:rounded-lg">
                 <div class="divide-y divide-gray-100 md:hidden">
                     @forelse ($reports as $report)
                         @php

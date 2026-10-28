@@ -17,11 +17,11 @@
             @endif
 
             <div class="grid gap-6 md:grid-cols-5">
-                <a href="{{ route('admin.users.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                <a href="{{ route('admin.users.index') }}" class="bg-white p-6 shadow-sm transition hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
                     <p class="text-sm text-gray-500">Users</p>
                     <p class="text-3xl font-semibold">{{ $userCount }}</p>
                 </a>
-                <div class="bg-white p-6 shadow sm:rounded-lg">
+                <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                     <p class="text-sm text-gray-500">Latest scrape</p>
                     @if ($latestScrapeRun)
                         <a class="text-sm text-blue-700" href="{{ route('admin.scrape-runs.show', $latestScrapeRun) }}">
@@ -36,21 +36,21 @@
                         </a>
                     @endif
                 </div>
-                <a href="{{ route('admin.backfills.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                <a href="{{ route('admin.backfills.index') }}" class="bg-white p-6 shadow-sm transition hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
                     <p class="text-sm text-gray-500">Latest backfill</p>
                     <p class="text-sm">{{ $latestBackfillRun?->status?->value ?? 'None' }}</p>
                 </a>
-                <a href="{{ route('admin.parser-errors.index') }}" class="bg-white p-6 shadow transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
+                <a href="{{ route('admin.parser-errors.index') }}" class="bg-white p-6 shadow-sm transition hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:rounded-lg">
                     <p class="text-sm text-gray-500">Parser errors</p>
                     <p class="text-3xl font-semibold">{{ $openParserErrorCount }}</p>
                 </a>
-                <a href="{{ route('admin.failed-jobs.index') }}" class="bg-white p-6 shadow sm:rounded-lg">
+                <a href="{{ route('admin.failed-jobs.index') }}" class="bg-white p-6 shadow-sm sm:rounded-lg">
                     <p class="text-sm text-gray-500">Failed jobs</p>
                     <p class="text-3xl font-semibold">{{ $failedJobCount }}</p>
                 </a>
             </div>
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-gray-900">AI primary parsing</h3>
                     <p class="text-xs text-gray-500">Last 24 hours unless noted</p>
@@ -68,7 +68,7 @@
                 </div>
             </div>
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-gray-900">Source health</h3>
                     <div class="flex gap-4 text-sm">
@@ -89,7 +89,7 @@
                 </div>
             </div>
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <div class="flex items-center justify-between">
                     <h3 class="font-semibold text-gray-900">AI parser review operations</h3>
                     <p class="text-xs text-gray-500">Review metrics cover the last 24 hours unless noted. Budgeted costs use provider-reported tokens and configured list prices; requests without usable metering consume their conservative reservation. Billed spend may differ.</p>
@@ -109,7 +109,7 @@
 
                 <div class="mt-5 grid gap-4 sm:grid-cols-2">
                     @foreach ($aiMetrics['budgets'] as $budget)
-                        <div class="rounded border border-gray-200 p-4">
+                        <div class="rounded-sm border border-gray-200 p-4">
                             <p class="text-xs font-medium uppercase tracking-wide text-gray-500">
                                 {{ $budget['period'] }} budget
                                 @if (! $budget['independent_limit'])

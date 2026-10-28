@@ -32,11 +32,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           cache: npm
+
+      - name: Install and Verify Pinned npm
+        run: bash .github/scripts/setup-node.sh
 
       - name: Install Node Dependencies
         run: npm ci
+
+      - name: Verify Native Build Dependencies
+        run: |
+          npm ls --all
+          npm run check:platform
 
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
@@ -66,6 +74,9 @@ jobs:
 
       - name: Run Tests
         run: php artisan test --compact
+
+      - name: Verify Dependency Locks
+        run: git diff --exit-code -- composer.lock package-lock.json
 
       - name: Package Release Artifact
         run: |
