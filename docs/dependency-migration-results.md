@@ -37,3 +37,9 @@ The initial Linux arm64 asset-stage build passed, including Node distribution ch
 Boost 2.10.3, Roster 1.0.0, and MCP 1.1.2 were resolved together using temporary Composer constraints and `--with-dependencies --minimal-changes`. The root Boost constraint remains `^2.4`. Composer Semver 3.5.2 is the only added package in this group. Guzzle stayed at its baseline version for independent transport verification.
 
 The full backend suite passed after this group: 927 passed, 5,401 assertions, one live-test skip. Composer validation, platform requirements, and audit passed. Package discovery, Artisan registration, Roster's actual scan, and a fresh MCP initialize/list-tools/application-info/search-docs exchange passed. The Roster 1 API is consumed by the upgraded Boost release; no application Roster callers exist. Project guidance and MCP settings were preserved.
+
+## HTTP transport
+
+Guzzle 8.3.1, Promises 3.1.0, PSR-7 3.2.0, and URI Template 2.0.1 were resolved as a bounded group. PSR-7 removes `ralouphie/getallheaders`; application code does not call that polyfill. No direct application Guzzle, Promise, PSR-7, or Brick API subclasses were found. Existing outbound headers are strings; the GitHub API version is configured as a string.
+
+All 116 focused integration tests passed with 661 assertions, covering scraping, environmental collection, both booking providers, AI parsing/review, regulation research, and GitHub token/issue clients using synthetic responses. Six new local transport tests passed before and after the Guzzle upgrade. They exercise real loopback HTTP redirects, JSON headers, streaming, retry/failure responses, timeout and connection-refusal exception mapping, cookies, and asynchronous promise completion. Each fixture process is bounded and stopped by test teardown. No external account or paid API is used. Composer validation, platform checks, and audit passed.
