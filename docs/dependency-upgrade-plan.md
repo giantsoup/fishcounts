@@ -1,6 +1,6 @@
 # Implement the deferred dependency upgrades from PR #56
 
-Status: proposed implementation plan. No dependency or application changes have been made for this plan.
+Status: implementation prepared in this isolated branch. See [migration results](dependency-migration-results.md) for verified changes, all 69 candidate decisions, and remaining review gates. The original planning checklists below are retained as the approved design.
 
 Source: [FishCounts PR #56](https://github.com/giantsoup/fishcounts/pull/56), read on 28 October 2026, at head `aed4c40924870e0bb20cae82d00c83838638bda4`.
 

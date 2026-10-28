@@ -41,7 +41,7 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
    bash .github/scripts/setup-node.sh
    ```
 
-   Local development, CI, and Docker asset builds use this same Node 26/npm pair. Keep `.nvmrc`, `engines`, and `packageManager` synchronized when updating it. Preserve `.npmrc` lifecycle-script and audit settings.
+   Local development, CI, and Docker asset builds use this same Node 26/npm pair. Keep `.nvmrc`, `engines`, and `packageManager` synchronized when updating it. Until the matching official Docker tag is published, also update the architecture-specific distribution checksums in `Dockerfile`. Preserve `.npmrc` lifecycle-script and audit settings.
 
 3. Create the local environment file and SQLite database:
 

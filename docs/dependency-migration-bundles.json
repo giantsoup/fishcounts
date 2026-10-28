@@ -1,0 +1,98 @@
+{
+  "after": {
+    "integrity": "sha512-jx1+rPhY/5Ympkktd656HBWEBLxP7dH06losBLjjf5vgCODXvi9KhtftWcMIwTFIDqBr7cRnQkdLnAG+IOlGvQ==",
+    "package": "@tailwindcss/oxide-wasm32-wasi",
+    "packages": {
+      "@emnapi/core": {
+        "dependencies": {
+          "@emnapi/wasi-threads": "1.2.2",
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/core",
+        "version": "1.11.1"
+      },
+      "@emnapi/runtime": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/runtime",
+        "version": "1.11.1"
+      },
+      "@emnapi/wasi-threads": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/wasi-threads",
+        "version": "1.2.2"
+      },
+      "@napi-rs/wasm-runtime": {
+        "dependencies": {
+          "@tybys/wasm-util": "^0.10.1"
+        },
+        "name": "@napi-rs/wasm-runtime",
+        "version": "1.1.4"
+      },
+      "@tybys/wasm-util": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@tybys/wasm-util",
+        "version": "0.10.2"
+      },
+      "tslib": {
+        "name": "tslib",
+        "version": "2.8.1"
+      }
+    },
+    "resolved": "https://registry.npmjs.org/@tailwindcss/oxide-wasm32-wasi/-/oxide-wasm32-wasi-4.3.3.tgz",
+    "version": "4.3.3"
+  },
+  "before": {
+    "integrity": "sha512-zsM8uOeqvVGHsAXsJxsT28ttosFahLJKCLOTUBqRAtKnVgGSRitds9T432QiT8b77Yga7JIBkulIRRlJPtYhRA==",
+    "package": "@tailwindcss/oxide-wasm32-wasi",
+    "packages": {
+      "@emnapi/core": {
+        "dependencies": {
+          "@emnapi/wasi-threads": "1.2.1",
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/core",
+        "version": "1.10.0"
+      },
+      "@emnapi/runtime": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/runtime",
+        "version": "1.10.0"
+      },
+      "@emnapi/wasi-threads": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@emnapi/wasi-threads",
+        "version": "1.2.1"
+      },
+      "@napi-rs/wasm-runtime": {
+        "dependencies": {
+          "@tybys/wasm-util": "^0.10.1"
+        },
+        "name": "@napi-rs/wasm-runtime",
+        "version": "1.1.4"
+      },
+      "@tybys/wasm-util": {
+        "dependencies": {
+          "tslib": "^2.4.0"
+        },
+        "name": "@tybys/wasm-util",
+        "version": "0.10.2"
+      },
+      "tslib": {
+        "name": "tslib",
+        "version": "2.8.1"
+      }
+    },
+    "resolved": "https://registry.npmjs.org/@tailwindcss/oxide-wasm32-wasi/-/oxide-wasm32-wasi-4.3.1.tgz",
+    "version": "4.3.1"
+  }
+}

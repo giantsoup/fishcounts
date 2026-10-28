@@ -76,3 +76,131 @@ Oxide's WASM package targets `cpu: wasm32` and bundles six helpers. Its download
 | `tslib` | 2.8.1 | Bundled supporting dependency |
 
 These are bundle dispositions, not claims that the proposed versions installed. No transitive overrides or new root requirements were added. WASM execution is not a supported platform in the project's native-build check; its integrity and complete bundled graph were inspected, but fallback execution was not exercised.
+
+## Tailwind 4 and remaining parents
+
+Tailwind 4.3.3 now runs once through `@tailwindcss/vite`. The JavaScript theme is fully migrated into `@theme inline`; explicit CSS sources retain Blade, JavaScript, compiled views, and Laravel pagination. The forms plugin remains in its admitted 0.5 release line. Old PostCSS configuration, direct Autoprefixer/PostCSS requirements, and obsolete Tailwind 3 dependencies are removed. Renamed shadow, radius, and outline utilities preserve the previous appearance. Default border color remains the application's existing border token. Figtree and all custom color aliases are retained. Browser minimums are documented.
+
+The 15 existing form/counts tests passed with 83 assertions. The full backend suite passes with the final dependency graph. Production assets build and load in the isolated Chrome session. Baseline and migrated desktop counts screenshots were visually compared. A fresh 390px mobile page reports `innerWidth=390`, `body.scrollWidth=390`, and `visualViewport.scale=1`; navigation opens, and the saved [mobile screenshot](dependency-migration-mobile.png) shows the responsive filters and native mobile date controls. Login, dashboard, counts filters, the desktop date picker, and the alert-rule form were exercised with an isolated SQLite database and synthetic records. Tom Select's multiple-option selection produced a removable chip. The chip was subsequently removed by keyboard. Scores filters, the administrator invitation form, and native required-field validation were also inspected. Exhaustive admin/error states and the visual disabled-field matrix remain manual review gates; existing component tests cover disabled markup. Decimal number fields intentionally remain text inputs unless an explicit mask is supplied.
+
+The browser check exposed Flatpickr 4.6.13's cross-origin `CSSStyleSheet.cssRules` error when resizing an open desktop calendar into touch emulation. The font stylesheet was loaded without CORS. Both layouts now request it with `crossorigin="anonymous"`; the font server's `Access-Control-Allow-Origin: *` response was verified. Chrome now reads all six font CSS rules, and repeating the open-calendar resize succeeds without SecurityError. No Flatpickr vendor code or application JS was changed. A non-passive wheel warning was traced to the 1Password browser extension.
+
+Vite's actual WebSocket delivered a CSS update and full reloads for JS and Blade changes. Every temporary HMR edit was restored byte-for-byte. A Chrome development page connected to Vite. The isolated Concurrently checks passed for two successful children and for termination of a long-running child with SIGTERM when the first child exits. No application queue worker or scheduler was started.
+
+All remaining parent candidates were checked against current registry metadata. Concurrently 10.0.6, PostCSS 8.5.32, vite-plugin-full-reload 1.2.0, and Rolldown 1.2.15 remain their inspected stable parent releases. Their exact restrictions are recorded per candidate below. No override, forced install, peer relaxation, or unsupported parent replacement was introduced.
+
+## Docker and platform proof
+
+Both Linux arm64 and Linux x64 asset images build with actual Node 26.13.0/npm 12.2.1. Their clean npm trees pass, and the platform check directly loads the matching Rolldown, Oxide, and Lightning CSS native bindings. The local macOS arm64 check loads the three corresponding native bindings too.
+
+The controlled Composer dependency stage runs on the build host architecture and provides vendor templates to either asset architecture. The first emulated x64 attempt compiled PHP extensions and hit a compiler segmentation fault; moving the build-only Composer stage to the build architecture removes that unnecessary emulated compilation. The final PHP runtime remains FrankenPHP/PHP 8.4 on Alpine with the original extensions, permissions, entry point, and web/queue/scheduler commands.
+
+`docker compose --env-file .env.example build app queue ai-queue scheduler` passes. Each final application image contains the production asset manifest, passes non-development Composer platform requirements, and excludes `.env`, Git data, Node/npm, and host `node_modules`. No Compose service or database was started. The native SSH release checksum, health, and rollback logic is unchanged.
+
+## Complete inventories and policy
+
+Run `python3 .github/scripts/dependency-migration-inventory.py` to regenerate the [full inventory](dependency-migration-inventory.json). It reads the exact baseline from Git, exports every Composer/dev and nested/optional/platform npm lock instance, verifies source stability at unchanged versions, and rejects an existing-package major or 0.x minor outside the approved target set. The [bundle inventory](dependency-migration-bundles.json) records both integrity-verified WASM tarballs, including their nested dependency requirements. Baseline bundled WASM Runtime was already 1.1.4 despite the old separate lock entry showing 1.1.5; the actual bundle did not downgrade.
+
+The final lock inventory contains 118 Composer packages and 111 npm instances, compared with 115 and 188 at baseline. It records 45 version changes, 78 removed instances, four additions, and four metadata-only corrections. Additions are Composer Semver through Roster, Symfony's PHP 8.2 polyfill through Guzzle, and Sebastian File Filter/Git State through PHPUnit's graph. Removed nested instances are compared by package name and remaining parent, so moves cannot hide an unapproved major.
+
+The routine maintenance checker remains untouched. Its actual-manifest run rejects the intentional manifest edits. A diagnostic run with manifest hashes held constant also rejects the authorized major upgrades. These expected rejections are not passing maintenance-policy results. The separate migration inventory check passes against this plan's target set.
+
+Coverage generation and WASM fallback execution remain unavailable. The Linux GitHub test job result is recorded in the PR after publication; local and container checks alone do not establish CI success.
+
+## Reinstall and final review gates
+
+Final Composer install and cold `npm ci` passed after verification. SHA-256 checks confirm `composer.json`, `composer.lock`, `package.json`, and `package-lock.json` remain byte-identical. The npm peer tree, native Mac imports, production build, both audits, Composer validation/platform requirements, and required PHP formatting checks pass. Vite terminates cleanly and leaves no `public/hot` file.
+
+This implementation remains a draft review while its stacked parent PR is open and the remaining manual UI gates are incomplete. No schema change, merge, deployment, auto-merge setting, production data write, or external notification was performed. Only the disposable SQLite UI database was migrated.
+
+## R01-R11 disposition
+
+| ID | Outcome |
+| --- | --- |
+| R01 | `.nvmrc` pins 26.13.0. |
+| R02 | Root engines and `packageManager` declare Node 26/npm 12 with exact npm bootstrap. |
+| R03 | nvm Node 26.13.0 at `/Users/Taylor/.nvm/versions/node/v26.13.0/bin/node`, npm 12.2.1. Other Node/PHP installations were preserved. |
+| R04 | Tests workflow uses `.nvmrc`, explicit npm installation/assertions, native imports and lock checks. |
+| R05 | Release verification uses the same toolchain checks. Deploy/SSH behavior is preserved. |
+| R06 | Separate Node asset stage; amd64/arm64 builds and final Compose image checks pass. |
+| R07 | Lock v3 retained; toolchain-only graph unchanged, final migration inventory complete. |
+| R08 | README setup, browser minimums, PHPUnit 13 and Tailwind 4 guidance updated. |
+| R09 | `.npmrc` unchanged and copied before install; scripts remain disabled and audits enabled. Remote-URL policy remains `none`. |
+| R10 | `.dockerignore` prevents host dependencies, build output, Git and real environment files entering images. |
+| R11 | Shared scripts assert actual versions, native bindings and lock stability. All four application services build. No Node runtime service was added. |
+
+## Candidate decisions
+
+Each row is an original PR candidate, not an installed-package count. Full package identities, remaining duplicate instances, requirements, sources, and metadata deltas are in the JSON inventory.
+
+| ID | Package | Proposed | Final result | Decision |
+| --- | --- | --- | --- | --- |
+| D01 | `brick/math` | 1.0.0 | 1.0.0 | installed: Selected through the supported parent graph. |
+| D02 | `guzzlehttp/guzzle` | 8.3.1 | 8.3.1 | installed: Selected through the supported parent graph. |
+| D03 | `guzzlehttp/promises` | 3.1.0 | 3.1.0 | installed: Selected through the supported parent graph. |
+| D04 | `guzzlehttp/psr7` | 3.2.0 | 3.2.0 | installed: Selected through the supported parent graph. |
+| D05 | `guzzlehttp/uri-template` | v2.0.1 | v2.0.1 | installed: Selected through the supported parent graph. |
+| D06 | `hamcrest/hamcrest-php` | v3.0.0 | v3.0.0 | installed: Selected through the supported parent graph. |
+| D07 | `laravel/mcp` | v1.1.2 | v1.1.2 | installed: Selected through the supported parent graph. |
+| D08 | `laravel/roster` | v1.0.0 | v1.0.0 | installed: Selected through the supported parent graph. |
+| D09 | `phpunit/php-code-coverage` | 14.4.1 | 14.4.1 | installed: Selected through the supported parent graph. |
+| D10 | `phpunit/php-file-iterator` | 7.0.2 | 7.0.2 | installed: Selected through the supported parent graph. |
+| D11 | `phpunit/php-invoker` | 7.0.0 | 7.0.0 | installed: Selected through the supported parent graph. |
+| D12 | `phpunit/php-text-template` | 6.0.1 | 6.0.1 | installed: Selected through the supported parent graph. |
+| D13 | `phpunit/php-timer` | 9.0.0 | 9.0.0 | installed: Selected through the supported parent graph. |
+| D14 | `phpunit/phpunit` | 13.4.5 | 13.4.5 | installed: Selected through the supported parent graph. |
+| D15 | `sebastian/cli-parser` | 5.0.1 | 5.0.1 | installed: Selected through the supported parent graph. |
+| D16 | `sebastian/comparator` | 8.4.0 | 8.4.0 | installed: Selected through the supported parent graph. |
+| D17 | `sebastian/complexity` | 6.0.0 | 6.0.0 | installed: Selected through the supported parent graph. |
+| D18 | `sebastian/diff` | 9.0.1 | 9.0.1 | installed: Selected through the supported parent graph. |
+| D19 | `sebastian/environment` | 9.3.3 | 9.3.3 | installed: Selected through the supported parent graph. |
+| D20 | `sebastian/exporter` | 8.2.1 | 8.2.1 | installed: Selected through the supported parent graph. |
+| D21 | `sebastian/global-state` | 9.0.1 | 9.0.1 | installed: Selected through the supported parent graph. |
+| D22 | `sebastian/lines-of-code` | 5.0.2 | 5.0.2 | installed: Selected through the supported parent graph. |
+| D23 | `sebastian/object-enumerator` | 8.1.0 | 8.1.0 | installed: Selected through the supported parent graph. |
+| D24 | `sebastian/object-reflector` | 6.1.0 | 6.1.0 | installed: Selected through the supported parent graph. |
+| D25 | `sebastian/recursion-context` | 8.0.1 | 8.0.1 | installed: Selected through the supported parent graph. |
+| D26 | `sebastian/type` | 7.0.2 | 7.0.2 | installed: Selected through the supported parent graph. |
+| D27 | `sebastian/version` | 7.0.1 | 7.0.1 | installed: Selected through the supported parent graph. |
+| D28 | `@emnapi/wasi-threads` | 2.2.0 | bundled 1.2.2 | blocked: Oxide 4.3.3 bundles @emnapi/wasi-threads 1.2.2; the tarball owns this version. Oxide requires WASI Threads ^1.2.2 and bundled Core pins 1.2.2. |
+| D29 | `@nodelib/fs.scandir` | 4.0.1 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D30 | `@nodelib/fs.stat` | 4.0.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D31 | `@nodelib/fs.walk` | 3.0.1 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D32 | `ansi-styles` | 7.0.0 | 6.2.3 | blocked: wrap-ansi 9.0.2 requires ^6.2.1; cliui requires wrap-ansi ^9.0.0. |
+| D33 | `picomatch` | 4.0.7 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. Other supported instances are listed separately. |
+| D34 | `binary-extensions` | 3.2.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D35 | `chalk` | 6.0.1 | 5.6.2 | blocked: concurrently 10.0.6 pins chalk exactly 5.6.2. |
+| D36 | `chokidar` | 6.0.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D37 | `glob-parent` | 6.0.2 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D38 | `commander` | 15.0.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D39 | `emoji-regex` | 11.0.0 | 10.6.0 | blocked: string-width 7.2.0 requires emoji-regex ^10.3.0. |
+| D40 | `glob-parent` | 6.0.2 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D41 | `is-binary-path` | 3.0.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D42 | `lines-and-columns` | 2.0.4 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D43 | `magic-string` | 1.4.5 | 0.30.21 | blocked: @tailwindcss/node 4.3.3 requires ^0.30.21. |
+| D44 | `picomatch` | 4.0.7 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. Other supported instances are listed separately. |
+| D45 | `nanoid` | 6.0.2 | 3.3.20 | blocked: postcss 8.5.32 requires ^3.3.20; Vite retains PostCSS. |
+| D46 | `postcss-import` | 17.0.1 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D47 | `postcss-js` | 5.1.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D48 | `postcss-nested` | 9.0.1 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D49 | `postcss-selector-parser` | 7.1.7 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D50 | `readdirp` | 5.1.1 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D51 | `picomatch` | 4.0.7 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. Other supported instances are listed separately. |
+| D52 | `string-width` | 8.3.0 | 7.2.0 | blocked: cliui and yargs require ^7.2.0; wrap-ansi requires ^7.0.0. |
+| D53 | `supports-color` | 11.0.0 | 10.2.2 | blocked: concurrently 10.0.6 pins exactly 10.2.2. |
+| D54 | `tailwindcss` | 4.3.3 | 4.3.3 | installed: Selected through the supported parent graph. |
+| D55 | `jiti` | 2.7.0 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. Other supported instances are listed separately. |
+| D56 | `ts-interface-checker` | 1.0.2 | removed | removed: Obsolete Tailwind 3 instance removed with its parent. |
+| D57 | `picomatch` | 4.0.7 | 2.3.2 | blocked: vite-plugin-full-reload 1.2.0 requires ^2.3.1. |
+| D58 | `wrap-ansi` | 10.0.2 | 9.0.2 | blocked: cliui requires ^9.0.0. |
+| D59 | `laravel/boost` | v2.10.3 | v2.10.3 | installed: Selected through the supported parent graph. |
+| D60 | `brick/math` | 0.20.0 | 1.0.0 | superseded: Validated final major target replaces this alternative. |
+| D61 | `laravel/mcp` | v0.9.7 | v1.1.2 | superseded: Validated final major target replaces this alternative. |
+| D62 | `@tailwindcss/vite` | 4.3.3 | 4.3.3 | installed: Selected through the supported parent graph. |
+| D63 | `@emnapi/core` | 1.11.3 | bundled 1.11.1 | blocked: Oxide 4.3.3 bundles @emnapi/core 1.11.1; the tarball owns this version. A newer parent tarball must update its bundled copy. |
+| D64 | `@emnapi/runtime` | 1.11.3 | bundled 1.11.1 | blocked: Oxide 4.3.3 bundles @emnapi/runtime 1.11.1; the tarball owns this version. A newer parent tarball must update its bundled copy. |
+| D65 | `@napi-rs/wasm-runtime` | 1.2.6 | bundled 1.1.4 | blocked: Oxide 4.3.3 bundles @napi-rs/wasm-runtime 1.1.4; the tarball owns this version. A newer parent tarball must update its bundled copy. |
+| D66 | `@tybys/wasm-util` | 0.10.4 | bundled 0.10.2 | blocked: Oxide 4.3.3 bundles @tybys/wasm-util 0.10.2; the tarball owns this version. A newer parent tarball must update its bundled copy. |
+| D67 | `enhanced-resolve` | 5.26.0 | 5.26.0 | installed: Selected through the supported parent graph. |
+| D68 | `yargs` | 18.2.0 | 18.0.0 | blocked: concurrently 10.0.6 pins exactly 18.0.0. |
+| D69 | `@oxc-project/types` | 0.156.0 | 0.155.0 | blocked: rolldown 1.2.15 pins exactly 0.155.0; it remains the latest stable parent inspected. |
