@@ -43,3 +43,9 @@ The full backend suite passed after this group: 927 passed, 5,401 assertions, on
 Guzzle 8.3.1, Promises 3.1.0, PSR-7 3.2.0, and URI Template 2.0.1 were resolved as a bounded group. PSR-7 removes `ralouphie/getallheaders`; application code does not call that polyfill. No direct application Guzzle, Promise, PSR-7, or Brick API subclasses were found. Existing outbound headers are strings; the GitHub API version is configured as a string.
 
 All 116 focused integration tests passed with 661 assertions, covering scraping, environmental collection, both booking providers, AI parsing/review, regulation research, and GitHub token/issue clients using synthetic responses. Six new local transport tests passed before and after the Guzzle upgrade. They exercise real loopback HTTP redirects, JSON headers, streaming, retry/failure responses, timeout and connection-refusal exception mapping, cookies, and asynchronous promise completion. Each fixture process is bounded and stopped by test teardown. No external account or paid API is used. Composer validation, platform checks, and audit passed.
+
+## UUID arithmetic
+
+Brick Math 1.0.0 is admitted by the unchanged Laravel and Ramsey UUID constraints. The 0.20.0 alternative is superseded. The application uses Laravel UUIDs for parsing execution/idempotency identifiers and client request IDs, with no direct Brick numeric API calls.
+
+A new regression test passed on both graphs: 100 unique Laravel UUIDs remain valid and survive byte and integer round trips through Ramsey's arithmetic. Ordered UUID generation remains valid. Existing parsing/limits integration tests passed, followed by the full combined suite: 934 passed, 5,719 assertions, one live OpenAI skip. Composer audit remained clear.
