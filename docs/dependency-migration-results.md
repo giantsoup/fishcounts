@@ -49,3 +49,11 @@ All 116 focused integration tests passed with 661 assertions, covering scraping,
 Brick Math 1.0.0 is admitted by the unchanged Laravel and Ramsey UUID constraints. The 0.20.0 alternative is superseded. The application uses Laravel UUIDs for parsing execution/idempotency identifiers and client request IDs, with no direct Brick numeric API calls.
 
 A new regression test passed on both graphs: 100 unique Laravel UUIDs remain valid and survive byte and integer round trips through Ramsey's arithmetic. Ordered UUID generation remains valid. Existing parsing/limits integration tests passed, followed by the full combined suite: 934 passed, 5,719 assertions, one live OpenAI skip. Composer audit remained clear.
+
+## PHPUnit and Hamcrest
+
+The root PHPUnit constraint is now `^13.4`, locked to 13.4.5 with its supported Sebastian/coverage graph. Hamcrest is 3.0.0 through Mockery's admitted range. PHP 8.4.27 meets PHPUnit's PHP 8.4.1 floor; CI selects the current PHP 8.4 patch. The existing XML schema reference tracks the installed runner and required no migration. No tests were removed.
+
+Two focused Mockery/Hamcrest tests pass, covering partial mocks, constructor-initialized headers, clone isolation, argument matching, and exception type/message assertions. The partial-mock fixture initializes its constructor after enabling partial behavior because HeaderBag's constructor calls overridable methods. Both direct PHPUnit and Artisan full-suite invocations pass with 936 tests, 5,727 assertions, and the same intentionally skipped live test. Deprecation detail flags produced no application-owned deprecations. Pint, strict Composer validation, platform checks, and audit passed.
+
+No PCOV or Xdebug driver is installed locally. Coverage generation is unavailable; passing tests do not establish coverage generation. CI retains its existing `coverage: none` configuration.
