@@ -57,3 +57,22 @@ The root PHPUnit constraint is now `^13.4`, locked to 13.4.5 with its supported 
 Two focused Mockery/Hamcrest tests pass, covering partial mocks, constructor-initialized headers, clone isolation, argument matching, and exception type/message assertions. The partial-mock fixture initializes its constructor after enabling partial behavior because HeaderBag's constructor calls overridable methods. Both direct PHPUnit and Artisan full-suite invocations pass with 936 tests, 5,727 assertions, and the same intentionally skipped live test. Deprecation detail flags produced no application-owned deprecations. Pint, strict Composer validation, platform checks, and audit passed.
 
 No PCOV or Xdebug driver is installed locally. Coverage generation is unavailable; passing tests do not establish coverage generation. CI retains its existing `coverage: none` configuration.
+
+## npm fetch policy and optional WASM graph
+
+The lock-only update reproduced `EALLOWREMOTE` under Node 26.13.0/npm 12.2.1. `allow-remote=none` is npm 12's built-in default, not a project override. Arborist's complete-tree/lock-only path cracks open packages declaring bundled dependencies by passing their resolved URL to Pacote. That path classifies the Oxide WASM tarball as a remote URL. The normal registry-based `npm update` path succeeds without changing any security setting. `npm ci`, peer validation, audit, and the existing production build then pass.
+
+The coupled Tailwind Vite/Node/Oxide packages are 4.3.3. Their optional platform entries were retained and reviewed. The normal solve also refreshes four Lightning CSS Linux entries' libc metadata without changing versions, source URLs, or integrity. This resolves the initial Linux arm64 `npm ls` failure on the baseline lock's musl metadata. Final native Linux peer checks pass.
+
+Oxide's WASM package targets `cpu: wasm32` and bundles six helpers. Its downloaded registry tarball was checked against the lock's SHA-512, and every bundled `package.json` was inspected. Root helper lock entries disappear because the reviewed tarball owns their versions:
+
+| Bundled package | Actual version | Proposed target disposition |
+| --- | --- | --- |
+| `@emnapi/core` | 1.11.1 | 1.11.3 blocked by the selected tarball's bundled contents |
+| `@emnapi/runtime` | 1.11.1 | 1.11.3 blocked by bundled contents |
+| `@emnapi/wasi-threads` | 1.2.2 | 2.2.0 blocked by Oxide's `^1.2.2` range and bundled Core's exact 1.2.2 |
+| `@napi-rs/wasm-runtime` | 1.1.4 | 1.2.6 blocked by bundled contents |
+| `@tybys/wasm-util` | 0.10.2 | 0.10.4 blocked by bundled contents |
+| `tslib` | 2.8.1 | Bundled supporting dependency |
+
+These are bundle dispositions, not claims that the proposed versions installed. No transitive overrides or new root requirements were added. WASM execution is not a supported platform in the project's native-build check; its integrity and complete bundled graph were inspected, but fallback execution was not exercised.
