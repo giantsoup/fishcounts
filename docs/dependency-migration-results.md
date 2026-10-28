@@ -31,3 +31,9 @@ The initial Linux arm64 asset-stage build passed, including Node distribution ch
 - [Node release index](https://nodejs.org/dist/index.json), [Node 26 changelog](https://github.com/nodejs/node/blob/main/doc/changelogs/CHANGELOG_V26.md), and [26.13.0 checksums](https://nodejs.org/dist/v26.13.0/SHASUMS256.txt).
 - [npm stable metadata](https://registry.npmjs.org/npm/latest) and [npm 12 changelog](https://github.com/npm/cli/blob/v12.2.1/CHANGELOG.md).
 - [Official Node Docker guidance](https://github.com/nodejs/docker-node/blob/main/README.md).
+
+## Boost, Roster, and MCP
+
+Boost 2.10.3, Roster 1.0.0, and MCP 1.1.2 were resolved together using temporary Composer constraints and `--with-dependencies --minimal-changes`. The root Boost constraint remains `^2.4`. Composer Semver 3.5.2 is the only added package in this group. Guzzle stayed at its baseline version for independent transport verification.
+
+The full backend suite passed after this group: 927 passed, 5,401 assertions, one live-test skip. Composer validation, platform requirements, and audit passed. Package discovery, Artisan registration, Roster's actual scan, and a fresh MCP initialize/list-tools/application-info/search-docs exchange passed. The Roster 1 API is consumed by the upgraded Boost release; no application Roster callers exist. Project guidance and MCP settings were preserved.
