@@ -38,9 +38,10 @@ class HotBiteScoringService
 
         $score = $this->applyRuleMinimums($rule, $metrics, max(0, min(100, $score)));
 
-        return ScoreResult::query()->updateOrCreate(
-            ['alert_rule_id' => $rule->id, 'score_date' => $date->toDateString()],
+        return ScoreResult::query()->whereDate('score_date', $date->toDateString())->updateOrCreate(
+            ['alert_rule_id' => $rule->id],
             [
+                'score_date' => $date->toDateString(),
                 'score_run_id' => $scoreRun->id,
                 'score' => $score,
                 'level' => ScoreLevel::fromScore($score),
@@ -55,6 +56,8 @@ class HotBiteScoringService
                 'breadth_score' => $breadthScore,
                 'source_confidence_score' => $sourceConfidenceScore,
                 'explanation' => [
+                    'includes_estimates' => $metrics['includes_estimates'] || $trendMetrics['includes_estimates'],
+                    'incomplete_quantity_coverage' => $metrics['incomplete_quantity_coverage'] || $trendMetrics['incomplete_quantity_coverage'],
                     'weights' => [
                         'total_count' => 30,
                         'count_per_angler' => 25,
@@ -84,16 +87,20 @@ class HotBiteScoringService
             ->leftJoin('species_counts', 'species_counts.trip_report_id', '=', 'trip_reports.id')
             ->where('species_counts.species_id', $rule->species_id)
             ->selectRaw('COALESCE(SUM(species_counts.count), 0) as total_count')
-            ->selectRaw('COALESCE(SUM(COALESCE(trip_reports.anglers, 0)), 0) as total_anglers')
-            ->selectRaw('COUNT(DISTINCT trip_reports.boat_id) as boat_count')
-            ->selectRaw('COUNT(DISTINCT trip_reports.landing_id) as landing_count')
-            ->selectRaw('COALESCE(AVG(trip_reports.source_confidence), 0) as average_source_confidence')
+            ->selectRaw('COALESCE(SUM(CASE WHEN species_counts.count IS NOT NULL THEN COALESCE(trip_reports.anglers, 0) ELSE 0 END), 0) as total_anglers')
+            ->selectRaw('COALESCE(MAX(species_counts.has_estimated_components), 0) as includes_estimates')
+            ->selectRaw('COALESCE(MAX(species_counts.has_unquantified_components), 0) as incomplete_quantity_coverage')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN species_counts.count IS NOT NULL THEN trip_reports.boat_id END) as boat_count')
+            ->selectRaw('COUNT(DISTINCT CASE WHEN species_counts.count IS NOT NULL THEN trip_reports.landing_id END) as landing_count')
+            ->selectRaw('COALESCE(AVG(CASE WHEN species_counts.count IS NOT NULL THEN trip_reports.source_confidence END), 0) as average_source_confidence')
             ->first();
 
         $totalCount = (int) ($reports->total_count ?? 0);
         $totalAnglers = (int) ($reports->total_anglers ?? 0);
 
         return [
+            'includes_estimates' => (bool) ($reports->includes_estimates ?? false),
+            'incomplete_quantity_coverage' => (bool) ($reports->incomplete_quantity_coverage ?? false),
             'total_count' => $totalCount,
             'total_anglers' => $totalAnglers,
             'count_per_angler' => $totalAnglers > 0 ? round($totalCount / $totalAnglers, 2) : 0.0,
@@ -124,19 +131,25 @@ class HotBiteScoringService
         $comparisonWindowEnd = $recentWindowStart->subDay();
         $comparisonWindowStart = $comparisonWindowEnd->subDays($comparisonWindowDays - 1);
 
+        $recent = $this->windowMetrics($rule, $recentWindowStart, $recentWindowEnd, $recentWindowDays);
+        $comparison = $this->windowMetrics($rule, $comparisonWindowStart, $comparisonWindowEnd, $comparisonWindowDays);
+
         return [
+            'includes_estimates' => $recent['includes_estimates'] || $comparison['includes_estimates'],
+            'incomplete_quantity_coverage' => $recent['incomplete_quantity_coverage'] || $comparison['incomplete_quantity_coverage'],
             'recent_window_days' => $recentWindowDays,
             'comparison_window_days' => $comparisonWindowDays,
             'recent_window_start' => $recentWindowStart->toDateString(),
             'recent_window_end' => $recentWindowEnd->toDateString(),
             'comparison_window_start' => $comparisonWindowStart->toDateString(),
             'comparison_window_end' => $comparisonWindowEnd->toDateString(),
-            'recent_average_total_count' => $this->averageDailyTotalCount($rule, $recentWindowStart, $recentWindowEnd, $recentWindowDays),
-            'comparison_average_total_count' => $this->averageDailyTotalCount($rule, $comparisonWindowStart, $comparisonWindowEnd, $comparisonWindowDays),
+            'recent_average_total_count' => $recent['average'],
+            'comparison_average_total_count' => $comparison['average'],
         ];
     }
 
-    private function averageDailyTotalCount(AlertRule $rule, CarbonImmutable $start, CarbonImmutable $end, int $windowDays): float
+    /** @return array{average: ?float, includes_estimates: bool, incomplete_quantity_coverage: bool} */
+    private function windowMetrics(AlertRule $rule, CarbonImmutable $start, CarbonImmutable $end, int $windowDays): array
     {
         $dailyCounts = $this->filteredReports($rule)
             ->where('trip_date', '>=', $start->toDateString())
@@ -144,11 +157,13 @@ class HotBiteScoringService
             ->join('species_counts', 'species_counts.trip_report_id', '=', 'trip_reports.id')
             ->where('species_counts.species_id', $rule->species_id)
             ->groupBy('trip_reports.trip_date')
-            ->selectRaw('trip_reports.trip_date, SUM(species_counts.count) as total_count')
-            ->get()
-            ->pluck('total_count');
+            ->selectRaw('trip_reports.trip_date, SUM(species_counts.count) as total_count, MAX(species_counts.has_estimated_components) as estimated, MAX(species_counts.has_unquantified_components) as incomplete')
+            ->get();
+        $knownDays = max(0, $windowDays - $dailyCounts->whereNull('total_count')->count());
 
-        return $windowDays > 0 ? round((float) $dailyCounts->sum() / $windowDays, 2) : 0.0;
+        return ['average' => $knownDays > 0 ? round((float) $dailyCounts->sum('total_count') / $knownDays, 2) : null,
+            'includes_estimates' => $dailyCounts->contains('estimated', 1),
+            'incomplete_quantity_coverage' => $dailyCounts->contains('incomplete', 1)];
     }
 
     /** @return Builder<TripReport> */
@@ -189,9 +204,9 @@ class HotBiteScoringService
         return (int) min(100, round(($value / $fullScoreAt) * 100));
     }
 
-    private function trendScore(float $recentAverage, float $comparisonAverage): int
+    private function trendScore(?float $recentAverage, ?float $comparisonAverage): int
     {
-        if ($recentAverage <= 0) {
+        if ($recentAverage === null || $comparisonAverage === null || $recentAverage <= 0) {
             return 0;
         }
 

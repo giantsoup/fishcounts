@@ -6,6 +6,7 @@ use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParserDiagnosticData;
 use App\DTOs\RawPayloadData;
+use App\Enums\CatchQuantityBasis;
 use App\Enums\SourceType;
 use App\Models\Boat;
 use App\Models\RawScrapePayload;
@@ -82,7 +83,7 @@ class TripReportNormalizer
                     continue;
                 }
 
-                if ($source->source_type === SourceType::Landing) {
+                if ($source->source_type === SourceType::Landing && ! isset($report->metadata['limits_source_conflict'])) {
                     $this->deleteSportfishingReportFallbackReports($report->tripDate->toDateString(), $boat?->id, $tripType?->id);
                 }
 
@@ -142,6 +143,7 @@ class TripReportNormalizer
             ->where('boat_id', $boatId)
             ->where('trip_type_id', $tripTypeId)
             ->whereHas('source', fn ($query) => $query->where('source_type', SourceType::Landing->value))
+            ->whereNull('metadata->limits_source_conflict')
             ->exists();
     }
 
@@ -260,7 +262,7 @@ class TripReportNormalizer
     {
         return $report->speciesCounts
             ->map(fn (SpeciesCount $count): string => implode(':', [
-                $count->species_id, (int) $count->is_retained_count, $count->count, $count->released_count,
+                $count->species_id, (int) $count->is_retained_count, $count->count ?? 'unknown', $count->released_count, (int) $count->has_estimated_components, (int) $count->has_unquantified_components,
             ]))
             ->sort()->implode('|');
     }
@@ -272,6 +274,16 @@ class TripReportNormalizer
             : Species::query()->whereKey($speciesCount->canonicalSpeciesId)->where('is_active', true)->first();
 
         if ($species === null) {
+            if ($speciesCount->isLimits) {
+                $metadata = $tripReport->metadata ?? [];
+                $component = $speciesCount->component();
+                $component['evidence']['unmapped_numeric_count'] = $component['count'];
+                $component['count'] = null;
+                $component['basis'] = CatchQuantityBasis::LimitsUnquantified->value;
+                $metadata['unmapped_limits'][] = $component;
+                $tripReport->update(['metadata' => $metadata]);
+            }
+
             return;
         }
 
@@ -283,8 +295,15 @@ class TripReportNormalizer
             ],
         );
 
-        $storedCount->count = (int) $storedCount->count + $speciesCount->count;
-        $storedCount->released_count = (int) $storedCount->released_count + $speciesCount->releasedCount;
+        $components = [...($storedCount->components ?? []), $speciesCount->component()];
+        $known = array_filter($components, fn (array $component): bool => $component['count'] !== null);
+        $bases = array_unique(array_column($components, 'basis'));
+        $storedCount->components = $components;
+        $storedCount->count = $known === [] ? null : array_sum(array_column($known, 'count'));
+        $storedCount->released_count = array_sum(array_column($components, 'released'));
+        $storedCount->quantity_basis = count($bases) === 1 ? CatchQuantityBasis::from(reset($bases)) : CatchQuantityBasis::Mixed;
+        $storedCount->has_estimated_components = in_array('limits_estimated', $bases, true);
+        $storedCount->has_unquantified_components = in_array('limits_unquantified', $bases, true);
         $storedCount->raw_species_name = collect([$storedCount->raw_species_name, $speciesCount->speciesName])
             ->filter()
             ->unique()
@@ -293,6 +312,8 @@ class TripReportNormalizer
             ->filter()
             ->unique()
             ->implode(', ');
+        $storedCount->raw_count_text = Str::limit($storedCount->raw_count_text, 255, '');
+        $storedCount->raw_species_name = Str::limit($storedCount->raw_species_name, 255, '');
         $storedCount->save();
     }
 

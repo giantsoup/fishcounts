@@ -4,9 +4,11 @@ namespace App\Providers;
 
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Contracts\IssueTracking\IssueTracker;
+use App\Contracts\Parsing\RegulationResearcher;
 use App\Services\AI\DisabledParserDiagnosticReviewer;
 use App\Services\AI\OpenAiParserDiagnosticReviewer;
 use App\Services\IssueTracking\GitHubIssueTracker;
+use App\Services\Parsing\OfficialRegulationResearcher;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -26,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
                 : DisabledParserDiagnosticReviewer::class,
         );
 
+        $this->app->bind(RegulationResearcher::class, OfficialRegulationResearcher::class);
         $this->app->bind(IssueTracker::class, GitHubIssueTracker::class);
     }
 
@@ -39,6 +42,8 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('ai-parser-reviews', fn (): Limit => Limit::perMinute(
             max(1, (int) config('fish.ai_review.rate_limit_per_minute')),
         )->by('openai-parser-reviews'));
+
+        RateLimiter::for('limits-research', fn (): Limit => Limit::perMinute(2)->by('official-limits-research'));
 
         RateLimiter::for('github-parser-issues', fn (): Limit => Limit::perMinute(
             max(1, (int) config('fish.github_issues.rate_limit_per_minute')),

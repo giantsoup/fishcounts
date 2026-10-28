@@ -7,6 +7,7 @@ use App\Models\SpeciesCount;
 use App\Models\TripReport;
 use App\Services\Booking\BookingAvailabilityResolver;
 use App\Services\Booking\BookingUrlResolver;
+use App\Services\Parsing\CatchCountFormatter;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -133,6 +134,9 @@ class TripDecisionBuilder
             'trip_date' => $tripReport->trip_date->format('n/j/y'),
             'trip_date_sort' => $tripReport->trip_date->toDateString(),
             'target_count' => $targetCount,
+            'target_count_text' => $this->targetCountText($tripReport, $rule, $targetCount),
+            'includes_estimates' => $tripReport->speciesCounts->where('species_id', $rule->species_id)->contains('has_estimated_components', true),
+            'incomplete_quantity_coverage' => $tripReport->speciesCounts->where('species_id', $rule->species_id)->contains('has_unquantified_components', true),
             'source_url' => $sourceUrl,
             'source_highlight_url' => $this->sourceHighlightLinkBuilder->build(
                 $sourceUrl,
@@ -167,6 +171,10 @@ class TripDecisionBuilder
         $speciesCount = $tripReport->speciesCounts
             ->first(fn (SpeciesCount $speciesCount): bool => $speciesCount->species_id === $rule->species_id
                 && $speciesCount->is_retained_count);
+
+        if ($speciesCount !== null && ($speciesCount->has_estimated_components || $speciesCount->has_unquantified_components || collect($speciesCount->components)->contains('limits', true))) {
+            return app(CatchCountFormatter::class)->count($speciesCount);
+        }
 
         if (filled($speciesCount?->raw_count_text)) {
             return str($speciesCount->raw_count_text)

@@ -4,8 +4,11 @@ namespace App\Services\Parsing\Rules;
 
 use App\Contracts\Parsing\ParsedReportDiagnosticRule;
 use App\DTOs\ParsedReportValidationData;
+use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParserDiagnosticFindingData;
+use App\Enums\CatchQuantityBasis;
 use App\Enums\ParserDiagnosticType;
+use App\Services\Parsing\LimitsClaimExtractor;
 use App\Services\Parsing\SourceFishCountGrammar;
 
 class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
@@ -20,14 +23,18 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
 
         $sourceText = $this->sourceText($data);
         $findings = [];
+        $sourceConflict = $data->report->metadata['limits_source_conflict'] ?? null;
 
-        preg_match_all('/\blimits\s+(?:of\s+)?(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)(?=\s*(?:,|[.!]|$)|\s+(?:and\s+\d+|on\s+(?:their|a)|for\s+\d+)\b)/i', $sourceText, $limitsWithoutCounts);
-        $unquantifiedSpecies = $limitsWithoutCounts['species'];
+        $claims = app(LimitsClaimExtractor::class);
+        $unquantifiedSpecies = collect($claims->extract($sourceText))
+            ->reject(fn (ParsedSpeciesCountData $claim): bool => collect($data->report->speciesCounts)->contains(fn (ParsedSpeciesCountData $count): bool => $count->isLimits && $claims->identity($count->speciesName) === $claims->identity($claim->speciesName)))
+            ->map(fn (ParsedSpeciesCountData $claim): string => $claim->evidence['raw_species'] ?? $claim->speciesName)
+            ->values()->all();
 
         if ($data->report->anglers !== null && preg_match_all('/(?<count>\d+)\s+(?:anglers?|people|passengers?)\b/i', $sourceText, $matches)) {
             $sourceAnglers = array_map('intval', $matches['count']);
 
-            if (! in_array($data->report->anglers, $sourceAnglers, true)) {
+            if (! in_array($data->report->anglers, $sourceAnglers, true) && ($data->report->metadata['corroborated_anglers']['count'] ?? null) !== $data->report->anglers) {
                 $findings[] = new ParserDiagnosticFindingData(
                     type: ParserDiagnosticType::ExtractedValueSourceSpanMismatch,
                     field: 'anglers',
@@ -41,6 +48,7 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
         $speciesMismatches = [];
 
         foreach ($data->report->speciesCounts as $speciesCount) {
+            $derivedRetained = $speciesCount->isLimits && in_array($speciesCount->quantityBasis, [CatchQuantityBasis::LimitsUnquantified, CatchQuantityBasis::LimitsEstimated, CatchQuantityBasis::Corroborated], true);
             $sentenceReleasedPattern = '/(?<retained>\d+)\s+'.preg_quote($speciesCount->speciesName, '/').'\.\s*(?<released>\d+)\s+were\s+released\b/iu';
             preg_match_all($sentenceReleasedPattern, $sourceText, $sentenceReleasedMatches, PREG_SET_ORDER);
             $remainingSourceText = preg_replace($sentenceReleasedPattern, ' ', $sourceText) ?? $sourceText;
@@ -70,7 +78,7 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
                 }
             }
 
-            if (($matches === [] && $sentenceReleasedMatches === [] && $limitsMatches === [] && $parentheticalMatches === [] && $releasedOnlyMatches === []) || $retained !== $speciesCount->count || $released !== $speciesCount->releasedCount) {
+            if ((! $derivedRetained && (($matches === [] && $sentenceReleasedMatches === [] && $limitsMatches === [] && $parentheticalMatches === [] && $releasedOnlyMatches === []) || $retained !== $speciesCount->count)) || $released !== $speciesCount->releasedCount) {
                 $speciesMismatches[] = [
                     'species' => $speciesCount->speciesName,
                     'extracted_retained' => $speciesCount->count,
@@ -81,16 +89,19 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
             }
         }
 
-        if ($speciesMismatches !== [] || $unquantifiedSpecies !== []) {
+        if ($speciesMismatches !== [] || $unquantifiedSpecies !== [] || $sourceConflict !== null) {
             $findings[] = new ParserDiagnosticFindingData(
                 type: ParserDiagnosticType::ExtractedValueSourceSpanMismatch,
                 field: 'species_counts',
                 rawValue: $data->report->rawFishCountText,
-                message: $speciesMismatches === []
-                    ? 'Source reports limits without an explicit catch count.'
-                    : 'Extracted retained or released counts do not match their source spans.',
+                message: $sourceConflict !== null
+                    ? 'Saved reports contain ambiguous or conflicting trip evidence for limits.'
+                    : ($speciesMismatches === []
+                        ? 'Source reports limits without an explicit catch count.'
+                        : 'Extracted retained or released counts do not match their source spans.'),
                 evidence: [
                     'mismatches' => $speciesMismatches,
+                    ...($sourceConflict === null ? [] : ['limits_source_conflict' => $sourceConflict]),
                     ...($unquantifiedSpecies === [] ? [] : ['unquantified_species' => $unquantifiedSpecies]),
                 ],
             );

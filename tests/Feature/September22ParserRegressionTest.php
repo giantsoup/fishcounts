@@ -36,9 +36,7 @@ class September22ParserRegressionTest extends TestCase
             $this->assertSame(0, collect($report->speciesCounts)->sum('releasedCount'));
         }
         $diagnostics = $this->diagnostics($payload, $parsed);
-        $this->assertCount(1, $diagnostics);
-        $this->assertSame(ParserDiagnosticType::ExtractedValueSourceSpanMismatch, $diagnostics[0]->type);
-        $this->assertSame(['dorado'], array_map('strtolower', $diagnostics[0]->context['evidence']['unquantified_species']));
+        $this->assertSame([], $diagnostics);
         $missing = new ParsedFishCountCollection($parsed->tripReports->reject(fn (ParsedTripReportData $report): bool => $report->boatName === 'San Diego')->values(), $parsed->parserVersion, $parsed->format);
         $this->assertTrue(collect($this->diagnostics($payload, $missing))->contains(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::EmptyOrUnexpectedlySmallResultSet && str_contains($diagnostic->context['sanitized_paragraph'], 'San Diego')));
     }
@@ -61,7 +59,7 @@ class September22ParserRegressionTest extends TestCase
                 </ul>
                 HTML, [
                 'Polaris Supreme' => ['3 Day', null, ['Dorado' => 141]],
-                'Tribute' => ['2.5 Day', null, ['Yellowfin' => 21]],
+                'Tribute' => ['2.5 Day', null, ['Yellowfin' => 21, 'Dorado' => null]],
                 'Sea Watch' => ['Full Day', null, ['Yellowfin Tuna' => 104, 'Dorado' => 6, 'Skipjack' => 6]],
                 'San Diego' => ['Full Day', 25, ['Yellowfin' => 199, 'Dorado' => 2, 'Skipjack' => 16]],
                 'New Seaforth' => ['Full Day', 23, ['Yellowfin' => 91, 'Dorado' => 4, 'Striped Marlin' => 1, 'Yellowtail' => 22, 'Skipjack' => 12]],
@@ -80,7 +78,7 @@ class September22ParserRegressionTest extends TestCase
                 <li>The <em>New Seaforth</em> has been seeing some excellent local action on its half-day trips, with anglers getting into Bass, Barracuda, and Bonito, along with opportunities at quality Yellowtail. A 20–30 lb live-bait setup with #4 through 2/0 hooks is recommended.</li>
                 </ul>
                 HTML, [
-                'Tribute' => ['2.5 Day', null, ['Yellowfin Tuna' => 103, 'Yellowtail' => 2, 'Wahoo' => 1]],
+                'Tribute' => ['2.5 Day', null, ['Yellowfin Tuna' => 103, 'Yellowtail' => 2, 'Wahoo' => 1, 'Dorado' => null]],
                 'Apollo' => ['2.5 Day', null, ['Yellowfin Tuna' => 201, 'Skipjack Tuna' => 81, 'Yellowtail' => 15, 'Striped Marlin' => 2]],
                 'Highliner' => ['2 Day', null, ['Yellowfin Tuna' => 151, 'Skipjack Tuna' => 76, 'Dorado' => 5, 'Wahoo' => 1]],
                 'Sea Watch' => ['Full Day', null, ['Yellowfin Tuna' => 45, 'Skipjack Tuna' => 5, 'Dorado' => 5, 'Yellowtail' => 3]],

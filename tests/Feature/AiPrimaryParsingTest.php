@@ -24,6 +24,8 @@ use App\Models\TripType;
 use App\Models\User;
 use App\Services\AI\AiParserBudgetManager;
 use App\Services\AI\AiReviewMetrics;
+use App\Services\Parsing\LimitsResolver;
+use App\Services\Parsing\LimitsSourceReconciler;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Cache\RateLimiter as CacheRateLimiter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -1171,7 +1173,7 @@ class AiPrimaryParsingTest extends TestCase
         $execution = ParserExecution::query()->sole();
         $this->assertSame(0, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-sandiego_fish_reports-v12', $result->parserVersion);
+        $this->assertSame('source-specific-sandiego_fish_reports-v13', $result->parserVersion);
         $this->assertSame(ParserEngine::Ai, $execution->requested_engine);
         $this->assertSame(ParserEngine::Deterministic, $execution->selected_engine);
         $this->assertSame('completed', $execution->status);
@@ -1761,6 +1763,8 @@ class AiPrimaryParsingTest extends TestCase
             config('fish.ai_parsing.schema_version'),
             config('fish.ai_parsing.sanitizer_version'),
             config('fish.ai_parsing.catalog_version'),
+            app(LimitsResolver::class)->fingerprint(),
+            app(LimitsSourceReconciler::class)->fingerprint($payload),
         ]));
     }
 }

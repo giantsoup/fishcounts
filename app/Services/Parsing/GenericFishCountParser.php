@@ -11,9 +11,9 @@ use Illuminate\Support\Str;
 
 class GenericFishCountParser
 {
-    public const string PARSER_VERSION = 'generic-line-v11';
+    public const string PARSER_VERSION = 'generic-line-v12';
 
-    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
+    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar, private readonly LimitsClaimExtractor $limits) {}
 
     public function parse(RawPayloadData $payload): ParsedFishCountCollection
     {
@@ -44,7 +44,7 @@ class GenericFishCountParser
             return null;
         }
 
-        if (! preg_match('/(?<anglers>\d+)\s+(?:anglers?|people|passengers?)\b/i', $line, $anglerMatches)) {
+        if (! preg_match('/(?<anglers>\d+)\s+(?:anglers?|people|passengers?)\b/i', $line, $anglerMatches) && $this->limits->extract($rawFishCountText) === []) {
             return null;
         }
 
@@ -64,7 +64,7 @@ class GenericFishCountParser
             landingName: null,
             boatName: $boatName,
             tripTypeName: $tripTypeName,
-            anglers: (int) $anglerMatches['anglers'],
+            anglers: isset($anglerMatches['anglers']) ? (int) $anglerMatches['anglers'] : null,
             rawFishCountText: $rawFishCountText,
             speciesCounts: $speciesCounts->all(),
             metadata: ['parser' => $parserVersion],
@@ -74,6 +74,8 @@ class GenericFishCountParser
     /** @return Collection<int, ParsedSpeciesCountData> */
     public function parseSpeciesCounts(string $line): Collection
     {
+        $claims = $this->limits->extract($line);
+        $original = $line;
         $line = $this->sourceGrammar->normalize($line);
 
         $line = preg_replace_callback(
@@ -140,7 +142,7 @@ class GenericFishCountParser
 
         preg_match_all('/(?<![#\d\/.])(?<count>\d+)\s+(?<species>[A-Za-z][A-Za-z\s.\-]{2,40}?)(?:\s+(?<released>Released))?(?=\s*(?:,|\.|!|$)|\s+\d+\s+|\s+and\s+limits\b)/i', $line, $matches, PREG_SET_ORDER);
 
-        return collect($matches)
+        $counts = collect($matches)
             ->map(function (array $match): ParsedSpeciesCountData {
                 $species = Str::of($match['species'])
                     ->replaceMatches('/^\s*(?:and|with)\s+/i', '')
@@ -183,6 +185,25 @@ class GenericFishCountParser
                 );
             })
             ->values();
+
+        foreach ($claims as $claim) {
+            $existing = $counts->first(fn (ParsedSpeciesCountData $count): bool => $this->limits->identity($count->speciesName) === $this->limits->identity($claim->speciesName));
+            if ($existing === null) {
+                $counts->push($claim);
+            } elseif ($existing->count === 0 && ! $this->limits->hasExplicitRetainedZero($original, $existing->speciesName)) {
+                $counts = $counts->map(fn (ParsedSpeciesCountData $count): ParsedSpeciesCountData => $count === $existing
+                    ? new ParsedSpeciesCountData($claim->speciesName, null, $existing->releasedCount, $claim->rawText, $claim->canonicalSpeciesId, $claim->quantityBasis, true, $claim->evidence)
+                    : $count);
+            }
+        }
+
+        return $counts->map(function (ParsedSpeciesCountData $count) use ($original): ParsedSpeciesCountData {
+            $name = preg_quote($count->speciesName, '/');
+            $isLimits = $count->isLimits || preg_match('/\blimits\s*(?:\(\s*\d+\s*\))?\s*(?:of\s+)?'.$name.'\b/iu', $original) === 1
+                || preg_match('/\b'.$name.'\s*\(\s*limits\s*\)/iu', $original) === 1;
+
+            return new ParsedSpeciesCountData($count->speciesName, $count->count, $count->releasedCount, $count->rawText, $count->canonicalSpeciesId, $count->quantityBasis, $isLimits, $count->evidence);
+        });
     }
 
     private function extractBeforeAnglers(string $line): ?string

@@ -107,11 +107,19 @@ class CountsController extends Controller
                 : 'raw:'.($report->raw_boat_name ?? $report->id)
             );
 
+        $hasUnmappedLimits = (clone $reportsQuery)->whereNotNull('metadata->unmapped_limits')->exists();
+        $incomplete = (clone $countsQuery)->where('has_unquantified_components', true)->exists() || $hasUnmappedLimits;
+        $retained = (clone $countsQuery)->whereNotNull('count')->exists()
+            ? (int) (clone $countsQuery)->sum('count')
+            : ($incomplete ? null : 0);
+
         return [
             'trips' => (clone $reportsQuery)->count(),
             'boats' => $boatKeys->unique()->count(),
             'anglers' => (int) (clone $reportsQuery)->sum('anglers'),
-            'retained' => (int) (clone $countsQuery)->sum('count'),
+            'retained' => $retained,
+            'estimated' => (clone $countsQuery)->where('has_estimated_components', true)->exists(),
+            'incomplete' => $incomplete,
             'released' => (int) (clone $countsQuery)->sum('released_count'),
         ];
     }

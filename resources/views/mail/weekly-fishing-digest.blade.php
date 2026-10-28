@@ -16,7 +16,7 @@ No scores were recorded for {{ $summary['species_name'] }} this week.
 <x-mail::table>
 | Metric | Value |
 | :-- | --: |
-| Weekly target fish | {{ $summary['weekly_total'] }} |
+| Weekly target fish | {{ $summary['weekly_total'] }}{{ ($summary['includes_estimates'] ?? false) ? ' (includes estimates)' : '' }}{{ ($summary['incomplete_quantity_coverage'] ?? false) ? ' (incomplete counts)' : '' }} |
 | Latest score date | {{ $summary['score_date'] }} |
 | Best day | {{ $summary['best_day'] }} |
 | Trend | {{ $summary['trend'] }} |
@@ -34,7 +34,7 @@ No matching completed trips with {{ $summary['species_name'] }} catches were fou
 | Catch date | Boat | Landing | Trip | Count |
 | :-- | :-- | :-- | :-- | --: |
 @foreach ($summary['trip_options'] as $trip)
-| {{ $trip['trip_date'] }} | {{ $trip['boat_name'] }} | {{ $trip['landing_name'] }} | {{ $trip['trip_type'] }} | @if ($trip['source_url']) [{{ $trip['target_count'] }} ↗]({{ $trip['source_highlight_url'] ?? $trip['source_url'] }}) @else {{ $trip['target_count'] }} @endif |
+| {{ $trip['trip_date'] }} | {{ $trip['boat_name'] }} | {{ $trip['landing_name'] }} | {{ $trip['trip_type'] }} | @if ($trip['source_url']) [{{ $trip['target_count_text'] ?? $trip['target_count'] }} ↗]({{ $trip['source_highlight_url'] ?? $trip['source_url'] }}) @else {{ $trip['target_count_text'] ?? $trip['target_count'] }} @endif |
 @endforeach
 </x-mail::table>
 
@@ -44,7 +44,7 @@ No matching completed trips with {{ $summary['species_name'] }} catches were fou
 No booking links are available for the ranked boats.
 @else
 @foreach ($summary['trip_recommendations'] as $trip)
-- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count'] }} {{ $summary['species_name'] }} caught {{ $trip['trip_date'] }}) - [{{ $trip['booking_is_direct'] ? 'Book next matching trip' : 'View booking options' }}]({{ $trip['booking_url'] }})
+- {{ $trip['boat_name'] }} - {{ $trip['trip_type'] }} from {{ $trip['landing_name'] }} ({{ $trip['target_count_text'] ?? ($trip['target_count'].' '.$summary['species_name']) }} caught {{ $trip['trip_date'] }}) - [{{ $trip['booking_is_direct'] ? 'Book next matching trip' : 'View booking options' }}]({{ $trip['booking_url'] }})
 @if ($trip['booking_departure_at_display'])
   Next matching departure: **{{ $trip['booking_departure_at_display'] }}**.
 @if ($trip['booking_open_spots'] !== null)

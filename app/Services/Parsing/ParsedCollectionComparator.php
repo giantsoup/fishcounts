@@ -128,8 +128,13 @@ final class ParsedCollectionComparator
 
         foreach ($report->speciesCounts as $count) {
             $key = $this->entityKey('species', $count->canonicalSpeciesId, $count->speciesName, $catalog);
-            $counts[$key] ??= ['retained' => 0, 'released' => 0];
-            $counts[$key]['retained'] += $count->count;
+            $counts[$key] ??= ['retained' => null, 'released' => 0, 'limits' => []];
+            if ($count->count !== null) {
+                $counts[$key]['retained'] = ($counts[$key]['retained'] ?? 0) + $count->count;
+            }
+            if ($count->isLimits) {
+                $counts[$key]['limits'][] = [$count->speciesName, $count->quantityBasis->value, $count->evidence['rule']['snapshot_hash'] ?? null, $count->evidence['supporting_payload_hash'] ?? null];
+            }
             $counts[$key]['released'] += $count->releasedCount;
         }
 

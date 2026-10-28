@@ -6,6 +6,7 @@ use App\DTOs\ParsedFishCountCollection;
 use App\DTOs\ParsedSpeciesCountData;
 use App\DTOs\ParsedTripReportData;
 use App\DTOs\RawPayloadData;
+use App\Enums\CatchQuantityBasis;
 use App\Enums\SourceType;
 use App\Models\RawScrapePayload;
 use Carbon\CarbonImmutable;
@@ -223,7 +224,7 @@ final class AiParsedCollectionFactory
             $released = $value['released_count'];
             $maximum = (int) config('fish.ai_parsing.limits.max_count');
 
-            if (! is_int($retained) || ! is_int($released) || $retained < 0 || $released < 0 || $retained > $maximum || $released > $maximum) {
+            if (($retained !== null && ! is_int($retained)) || ! is_int($released) || $retained < 0 || $released < 0 || $retained > $maximum || $released > $maximum) {
                 throw new UnexpectedValueException("AI species count [{$reportIndex}:{$speciesIndex}] exceeded count bounds.");
             }
 
@@ -240,9 +241,25 @@ final class AiParsedCollectionFactory
             if ($interpretedName === null) {
                 continue;
             }
-            $this->assertCanonicalName($canonical, $interpretedName, 'species', $reportIndex);
+            $limits = app(LimitsClaimExtractor::class);
+            $claim = collect($limits->extract($reportText))->first(fn (ParsedSpeciesCountData $claim): bool => $limits->identity($claim->speciesName) === $limits->identity($name));
+            if ($retained === null) {
+                if ($claim === null || ! $this->spansContainExactText($evidenceSpans, $claim->rawText)) {
+                    throw new UnexpectedValueException("AI species count [{$reportIndex}:{$speciesIndex}] lacked limits evidence.");
+                }
+                $interpretedName = $claim->speciesName;
+                $approvedRedsGroup = $canonical !== null && $limits->identity($interpretedName) === 'vermilion_sunset'
+                    && in_array($canonical['name'], ['Rockfish', 'Vermilion Rockfish', 'Red Rock Fish'], true);
+                if (! $approvedRedsGroup) {
+                    $this->assertCanonicalName($canonical, $name, 'species', $reportIndex);
+                }
+            } else {
+                $this->assertCanonicalName($canonical, $interpretedName, 'species', $reportIndex);
+            }
             $interpretedText = $this->assumptions->normalize($reportText);
-            $this->assertCountEvidence($interpretedText !== $reportText ? $interpretedText : $sourceBlock, $interpretedName, $retained, $released, $reportIndex, $speciesIndex);
+            if ($retained !== null || $released > 0) {
+                $this->assertCountEvidence($interpretedText !== $reportText ? $interpretedText : $sourceBlock, $retained === null ? $name : $interpretedName, $retained ?? 0, $released, $reportIndex, $speciesIndex);
+            }
             $evidence = implode(' … ', $evidenceSpans);
             $identity = (string) ($canonical['id'] ?? Str::lower($name));
             if (isset($identities[$identity])) {
@@ -255,6 +272,9 @@ final class AiParsedCollectionFactory
                 releasedCount: $released,
                 rawText: $evidence,
                 canonicalSpeciesId: $canonical['id'] ?? null,
+                quantityBasis: $retained === null ? CatchQuantityBasis::LimitsUnquantified : CatchQuantityBasis::Explicit,
+                isLimits: $retained === null || $claim !== null,
+                evidence: $retained === null ? $claim->evidence : [],
             );
         }
 
@@ -330,7 +350,7 @@ final class AiParsedCollectionFactory
     ): void {
         $speciesNames = [$speciesName];
 
-        if ($retained > 0 && ! $this->textSupportsCount($sourceBlock, $speciesNames, $retained, false)) {
+        if (($retained > 0 || ($retained === 0 && $released === 0)) && ! $this->textSupportsCount($sourceBlock, $speciesNames, $retained, false)) {
             throw new UnexpectedValueException("AI species count [{$reportIndex}:{$speciesIndex}] lacked retained-count evidence.");
         }
         if ($released > 0 && ! $this->textSupportsCount($sourceBlock, $speciesNames, $released, true)) {

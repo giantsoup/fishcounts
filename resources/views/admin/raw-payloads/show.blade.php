@@ -73,7 +73,7 @@
                                     <td class="py-2 pe-4">{{ $report->tripType?->name ?? $report->raw_trip_type ?? 'Unknown' }}</td>
                                     <td class="py-2 pe-4">{{ $report->anglers ?? 'n/a' }}</td>
                                     <td class="py-2 pe-4">
-                                        {{ $report->speciesCounts->map(fn ($count) => $count->species->name.' '.$count->count.($count->released_count > 0 ? ' / '.$count->released_count.' released' : ''))->implode(', ') }}
+                                        {{ app(\App\Services\Parsing\CatchCountFormatter::class)->report($report) }}
                                     </td>
                                 </tr>
                             @empty

@@ -248,7 +248,7 @@ class ParserDiagnosticPersistenceTest extends TestCase
 
         $this->assertSame(1, $result->parsedReportCount);
         $this->assertSame(0, $result->diagnosticCount);
-        $this->assertSame('source-specific-fishermans_landing-v12', $result->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v13', $result->parserVersion);
         $this->assertSame($boatName, $report->boat->name);
         $this->assertSame($boatName, $report->raw_boat_name);
         $this->assertSame($tripType, $report->raw_trip_type);
@@ -361,14 +361,9 @@ class ParserDiagnosticPersistenceTest extends TestCase
 
         $result = app(ParseRawPayloadAction::class)->handle($payload->id, false);
 
-        $this->assertSame(0, $result->parsedReportCount);
-        $this->assertSame(1, $result->diagnosticCount);
-        $this->assertDatabaseHas('parser_errors', [
-            'raw_scrape_payload_id' => $payload->id,
-            'error_type' => 'empty_or_unexpectedly_small_result_set',
-            'raw_field' => 'report',
-            'raw_value' => $boatName,
-        ]);
+        $this->assertSame(1, $result->parsedReportCount);
+        $this->assertSame(0, $result->diagnosticCount);
+        $this->assertNull(TripReport::query()->with('speciesCounts')->sole()->speciesCounts->sole()->count);
         $this->assertDatabaseMissing('parser_errors', [
             'raw_scrape_payload_id' => $payload->id,
             'error_type' => 'unknown_boat_alias',

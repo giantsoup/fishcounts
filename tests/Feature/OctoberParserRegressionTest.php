@@ -97,16 +97,16 @@ class OctoberParserRegressionTest extends TestCase
         $this->assertTrue(collect($missing)->contains(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::UnaccountedNumericTokens && $diagnostic->rawValue === '49, 53'));
     }
 
-    public function test_unnumbered_limits_keep_explicit_catches_and_a_diagnostic(): void
+    public function test_unnumbered_limits_keep_explicit_catches_and_a_qualitative_claim(): void
     {
         $this->seed(DatabaseSeeder::class);
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
         $payload = new RawPayloadData('seaforth_landing', CarbonImmutable::parse('2026-10-24'), 'https://example.test/counts', '<ul><li>The Highliner 1.5 Day trip finished with 16 bluefin tuna, 17 yellowfin tuna, 5 skipjack, 19 yellowtail and limits of reds.</li></ul>');
         $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
-        $this->assertSame(['Bluefin Tuna', 'Yellowfin Tuna', 'Skipjack', 'Yellowtail'], collect($parsed->tripReports->sole()->speciesCounts)->pluck('speciesName')->all());
-        $this->assertSame([16, 17, 5, 19], collect($parsed->tripReports->sole()->speciesCounts)->pluck('count')->all());
+        $this->assertSame(['Bluefin Tuna', 'Yellowfin Tuna', 'Skipjack', 'Yellowtail', 'Red Rock Fish'], collect($parsed->tripReports->sole()->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame([16, 17, 5, 19, null], collect($parsed->tripReports->sole()->speciesCounts)->pluck('count')->all());
         $diagnostics = $this->structuralDiagnostics($payload, $parsed);
-        $this->assertTrue(collect($diagnostics)->contains(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::ExtractedValueSourceSpanMismatch && ($diagnostic->context['evidence']['unquantified_species'] ?? []) === ['reds']));
+        $this->assertSame([], $diagnostics);
     }
 
     public function test_multiple_unnumbered_limits_do_not_hide_explicit_catches(): void
@@ -115,10 +115,10 @@ class OctoberParserRegressionTest extends TestCase
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
         $payload = new RawPayloadData('fishermans_landing', CarbonImmutable::parse('2026-10-24'), 'https://example.test/counts', '<p>The Dolphin finished with limits of Calico Bass, Limits Bonito and 17 Yellowtail, 26 Whitefish, and 21 Sheephead on their 3/4 day trip for 25 anglers.</p>');
         $parsed = app(SourceSpecificFishCountParser::class)->parse($payload);
-        $this->assertSame(['Yellowtail', 'Whitefish', 'Sheephead'], collect($parsed->tripReports->sole()->speciesCounts)->pluck('speciesName')->all());
-        $this->assertSame([17, 26, 21], collect($parsed->tripReports->sole()->speciesCounts)->pluck('count')->all());
+        $this->assertSame(['Yellowtail', 'Whitefish', 'Sheephead', 'Calico Bass', 'Bonito'], collect($parsed->tripReports->sole()->speciesCounts)->pluck('speciesName')->all());
+        $this->assertSame([17, 26, 21, null, null], collect($parsed->tripReports->sole()->speciesCounts)->pluck('count')->all());
         $diagnostics = $this->structuralDiagnostics($payload, $parsed);
-        $this->assertTrue(collect($diagnostics)->contains(fn (ParserDiagnosticData $diagnostic): bool => ($diagnostic->context['evidence']['unquantified_species'] ?? []) === ['Calico Bass', 'Bonito']));
+        $this->assertSame([], $diagnostics);
     }
 
     public function test_unquantified_limits_and_incorrect_counts_share_one_complete_diagnostic(): void

@@ -9,6 +9,7 @@ use App\DTOs\ParsedTripReportData;
 use App\DTOs\ParserReportOverrideData;
 use App\DTOs\RawPayloadData;
 use App\Enums\CanonicalEntityType;
+use App\Enums\CatchQuantityBasis;
 use App\Enums\ParserCorrectionField;
 use App\Enums\ParserCorrectionOperation;
 use App\Enums\ParserReportOverrideStatus;
@@ -248,6 +249,9 @@ final class ParserReportOverrideApplier
                 $count->releasedCount,
                 $count->rawText,
                 $correction->canonicalId,
+                $count->quantityBasis,
+                $count->isLimits,
+                $count->evidence,
             );
         })->all();
 
@@ -279,6 +283,9 @@ final class ParserReportOverrideApplier
                 $correction->releasedCount ?? 0,
                 $count->rawText,
                 $correction->canonicalId,
+                CatchQuantityBasis::Explicit,
+                $count->isLimits,
+                ['manual_count_correction' => true, 'original_claim' => $count->rawText],
             );
         })->all();
 

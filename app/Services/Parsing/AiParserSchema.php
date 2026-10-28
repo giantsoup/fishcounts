@@ -68,7 +68,7 @@ final class AiParserSchema
                                         'properties' => [
                                             'raw_species_name' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200],
                                             'canonical_species_id' => $nullableInteger,
-                                            'retained_count' => ['type' => 'integer', 'minimum' => 0],
+                                            'retained_count' => ['type' => ['integer', 'null'], 'minimum' => 0],
                                             'released_count' => ['type' => 'integer', 'minimum' => 0],
                                             'evidence_spans' => $speciesEvidenceSpans,
                                         ],

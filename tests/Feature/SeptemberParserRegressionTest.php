@@ -337,8 +337,8 @@ class SeptemberParserRegressionTest extends TestCase
                     ['Yellowfin', 100, 0],
                     ['Yellowtail', 9, 0],
                     ['Marlin', 1, 0],
+                    ['Dorado', null, 0],
                 ],
-                ['Dorado'],
             ],
             'tribute angler prose' => [
                 'seaforth_landing',

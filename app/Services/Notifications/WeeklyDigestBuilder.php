@@ -44,7 +44,9 @@ class WeeklyDigestBuilder
 
                 $conditions = $this->environmentalConditionLine($summary['environmental_condition']);
 
-                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week · best {$summary['best_day']} · {$conditions} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
+                $coverage = (($summary['includes_estimates'] ?? false) ? ' includes estimates' : '').(($summary['incomplete_quantity_coverage'] ?? false) ? ' incomplete counts' : '');
+
+                return "{$summary['rule_name']}: {$summary['score']} {$summary['level']} on {$summary['score_date']} · {$summary['weekly_total']} target fish this week{$coverage} · best {$summary['best_day']} · {$conditions} · trend {$summary['trend']} · {$summary['boat_count']} boats · ranked trips: {$tripOptions} · recommended: {$recommendedBoats}.";
             })
             ->values();
     }
@@ -110,6 +112,8 @@ class WeeklyDigestBuilder
                     'level_label' => str($latest->level->value)->replace('_', ' ')->headline()->toString(),
                     'score_date' => $latest->score_date->format('n/j/Y'),
                     'weekly_total' => $summary['weekly_total'],
+                    'includes_estimates' => $summary['includes_estimates'],
+                    'incomplete_quantity_coverage' => $summary['incomplete_quantity_coverage'],
                     'best_day' => $summary['best_day'],
                     'trend' => $summary['trend'],
                     'boat_count' => $latest->boat_count,
@@ -151,6 +155,8 @@ class WeeklyDigestBuilder
 
         return [
             'weekly_total' => $weeklyTotal,
+            'includes_estimates' => $scores->contains(fn ($score): bool => (bool) ($score->explanation['includes_estimates'] ?? false)),
+            'incomplete_quantity_coverage' => $scores->contains(fn ($score): bool => (bool) ($score->explanation['incomplete_quantity_coverage'] ?? false)),
             'best_day' => $bestScore === null ? 'n/a' : "{$bestScore->score_date->format('n/j/Y')} ({$bestScore->score})",
             'trend' => $this->trendLabel($firstScore?->score, $lastScore?->score),
             'environmental_condition' => $bestScore === null

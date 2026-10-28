@@ -1,23 +1,6 @@
 @php
-    $formatSpeciesCounts = function ($report): string {
-        return $report->speciesCounts
-            ->flatMap(function ($count) {
-                $parts = collect();
-
-                if ($count->count > 0) {
-                    $parts->push(number_format($count->count).' '.$count->species->name);
-                }
-
-                if ($count->released_count > 0) {
-                    $parts->push(number_format($count->released_count).' '.$count->species->name.' Released');
-                }
-
-                return $parts->isNotEmpty()
-                    ? $parts
-                    : collect([number_format($count->count).' '.$count->species->name]);
-            })
-            ->implode(', ');
-    };
+    $formatter = app(\App\Services\Parsing\CatchCountFormatter::class);
+    $formatSpeciesCounts = fn ($report): string => $formatter->report($report);
 @endphp
 
 <x-app-layout>
@@ -49,13 +32,15 @@
                     </div>
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Retained</p>
-                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['retained']) }}</p>
+                        <p class="mt-1 text-2xl font-semibold text-gray-900">{{ $summary['retained'] === null ? 'Limits reported' : number_format($summary['retained']) }}</p>
                     </div>
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Released</p>
                         <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['released']) }}</p>
                     </div>
                 </div>
+                @if ($summary['estimated'])<p class="mt-3 text-sm text-gray-600">Totals include estimates from limits.</p>@endif
+                @if ($summary['incomplete'])<p class="mt-2 text-sm text-gray-600">Some limits have no numeric count. Numeric totals are incomplete.</p>@endif
             </section>
 
             <section class="bg-white px-4 py-5 shadow sm:rounded-lg sm:p-6">
@@ -143,7 +128,8 @@
                                 <span>{{ $report->source?->name ?? 'Unknown' }}</span>
                             </div>
 
-                            <p class="mt-3 text-sm leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</p>
+                            <p title="{{ $formatter->details($report) }}" class="mt-3 text-sm leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</p>
+                            @if ($formatter->details($report))<p class="mt-1 text-xs text-gray-500">{{ $formatter->details($report) }}</p>@endif
                         </article>
                     @empty
                         <p class="px-4 py-8 text-center text-sm text-gray-500">No counts match the current filters.</p>
@@ -178,7 +164,7 @@
                                     </td>
                                     <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $tripTypeName }}</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-right text-gray-700">{{ $report->anglers !== null ? number_format($report->anglers) : '—' }}</td>
-                                    <td class="min-w-[360px] px-4 py-3 leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</td>
+                                    <td class="min-w-[360px] px-4 py-3 leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}@if ($formatter->details($report))<p class="text-xs text-gray-500">{{ $formatter->details($report) }}</p>@endif</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $report->source?->name ?? 'Unknown' }}</td>
                                 </tr>
                             @empty

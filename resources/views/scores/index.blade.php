@@ -105,7 +105,7 @@
                                             {{ str($score->level->value)->replace('_', ' ')->title() }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ number_format($score->total_count) }}</td>
+                                    <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ number_format($score->total_count) }}@if ($score->explanation['includes_estimates'] ?? false) <span class="text-xs">includes estimates</span>@endif @if ($score->explanation['incomplete_quantity_coverage'] ?? false) <span class="text-xs">incomplete counts</span>@endif</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->boat_count }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->landing_count }}</td>
                                     <td class="px-4 py-3 whitespace-nowrap text-right text-gray-700">{{ $score->trend_score }}</td>

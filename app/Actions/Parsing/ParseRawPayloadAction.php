@@ -13,6 +13,7 @@ use App\Exceptions\AiParserRateLimitExceededException;
 use App\Exceptions\NoPublicFishCountTextException;
 use App\Jobs\DeduplicateTripReportsJob;
 use App\Jobs\DispatchParserDiagnosticReviewBatchesJob;
+use App\Jobs\ParseRawPayloadJob;
 use App\Models\AiBudgetReservation;
 use App\Models\ParserDiagnosticReviewRun;
 use App\Models\ParserError;
@@ -21,6 +22,9 @@ use App\Models\RawScrapePayload;
 use App\Services\Parsing\AiParserCatalog;
 use App\Services\Parsing\AiParserDocumentSanitizer;
 use App\Services\Parsing\AiPrimaryParser;
+use App\Services\Parsing\LimitsResolver;
+use App\Services\Parsing\LimitsScoreRefresher;
+use App\Services\Parsing\LimitsSourceReconciler;
 use App\Services\Parsing\ParsedCollectionSnapshot;
 use App\Services\Parsing\ParsedReportValidator;
 use App\Services\Parsing\ParserReportOverrideApplier;
@@ -45,6 +49,9 @@ class ParseRawPayloadAction
         private readonly ParsedCollectionSnapshot $snapshot,
         private readonly AiParserDocumentSanitizer $sanitizer,
         private readonly AiParserCatalog $catalog,
+        private readonly LimitsResolver $limits,
+        private readonly LimitsSourceReconciler $reconciler,
+        private readonly LimitsScoreRefresher $limitsScores,
     ) {}
 
     public function handle(
@@ -85,6 +92,9 @@ class ParseRawPayloadAction
         $execution = $this->execution($payload, $options);
 
         if ($execution->status === 'completed' && $payload->authoritative_parser_execution_id === $execution->id) {
+            if ($execution->downstream_dispatched_at === null) {
+                $this->prepareLimitsDownstream($payload, $options);
+            }
             $diagnosticCount = $payload->parserErrors()->whereNull('resolution_type')->count();
             $this->dispatchDownstream(
                 $payload,
@@ -186,16 +196,24 @@ class ParseRawPayloadAction
             $parsed = $this->overrideApplier->apply($payload, $rawPayload, $parsed);
             $execution->update(['deterministic_snapshot' => $this->snapshot->make($parsed)]);
         }
+        $evidenceFingerprint = $this->reconciler->fingerprint($payload);
+        $ruleFingerprint = $this->limits->fingerprint();
+        $parsed = $this->reconciler->reconcile($parsed, $payload);
+        $parsed = $this->limits->enrich($parsed, $payload);
         $parsed = $this->withExecutionMetadata($parsed, $execution, $selectedEngine);
 
         try {
-            [$payload, $parsed, $parsedReportCount, $diagnosticCount] = DB::transaction(function () use ($payload, $rawPayload, $parsed, $execution, $selectedEngine, $fallbackCategory): array {
+            [$payload, $parsed, $parsedReportCount, $diagnosticCount] = DB::transaction(function () use ($payload, $rawPayload, $parsed, $execution, $selectedEngine, $fallbackCategory, $evidenceFingerprint, $ruleFingerprint): array {
+                RawScrapePayload::query()->whereDate('target_date', $payload->target_date)->orderBy('id')->lockForUpdate()->get(['id']);
                 $lockedPayload = RawScrapePayload::query()->with('scrapeSource')->lockForUpdate()->findOrFail($payload->id);
                 if (! hash_equals($payload->payload_hash, $lockedPayload->payload_hash)) {
                     throw new RuntimeException('The raw payload changed while it was being parsed.');
                 }
 
                 $this->assertNewestPayload($lockedPayload);
+                if (! hash_equals($evidenceFingerprint, $this->reconciler->fingerprint($lockedPayload)) || ! hash_equals($ruleFingerprint, $this->limits->fingerprint())) {
+                    throw new RuntimeException('Limits evidence changed while the payload was being parsed. Retry with the current evidence.');
+                }
 
                 $diagnostics = $this->validator->validate($lockedPayload, $rawPayload, $parsed);
                 $parsedReportCount = $this->normalizer->replaceForPayload($lockedPayload, $parsed, $diagnostics);
@@ -230,6 +248,7 @@ class ParseRawPayloadAction
         }
         $parserVersion = $parsed->tripReports->first()?->metadata['parser'] ?? $parsed->parserVersion ?? 'unknown';
 
+        $this->prepareLimitsDownstream($payload, $options);
         $this->dispatchDownstream($payload, $options, $diagnosticCount, $selectedEngine, $execution);
 
         return new ParseRawPayloadResult(
@@ -239,6 +258,19 @@ class ParseRawPayloadAction
             diagnosticCount: $diagnosticCount,
             shouldDispatchDeduplication: $options->dispatchDeduplication,
         );
+    }
+
+    private function prepareLimitsDownstream(RawScrapePayload $payload, ParseRawPayloadOptions $options): void
+    {
+        if (config('limits.enabled')) {
+            $this->limitsScores->refresh($payload->target_date->toDateString());
+        }
+        if (config('limits.enabled') && $options->dispatchDeduplication) {
+            RawScrapePayload::query()->with('scrapeSource')->whereDate('target_date', $payload->target_date)
+                ->where('scrape_source_id', '!=', $payload->scrape_source_id)->where('payload', 'like', '%limits%')
+                ->orderByDesc('fetched_at')->orderByDesc('id')->get()->unique('scrape_source_id')
+                ->each(fn (RawScrapePayload $dependent) => ParseRawPayloadJob::dispatch($dependent->id, parserEngine: $dependent->scrapeSource->parser_engine, executionKey: 'limits-evidence:'.$this->reconciler->fingerprint($dependent))->afterCommit());
+        }
     }
 
     private function containsOnlyRecognizedAggregates(RawPayloadData $rawPayload, ?ParsedFishCountCollection $deterministic): bool
@@ -273,6 +305,8 @@ class ParseRawPayloadAction
             config('fish.ai_parsing.schema_version'),
             config('fish.ai_parsing.sanitizer_version'),
             config('fish.ai_parsing.catalog_version'),
+            $this->limits->fingerprint(),
+            $this->reconciler->fingerprint($payload),
         ]));
 
         return ParserExecution::query()->firstOrCreate(

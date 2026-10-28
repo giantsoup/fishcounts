@@ -15,9 +15,12 @@ use App\Models\SpeciesCount;
 use App\Models\TripReport;
 use App\Models\TripType;
 use App\Models\User;
+use App\Services\Parsing\LimitsScoreRefresher;
 use App\Services\Scoring\HotBiteScoringService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class HotBiteScoringServiceTest extends TestCase
@@ -100,6 +103,47 @@ class HotBiteScoringServiceTest extends TestCase
         $this->assertSame(5, $score->total_anglers);
         $this->assertSame('4.00', $score->count_per_angler);
         $this->assertSame(73.33, $score->explanation['recent_average_total_count']);
+    }
+
+    public function test_unquantified_limits_do_not_add_anglers_or_breadth_to_numeric_metrics(): void
+    {
+        $context = $this->scoringContext();
+        $this->createTripReport($context, '2026-10-07', 40, 10);
+        $unknown = $this->createTripReport($context, '2026-10-07', 0, 30);
+        $unknown->speciesCounts()->update(['count' => null, 'quantity_basis' => 'limits_unquantified', 'has_unquantified_components' => true]);
+        $score = $this->scoreRule($context['rule'], '2026-10-07');
+        $this->assertSame(40, $score->total_count);
+        $this->assertSame(10, $score->total_anglers);
+        $this->assertSame('4.00', $score->count_per_angler);
+        $this->assertTrue($score->explanation['incomplete_quantity_coverage']);
+        $this->assertFalse($score->explanation['includes_estimates']);
+    }
+
+    public function test_numeric_limits_estimates_enter_scores_with_a_visible_basis(): void
+    {
+        $context = $this->scoringContext();
+        $report = $this->createTripReport($context, '2026-10-07', 80, 16);
+        $report->speciesCounts()->update(['quantity_basis' => 'limits_estimated', 'has_estimated_components' => true]);
+        $score = $this->scoreRule($context['rule'], '2026-10-07');
+        $this->assertSame(80, $score->total_count);
+        $this->assertSame('5.00', $score->count_per_angler);
+        $this->assertTrue($score->explanation['includes_estimates']);
+    }
+
+    public function test_limits_replay_refreshes_existing_scores_without_historical_notifications(): void
+    {
+        $context = $this->scoringContext();
+        $report = $this->createTripReport($context, '2026-10-07', 40, 10);
+        $score = $this->scoreRule($context['rule'], '2026-10-07');
+        $report->speciesCounts()->update(['count' => 80, 'has_estimated_components' => true]);
+        Queue::fake();
+        Notification::fake();
+        app(LimitsScoreRefresher::class)->refresh('2026-10-07');
+        $this->assertSame(80, $score->fresh()->total_count);
+        $this->assertTrue($score->fresh()->explanation['includes_estimates']);
+        $this->assertSame(1, ScoreResult::query()->count());
+        Queue::assertNothingPushed();
+        Notification::assertNothingSent();
     }
 
     /** @return array{rule: AlertRule, region: Region, landing: Landing, boat: Boat, tripType: TripType, species: Species, source: ScrapeSource} */
