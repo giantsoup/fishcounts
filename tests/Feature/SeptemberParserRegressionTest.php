@@ -22,9 +22,12 @@ class SeptemberParserRegressionTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @param array<int, array{string, int, int}> $counts */
+    /**
+     * @param  array<int, array{string, int, int}>  $counts
+     * @param  list<string>  $unquantifiedSpecies
+     */
     #[DataProvider('productionParagraphs')]
-    public function test_production_paragraph_preserves_report_and_catches(string $source, string $paragraph, string $boat, ?string $trip, ?int $anglers, array $counts): void
+    public function test_production_paragraph_preserves_report_and_catches(string $source, string $paragraph, string $boat, ?string $trip, ?int $anglers, array $counts, array $unquantifiedSpecies = []): void
     {
         $this->seed(DatabaseSeeder::class);
         config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
@@ -40,7 +43,14 @@ class SeptemberParserRegressionTest extends TestCase
         $this->assertSame($counts, collect($report->speciesCounts)->map(fn (ParsedSpeciesCountData $count): array => [$count->speciesName, $count->count, $count->releasedCount])->all());
         $stored = new RawScrapePayload(['payload_hash' => hash('sha256', $body)]);
         $diagnostics = app(ParsedReportValidator::class)->validate($stored, $payload, $parsed);
-        $this->assertSame([], collect($diagnostics)->reject(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::UnknownAlias)->map(fn (ParserDiagnosticData $diagnostic): array => [$diagnostic->type->value, $diagnostic->rawValue])->all());
+        $structural = collect($diagnostics)->reject(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::UnknownAlias)->values();
+        if ($unquantifiedSpecies === []) {
+            $this->assertSame([], $structural->all());
+        } else {
+            $this->assertCount(1, $structural);
+            $this->assertSame(ParserDiagnosticType::ExtractedValueSourceSpanMismatch, $structural[0]->type);
+            $this->assertSame($unquantifiedSpecies, $structural[0]->context['evidence']['unquantified_species']);
+        }
     }
 
     #[DataProvider('tableSources')]
@@ -328,6 +338,7 @@ class SeptemberParserRegressionTest extends TestCase
                     ['Yellowtail', 9, 0],
                     ['Marlin', 1, 0],
                 ],
+                ['Dorado'],
             ],
             'tribute angler prose' => [
                 'seaforth_landing',

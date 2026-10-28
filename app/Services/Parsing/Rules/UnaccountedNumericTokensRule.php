@@ -35,7 +35,7 @@ class UnaccountedNumericTokensRule implements ParsedReportDiagnosticRule
         ], ' ', $remaining) ?? $remaining;
 
         foreach ([$data->report->boatName, $data->report->landingName, $data->report->tripTypeName] as $value) {
-            if (is_string($value) && $value !== '') {
+            if (is_string($value) && preg_match('/\d/', $value) === 1) {
                 $remaining = preg_replace('/'.preg_quote($value, '/').'/iu', ' ', $remaining) ?? $remaining;
             }
         }

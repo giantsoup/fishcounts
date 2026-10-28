@@ -35,7 +35,10 @@ class September22ParserRegressionTest extends TestCase
             $this->assertSame($counts, collect($report->speciesCounts)->mapWithKeys(fn (ParsedSpeciesCountData $count): array => [$count->speciesName => $count->count])->all());
             $this->assertSame(0, collect($report->speciesCounts)->sum('releasedCount'));
         }
-        $this->assertSame([], $this->diagnostics($payload, $parsed));
+        $diagnostics = $this->diagnostics($payload, $parsed);
+        $this->assertCount(1, $diagnostics);
+        $this->assertSame(ParserDiagnosticType::ExtractedValueSourceSpanMismatch, $diagnostics[0]->type);
+        $this->assertSame(['dorado'], array_map('strtolower', $diagnostics[0]->context['evidence']['unquantified_species']));
         $missing = new ParsedFishCountCollection($parsed->tripReports->reject(fn (ParsedTripReportData $report): bool => $report->boatName === 'San Diego')->values(), $parsed->parserVersion, $parsed->format);
         $this->assertTrue(collect($this->diagnostics($payload, $missing))->contains(fn (ParserDiagnosticData $diagnostic): bool => $diagnostic->type === ParserDiagnosticType::EmptyOrUnexpectedlySmallResultSet && str_contains($diagnostic->context['sanitized_paragraph'], 'San Diego')));
     }

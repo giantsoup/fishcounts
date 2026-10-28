@@ -21,6 +21,9 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
         $sourceText = $this->sourceText($data);
         $findings = [];
 
+        preg_match_all('/\blimits\s+(?:of\s+)?(?<species>[A-Za-z][A-Za-z .\'-]{2,40}?)(?=\s*(?:,|[.!]|$)|\s+(?:and\s+\d+|on\s+(?:their|a)|for\s+\d+)\b)/i', $sourceText, $limitsWithoutCounts);
+        $unquantifiedSpecies = $limitsWithoutCounts['species'];
+
         if ($data->report->anglers !== null && preg_match_all('/(?<count>\d+)\s+(?:anglers?|people|passengers?)\b/i', $sourceText, $matches)) {
             $sourceAnglers = array_map('intval', $matches['count']);
 
@@ -78,13 +81,18 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
             }
         }
 
-        if ($speciesMismatches !== []) {
+        if ($speciesMismatches !== [] || $unquantifiedSpecies !== []) {
             $findings[] = new ParserDiagnosticFindingData(
                 type: ParserDiagnosticType::ExtractedValueSourceSpanMismatch,
                 field: 'species_counts',
                 rawValue: $data->report->rawFishCountText,
-                message: 'Extracted retained or released counts do not match their source spans.',
-                evidence: ['mismatches' => $speciesMismatches],
+                message: $speciesMismatches === []
+                    ? 'Source reports limits without an explicit catch count.'
+                    : 'Extracted retained or released counts do not match their source spans.',
+                evidence: [
+                    'mismatches' => $speciesMismatches,
+                    ...($unquantifiedSpecies === [] ? [] : ['unquantified_species' => $unquantifiedSpecies]),
+                ],
             );
         }
 
