@@ -4,7 +4,7 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="mx-auto max-w-3xl bg-white p-6 shadow sm:rounded-lg sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl bg-white p-6 shadow-sm sm:rounded-lg sm:px-6 lg:px-8">
             <form method="POST" action="{{ route('admin.users.store') }}" class="space-y-5">
                 @csrf
 

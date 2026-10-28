@@ -8,7 +8,7 @@
 
     <div class="py-8">
         <div
-            class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow sm:rounded-lg"
+            class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow-sm sm:rounded-lg"
             data-progress-poll
             data-progress-poll-active="{{ $hasActiveBackfills ? 'true' : 'false' }}"
             data-progress-poll-interval="5000"

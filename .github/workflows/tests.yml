@@ -40,6 +40,11 @@ jobs:
       - name: Install Node Dependencies
         run: npm ci
 
+      - name: Verify Native Build Dependencies
+        run: |
+          npm ls --all
+          npm run check:platform
+
       - name: Install Dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
@@ -65,3 +70,6 @@ jobs:
 
       - name: Run Tests
         run: php artisan test --compact
+
+      - name: Verify Dependency Locks
+        run: git diff --exit-code -- composer.lock package-lock.json

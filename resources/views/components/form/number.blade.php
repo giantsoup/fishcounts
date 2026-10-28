@@ -17,5 +17,5 @@
     @if ($attributes->has('step')) data-step="{{ $attributes->get('step') }}" @endif
     @if ($mask) x-mask="{{ $mask }}" @endif
     @disabled($disabled)
-    {{ $inputAttributes->merge(['class' => 'form-number-control mt-1 block w-full rounded-md border-border shadow-sm focus:border-focus focus:ring-focus']) }}
+    {{ $inputAttributes->merge(['class' => 'form-number-control mt-1 block w-full rounded-md border-border shadow-xs focus:border-focus focus:ring-focus']) }}
 >

@@ -1,6 +1,103 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss" source(none);
+
+@source "../views";
+@source "../js";
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views";
+@source "../../storage/framework/views";
+
+@plugin "@tailwindcss/forms";
+
+@theme inline {
+    --color-fc-navy: var(--fc-navy);
+    --color-fc-blue: var(--fc-blue);
+    --color-fc-blue-soft: var(--fc-blue-soft);
+    --color-fc-bg: var(--fc-bg);
+    --color-fc-red: var(--fc-red);
+    --color-fc-red-dark: var(--fc-red-dark);
+    --color-fc-text: var(--fc-text);
+    --color-fc-muted: var(--fc-muted);
+    --color-fc-border: var(--fc-border);
+    --color-fc-white: var(--fc-white);
+    --color-background: var(--fc-bg);
+    --color-surface: var(--fc-white);
+    --color-text: var(--fc-text);
+    --color-muted: var(--fc-muted);
+    --color-border: var(--fc-border);
+    --color-primary: var(--fc-navy);
+    --color-link: var(--fc-blue);
+    --color-focus: var(--fc-blue);
+    --color-danger: var(--fc-red-dark);
+    --color-danger-accent: var(--fc-red);
+    --color-gray-50: var(--fc-blue-soft);
+    --color-gray-100: var(--fc-bg);
+    --color-gray-200: var(--fc-border);
+    --color-gray-300: var(--fc-border);
+    --color-gray-400: var(--fc-muted);
+    --color-gray-500: var(--fc-muted);
+    --color-gray-600: var(--fc-muted);
+    --color-gray-700: var(--fc-text);
+    --color-gray-800: var(--fc-text);
+    --color-gray-900: var(--fc-text);
+    --color-gray-950: var(--fc-navy);
+    --color-indigo-50: var(--fc-blue-soft);
+    --color-indigo-100: var(--fc-blue-soft);
+    --color-indigo-200: var(--fc-border);
+    --color-indigo-300: var(--fc-border);
+    --color-indigo-400: var(--fc-blue);
+    --color-indigo-500: var(--fc-blue);
+    --color-indigo-600: var(--fc-blue);
+    --color-indigo-700: var(--fc-navy);
+    --color-indigo-800: var(--fc-navy);
+    --color-indigo-900: var(--fc-navy);
+    --color-indigo-950: var(--fc-navy);
+    --color-blue-50: var(--fc-blue-soft);
+    --color-blue-100: var(--fc-blue-soft);
+    --color-blue-200: var(--fc-border);
+    --color-blue-300: var(--fc-border);
+    --color-blue-400: var(--fc-blue);
+    --color-blue-500: var(--fc-blue);
+    --color-blue-600: var(--fc-blue);
+    --color-blue-700: var(--fc-blue);
+    --color-blue-800: var(--fc-navy);
+    --color-blue-900: var(--fc-navy);
+    --color-blue-950: var(--fc-navy);
+    --color-sky-50: var(--fc-blue-soft);
+    --color-sky-100: var(--fc-blue-soft);
+    --color-sky-200: var(--fc-border);
+    --color-sky-300: var(--fc-border);
+    --color-sky-400: var(--fc-blue);
+    --color-sky-500: var(--fc-blue);
+    --color-sky-600: var(--fc-blue);
+    --color-sky-700: var(--fc-blue);
+    --color-sky-800: var(--fc-navy);
+    --color-sky-900: var(--fc-navy);
+    --color-sky-950: var(--fc-navy);
+    --color-red-50: var(--fc-blue-soft);
+    --color-red-100: var(--fc-blue-soft);
+    --color-red-200: var(--fc-border);
+    --color-red-300: var(--fc-border);
+    --color-red-400: var(--fc-red);
+    --color-red-500: var(--fc-red);
+    --color-red-600: var(--fc-red);
+    --color-red-700: var(--fc-red-dark);
+    --color-red-800: var(--fc-red-dark);
+    --color-red-900: var(--fc-red-dark);
+    --color-red-950: var(--fc-red-dark);
+    --color-green-50: var(--fc-blue-soft);
+    --color-green-100: var(--fc-blue-soft);
+    --color-green-200: var(--fc-border);
+    --color-green-300: var(--fc-border);
+    --color-green-400: var(--fc-blue);
+    --color-green-500: var(--fc-blue);
+    --color-green-600: var(--fc-blue);
+    --color-green-700: var(--fc-navy);
+    --color-green-800: var(--fc-navy);
+    --color-green-900: var(--fc-navy);
+    --color-green-950: var(--fc-navy);
+    --font-sans: Figtree, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+
 
 @layer base {
     :root {
@@ -26,12 +123,20 @@
         --color-danger-accent: var(--fc-red);
     }
 
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--fc-border);
+    }
+
     body {
         @apply bg-background text-text;
     }
 
     a {
-        @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2;
+        @apply focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2;
     }
 }
 
@@ -62,7 +167,7 @@
 }
 
 .ts-wrapper .ts-control {
-    @apply min-h-[42px] rounded-md border-border bg-surface px-3 py-2 text-sm shadow-sm transition focus-within:border-focus focus-within:ring-1 focus-within:ring-focus;
+    @apply min-h-[42px] rounded-md border-border bg-surface px-3 py-2 text-sm shadow-xs transition focus-within:border-focus focus-within:ring-1 focus-within:ring-focus;
 }
 
 .ts-wrapper.single .ts-control,
@@ -87,7 +192,7 @@
 }
 
 .ts-wrapper.multi .ts-control > .item {
-    @apply rounded bg-fc-blue-soft px-2 py-0.5 text-text;
+    @apply rounded-sm bg-fc-blue-soft px-2 py-0.5 text-text;
 }
 
 .ts-wrapper.plugin-remove_button .ts-control .item .remove {

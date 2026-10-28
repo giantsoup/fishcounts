@@ -4,7 +4,7 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow sm:rounded-lg">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow-sm sm:rounded-lg">
             @if (session('status'))
                 <p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>
             @endif
@@ -69,7 +69,7 @@
                                         </p>
                                     @endif
                                     @if ($execution->fallback_category)
-                                        <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                                        <div class="mt-2 rounded-sm border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
                                             <p class="font-medium">
                                                 Completed via deterministic fallback
                                                 · {{ str($execution->fallback_stage ?? 'unknown')->replace('_', ' ') }}
@@ -91,7 +91,7 @@
                                             <summary class="cursor-pointer font-medium">Provider attempt audit</summary>
                                             <ul class="mt-1 space-y-2">
                                                 @foreach ($execution->aiAttempts as $attempt)
-                                                    <li class="rounded border border-gray-200 p-2">
+                                                    <li class="rounded-sm border border-gray-200 p-2">
                                                         Attempt {{ $attempt->attempt_number ?? $loop->iteration }}
                                                         · {{ $attempt->status->value }}
                                                         · {{ str($attempt->cost_basis->value)->replace('_', ' ') }}
@@ -118,7 +118,7 @@
                                                         @if ($attempt->provider_output_excerpt)
                                                             <details class="mt-1">
                                                                 <summary class="cursor-pointer">Provider output excerpt</summary>
-                                                                <pre class="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-50 p-2 text-[11px]">{{ $attempt->provider_output_excerpt }}</pre>
+                                                                <pre class="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-gray-50 p-2 text-[11px]">{{ $attempt->provider_output_excerpt }}</pre>
                                                             </details>
                                                         @endif
                                                     </li>
@@ -147,7 +147,7 @@
 
                             <div>
                                 <x-input-label for="parser-engine-{{ $source->id }}" value="Parsing engine" />
-                                <select id="parser-engine-{{ $source->id }}" name="parser_engine" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                <select id="parser-engine-{{ $source->id }}" name="parser_engine" class="mt-1 block w-full rounded-md border-gray-300 shadow-xs">
                                     @foreach (\App\Enums\ParserEngine::cases() as $engine)
                                         <option value="{{ $engine->value }}" @selected(($isSubmittedSource ? old('parser_engine') : $source->parser_engine->value) === $engine->value)>
                                             {{ $engine === \App\Enums\ParserEngine::Ai ? 'AI primary' : 'Deterministic' }}
@@ -159,13 +159,13 @@
 
                             <div class="lg:col-span-2">
                                 <x-input-label for="parser-reason-{{ $source->id }}" value="Engine change reason" />
-                                <input id="parser-reason-{{ $source->id }}" name="parser_engine_change_reason" type="text" maxlength="1000" value="{{ $isSubmittedSource ? old('parser_engine_change_reason') : '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">
+                                <input id="parser-reason-{{ $source->id }}" name="parser_engine_change_reason" type="text" maxlength="1000" value="{{ $isSubmittedSource ? old('parser_engine_change_reason') : '' }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-xs">
                                 <p class="mt-1 text-xs text-amber-700">Changing engines can invalidate parser-version-bound report overrides. In-flight jobs keep their snapshotted engine.</p>
                             </div>
 
                             <div class="lg:col-span-6">
                                 <x-input-label for="notes-{{ $source->id }}" value="Notes" />
-                                <textarea id="notes-{{ $source->id }}" name="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">{{ $isSubmittedSource ? old('notes') : $source->notes }}</textarea>
+                                <textarea id="notes-{{ $source->id }}" name="notes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">{{ $isSubmittedSource ? old('notes') : $source->notes }}</textarea>
                             </div>
 
                             <div class="lg:col-span-6">

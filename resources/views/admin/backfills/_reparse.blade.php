@@ -1,4 +1,4 @@
-<div class="bg-white p-6 shadow sm:rounded-lg">
+<div class="bg-white p-6 shadow-sm sm:rounded-lg">
     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
             <h3 class="font-semibold text-gray-900">Reparse saved payloads</h3>

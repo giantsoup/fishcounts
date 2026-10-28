@@ -14,8 +14,8 @@
                 <p class="text-sm text-gray-600">
                     {{ $backfill->status->value }} · {{ $finishedItems }} of {{ $backfill->items_count }} source dates complete · {{ $progress }}%
                 </p>
-                <div class="mt-2 h-2 rounded bg-gray-100">
-                    <div class="h-2 rounded bg-blue-600" style="width: {{ $progress }}%"></div>
+                <div class="mt-2 h-2 rounded-sm bg-gray-100">
+                    <div class="h-2 rounded-sm bg-blue-600" style="width: {{ $progress }}%"></div>
                 </div>
                 <p class="mt-2 text-xs text-gray-500">
                     Pending {{ $backfill->pending_items_count }} · Running {{ $backfill->running_items_count }} · Succeeded {{ $backfill->succeeded_items_count }} · Failed {{ $backfill->failed_items_count }} · Unavailable {{ $backfill->unavailable_items_count }}
@@ -23,7 +23,7 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <a class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-sm transition duration-150 ease-in-out hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25" href="{{ route('admin.backfills.show', $backfill) }}">
+                <a class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-widest text-gray-700 shadow-xs transition duration-150 ease-in-out hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25" href="{{ route('admin.backfills.show', $backfill) }}">
                     View source dates
                 </a>
 
@@ -58,7 +58,7 @@
         </div>
 
         @if ($backfill->items->isNotEmpty())
-            <div class="rounded border border-gray-200 bg-gray-50 p-3">
+            <div class="rounded-sm border border-gray-200 bg-gray-50 p-3">
                 <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">Dates needing attention</p>
                 <div class="mt-2 grid gap-2 md:grid-cols-2">
                     @foreach ($backfill->items->take(8) as $item)

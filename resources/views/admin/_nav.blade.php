@@ -30,7 +30,7 @@
                     href="{{ route($adminNavigationItem['route']) }}"
                     @if ($isActive) aria-current="page" @endif
                     @class([
-                        'flex items-center gap-3 border-l-4 py-2 pl-7 pr-4 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-focus focus:ring-inset',
+                        'flex items-center gap-3 border-l-4 py-2 pl-7 pr-4 text-sm font-medium transition duration-150 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-focus focus:ring-inset',
                         'border-link bg-fc-blue-soft text-primary' => $isActive,
                         'border-transparent text-muted hover:border-border hover:bg-fc-blue-soft hover:text-text' => ! $isActive,
                     ])
@@ -51,7 +51,7 @@
 @else
     <div class="hidden border-b border-border bg-surface sm:block">
         <nav class="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8" aria-label="Admin navigation">
-            <div class="flex items-center gap-3 rounded-lg border border-border bg-fc-blue-soft p-1 shadow-sm">
+            <div class="flex items-center gap-3 rounded-lg border border-border bg-fc-blue-soft p-1 shadow-xs">
                 <div class="hidden shrink-0 border-r border-border px-3 text-xs font-semibold uppercase tracking-wider text-muted lg:block">
                     Admin
                 </div>
@@ -66,8 +66,8 @@
                             href="{{ route($adminNavigationItem['route']) }}"
                             @if ($isActive) aria-current="page" @endif
                             @class([
-                                'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2',
-                                'bg-surface text-primary shadow-sm ring-1 ring-border' => $isActive,
+                                'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition duration-150 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-focus focus:ring-offset-2',
+                                'bg-surface text-primary shadow-xs ring-1 ring-border' => $isActive,
                                 'text-muted hover:bg-surface hover:text-text' => ! $isActive,
                             ])
                         >

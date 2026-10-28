@@ -15,7 +15,7 @@
                 <p class="text-sm text-green-700">{{ session('status') }}</p>
             @endif
 
-            <div class="bg-white px-6 py-4 shadow sm:rounded-lg">
+            <div class="bg-white px-6 py-4 shadow-sm sm:rounded-lg">
                 <div class="overflow-x-auto">
                     <table class="w-full min-w-max text-left">
                         <thead>
@@ -72,7 +72,7 @@
                 </div>
             </div>
 
-            <div class="bg-white p-6 shadow sm:rounded-lg">
+            <div class="bg-white p-6 shadow-sm sm:rounded-lg">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <h3 class="font-semibold text-gray-900">Source dates</h3>
                     <a class="text-sm text-blue-700" href="{{ route('admin.scrape-runs.index') }}">All scrape runs</a>

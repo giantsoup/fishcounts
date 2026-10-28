@@ -4,7 +4,7 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow sm:rounded-lg">
+        <div class="max-w-3xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow-sm sm:rounded-lg">
             @if (session('status'))
                 <p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>
             @endif
@@ -26,7 +26,7 @@
                 <x-primary-button>Save</x-primary-button>
             </form>
 
-            <div class="mt-6 divide-y rounded border border-gray-200">
+            <div class="mt-6 divide-y rounded-sm border border-gray-200">
                 @forelse ($destinations as $destination)
                     <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                         <p class="text-sm text-gray-600">

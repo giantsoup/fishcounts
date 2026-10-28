@@ -19,7 +19,9 @@ RUN apk add --no-cache \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-FROM php-base AS dependencies
+FROM --platform=$BUILDPLATFORM composer:2 AS dependencies
+
+WORKDIR /app
 
 COPY . .
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
@@ -47,9 +49,10 @@ RUN set -eu; \
 
 COPY package.json package-lock.json .npmrc ./
 COPY .github/scripts/setup-node.sh /tmp/setup-node.sh
-RUN bash /tmp/setup-node.sh && npm ci
+COPY .github/scripts/check-native-bindings.mjs .github/scripts/check-native-bindings.mjs
+RUN bash /tmp/setup-node.sh && npm ci && npm ls --all && npm run check:platform
 
-COPY vite.config.js tailwind.config.js postcss.config.js ./
+COPY vite.config.js ./
 COPY resources resources
 COPY public public
 COPY --from=dependencies /app/vendor vendor

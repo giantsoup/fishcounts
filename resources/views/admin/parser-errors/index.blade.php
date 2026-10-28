@@ -9,7 +9,7 @@
     </x-slot>
 
     <div class="py-8">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow sm:rounded-lg">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 bg-white p-6 shadow-sm sm:rounded-lg">
             @if (session('status'))
                 <p class="mb-4 text-sm text-green-700">{{ session('status') }}</p>
             @endif
@@ -320,7 +320,7 @@
                                             @else
                                                 <details class="mt-2 text-sm">
                                                     <summary class="cursor-pointer font-medium text-gray-700">Review exact issue preview</summary>
-                                                    <pre class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ $parserBugReport->body }}</pre>
+                                                    <pre class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap rounded-sm bg-white p-3 text-xs text-gray-800">{{ $parserBugReport->body }}</pre>
                                                 </details>
 
                                                 @if ($parserBugReport->status === \App\Enums\ParserBugReportStatus::Invalidated)
@@ -380,25 +380,25 @@
                                             <div class="mt-3 grid gap-3 lg:grid-cols-2">
                                                 <details class="text-sm">
                                                     <summary class="cursor-pointer font-medium text-gray-700">Original deterministic parse</summary>
-                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ json_encode($reportOverride->original_parse, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-sm bg-white p-3 text-xs text-gray-800">{{ json_encode($reportOverride->original_parse, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                                                 </details>
                                                 <details class="text-sm">
                                                     <summary class="cursor-pointer font-medium text-gray-700">Corrected parse and affected scope</summary>
-                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-800">{{ json_encode(['scope' => $reportOverride->affected_scope, 'corrected_parse' => $reportOverride->corrected_parse], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                                                    <pre class="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-sm bg-white p-3 text-xs text-gray-800">{{ json_encode(['scope' => $reportOverride->affected_scope, 'corrected_parse' => $reportOverride->corrected_parse], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                                                 </details>
                                             </div>
 
                                             @if ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Pending)
                                                 <form method="POST" action="{{ route('admin.parser-report-overrides.approve', $reportOverride) }}" class="mt-3 space-y-2">
                                                     @csrf
-                                                    <textarea name="review_notes" rows="2" maxlength="2000" class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Optional approval notes"></textarea>
+                                                    <textarea name="review_notes" rows="2" maxlength="2000" class="block w-full rounded-md border-gray-300 text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500" placeholder="Optional approval notes"></textarea>
                                                     <x-primary-button type="submit">Approve override and reparse</x-primary-button>
                                                 </form>
                                             @elseif ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Active)
                                                 <p class="mt-2 text-xs text-green-700">Approved by {{ $reportOverride->approved_by_name }} at {{ $reportOverride->approved_at?->format('n/j/Y g:i A') }}.</p>
                                                 <form method="POST" action="{{ route('admin.parser-report-overrides.disable', $reportOverride) }}" class="mt-3 space-y-2">
                                                     @csrf
-                                                    <textarea name="disable_reason" rows="2" maxlength="1000" required class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Reason for rollback"></textarea>
+                                                    <textarea name="disable_reason" rows="2" maxlength="1000" required class="block w-full rounded-md border-gray-300 text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500" placeholder="Reason for rollback"></textarea>
                                                     <x-secondary-button type="submit">Disable override and restore deterministic parse</x-secondary-button>
                                                 </form>
                                             @elseif ($reportOverride->status === \App\Enums\ParserReportOverrideStatus::Invalidated)

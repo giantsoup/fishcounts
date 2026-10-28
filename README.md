@@ -15,9 +15,9 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
 ## Tech Stack
 
 - PHP 8.4 and Laravel 13
-- Laravel Breeze authentication with Blade, Alpine.js, and Tailwind CSS
+- Laravel Breeze authentication with Blade, Alpine.js, and Tailwind CSS 4
 - Vite 8, Node.js 26.13.0 LTS, and npm 12.2.1
-- PHPUnit 12
+- PHPUnit 13
 - SQLite for the default local environment
 - PostgreSQL and Redis in the Docker Compose environment
 - MariaDB, database queues, and database cache are also supported by the native deployment configuration
@@ -26,7 +26,7 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
 
 ### Prerequisites
 
-- PHP 8.4 with the extensions required by Laravel and the selected database
+- PHP 8.4.1+ for PHPUnit 13, with the extensions required by Laravel and the selected database
 - Composer 2
 - Node.js 26.13.0 LTS and npm 12.2.1, selected with nvm
 
@@ -71,6 +71,8 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
    ```
 
 The application is available at <http://localhost:8000>. Sign in with the administrator account created in step 6.
+
+The frontend supports Safari 16.4+, Chrome 111+, and Firefox 128+, following Tailwind 4 requirements. Styles use the Tailwind Vite plugin and the CSS theme in `resources/css/app.css`.
 
 ## Configuration
 
