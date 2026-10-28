@@ -18,6 +18,7 @@ class TripDecisionBuilder
         private readonly SourceHighlightLinkBuilder $sourceHighlightLinkBuilder,
         private readonly BookingUrlResolver $bookingUrlResolver,
         private readonly BookingAvailabilityResolver $bookingAvailabilityResolver,
+        private readonly CatchCountFormatter $countFormatter,
     ) {}
 
     /**
@@ -173,7 +174,7 @@ class TripDecisionBuilder
                 && $speciesCount->is_retained_count);
 
         if ($speciesCount !== null && ($speciesCount->has_estimated_components || $speciesCount->has_unquantified_components || collect($speciesCount->components)->contains('limits', true))) {
-            return app(CatchCountFormatter::class)->count($speciesCount);
+            return $this->countFormatter->count($speciesCount);
         }
 
         if (filled($speciesCount?->raw_count_text)) {

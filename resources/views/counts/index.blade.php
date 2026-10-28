@@ -1,6 +1,6 @@
 @php
     $formatter = app(\App\Services\Parsing\CatchCountFormatter::class);
-    $formatSpeciesCounts = fn ($report): string => $formatter->report($report);
+    $formatSpeciesCounts = fn ($report): string => $formatter->report($report, includeUnmappedLimits: $filters['species_id'] === null);
 @endphp
 
 <x-app-layout>
@@ -39,8 +39,12 @@
                         <p class="mt-1 text-2xl font-semibold text-gray-900">{{ number_format($summary['released']) }}</p>
                     </div>
                 </div>
-                @if ($summary['estimated'])<p class="mt-3 text-sm text-gray-600">Totals include estimates from limits.</p>@endif
-                @if ($summary['incomplete'])<p class="mt-2 text-sm text-gray-600">Some limits have no numeric count. Numeric totals are incomplete.</p>@endif
+                @if ($summary['estimated'])
+                    <p class="mt-3 text-sm text-gray-600">Totals include estimates from limits.</p>
+                @endif
+                @if ($summary['incomplete'])
+                    <p class="mt-2 text-sm text-gray-600">Some limits have no numeric count. Numeric totals are incomplete.</p>
+                @endif
             </section>
 
             <section class="bg-white px-4 py-5 shadow sm:rounded-lg sm:p-6">
@@ -111,6 +115,7 @@
                             $landingName = $report->landing?->name ?? $report->raw_landing_name ?? 'Unknown';
                             $tripTypeName = $report->tripType?->name ?? $report->raw_trip_type ?? 'Unknown';
                             $fishCountText = $formatSpeciesCounts($report);
+                            $fishCountDetails = $formatter->details($report);
                         @endphp
 
                         <article class="px-4 py-4">
@@ -128,8 +133,10 @@
                                 <span>{{ $report->source?->name ?? 'Unknown' }}</span>
                             </div>
 
-                            <p title="{{ $formatter->details($report) }}" class="mt-3 text-sm leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</p>
-                            @if ($formatter->details($report))<p class="mt-1 text-xs text-gray-500">{{ $formatter->details($report) }}</p>@endif
+                            <p title="{{ $fishCountDetails }}" class="mt-3 text-sm leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}</p>
+                            @if ($fishCountDetails)
+                                <p class="mt-1 text-xs text-gray-500">{{ $fishCountDetails }}</p>
+                            @endif
                         </article>
                     @empty
                         <p class="px-4 py-8 text-center text-sm text-gray-500">No counts match the current filters.</p>
@@ -155,6 +162,7 @@
                                     $landingName = $report->landing?->name ?? $report->raw_landing_name ?? 'Unknown';
                                     $tripTypeName = $report->tripType?->name ?? $report->raw_trip_type ?? 'Unknown';
                                     $fishCountText = $formatSpeciesCounts($report);
+                                    $fishCountDetails = $formatter->details($report);
                                 @endphp
                                 <tr>
                                     <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $report->trip_date->format('n/j/Y') }}</td>
@@ -164,7 +172,12 @@
                                     </td>
                                     <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $tripTypeName }}</td>
                                     <td class="whitespace-nowrap px-4 py-3 text-right text-gray-700">{{ $report->anglers !== null ? number_format($report->anglers) : '—' }}</td>
-                                    <td class="min-w-[360px] px-4 py-3 leading-6 text-gray-900">{{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}@if ($formatter->details($report))<p class="text-xs text-gray-500">{{ $formatter->details($report) }}</p>@endif</td>
+                                    <td class="min-w-[360px] px-4 py-3 leading-6 text-gray-900">
+                                        {{ $fishCountText !== '' ? $fishCountText : 'No fish count reported.' }}
+                                        @if ($fishCountDetails)
+                                            <p class="text-xs text-gray-500">{{ $fishCountDetails }}</p>
+                                        @endif
+                                    </td>
                                     <td class="whitespace-nowrap px-4 py-3 text-gray-700">{{ $report->source?->name ?? 'Unknown' }}</td>
                                 </tr>
                             @empty

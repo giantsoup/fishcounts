@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Actions\Parsing\ParseRawPayloadAction;
+use App\DTOs\ParsedFishCountCollection;
+use App\DTOs\ParsedTripReportData;
 use App\DTOs\ParseRawPayloadOptions;
 use App\Enums\CatchQuantityBasis;
 use App\Enums\ScrapeRunType;
@@ -20,6 +22,7 @@ use App\Services\Parsing\LimitsSourceReconciler;
 use App\Services\Parsing\RawPayloadEvaluator;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -121,6 +124,7 @@ class LimitsCorroborationTest extends TestCase
 
     public function test_conflicting_sources_produce_a_reviewable_diagnostic(): void
     {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
         $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
         $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 20, '75 Calico Bass, 17 Yellowtail'));
         app(ParseRawPayloadAction::class)->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
@@ -128,6 +132,100 @@ class LimitsCorroborationTest extends TestCase
         $request = app(ParserDiagnosticReviewRequestFactory::class)->make($primary, $error);
         app(ParserDiagnosticReviewRequestValidator::class)->validate($request);
         $this->assertArrayHasKey('limits_source_conflict', $request->context['evidence']);
+    }
+
+    public function test_fallback_releases_survive_primary_limits_corroboration(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $support = $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 25, '75 Calico Bass, 50 Calico Bass Released, 17 Yellowtail'));
+        $action = app(ParseRawPayloadAction::class);
+        $action->handleWithOptions($support->id, ParseRawPayloadOptions::maintenance());
+        $action->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
+        $report = TripReport::query()->with('speciesCounts.species')->sole();
+        $count = $report->speciesCounts->firstWhere('species.name', 'Calico Bass');
+        $this->assertSame(75, $count->count);
+        $this->assertSame(50, $count->released_count);
+        $this->assertSame($support->id, $count->components[0]['evidence']['corroborated_releases']['payload_id']);
+        $this->assertFalse($primary->parserErrors()->whereNull('resolution_type')->exists());
+    }
+
+    public function test_reconciliation_resolves_catalog_identities_once_per_invocation(): void
+    {
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 25, '75 Calico Bass, 17 Yellowtail'));
+        [, , $parsed] = app(RawPayloadEvaluator::class)->evaluate($primary->id);
+        $reports = new ParsedFishCountCollection(collect(range(1, 20))->map(fn (): ParsedTripReportData => clone $parsed->tripReports[0]));
+        DB::enableQueryLog();
+        try {
+            app(LimitsSourceReconciler::class)->reconcile($reports, $primary);
+            $queries = collect(DB::getQueryLog())->filter(fn (array $query): bool => preg_match('/from ["`]*(?:boats|boat_aliases|trip_types|trip_type_aliases)["`]*\\s/i', $query['query']) === 1);
+            $this->assertLessThanOrEqual(4, $queries->count());
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
+    public function test_release_only_fallback_keeps_unknown_retained_and_explicit_releases(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $support = $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 25, '20 Calico Bass Released, 17 Yellowtail'));
+        $action = app(ParseRawPayloadAction::class);
+        $action->handleWithOptions($support->id, ParseRawPayloadOptions::maintenance());
+        $action->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
+        $count = TripReport::query()->with('speciesCounts.species')->sole()->speciesCounts->firstWhere('species.name', 'Calico Bass');
+        $this->assertNull($count->count);
+        $this->assertSame(20, $count->released_count);
+        $this->assertSame($support->id, $count->components[0]['evidence']['corroborated_releases']['payload_id']);
+        $this->assertFalse($primary->parserErrors()->whereNull('resolution_type')->exists());
+    }
+
+    public function test_conflicting_explicit_releases_preserve_both_sources_for_review(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 20 Calico Bass Released, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $support = $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 25, '75 Calico Bass, 50 Calico Bass Released, 17 Yellowtail'));
+        $action = app(ParseRawPayloadAction::class);
+        $action->handleWithOptions($support->id, ParseRawPayloadOptions::maintenance());
+        $action->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
+        $this->assertSame(2, TripReport::query()->count());
+        $this->assertTrue($primary->parserErrors()->whereNull('resolution_type')->exists());
+    }
+
+    #[DataProvider('corroboratedLocations')]
+    public function test_matching_source_location_overrides_the_duration_heuristic(string $trip, string $counts): void
+    {
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $support = $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", $trip, 25, $counts));
+        app(ParseRawPayloadAction::class)->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
+        $report = TripReport::query()->sole();
+        $this->assertSame('california_southern', $report->metadata['limits_jurisdiction']);
+        $this->assertSame($support->id, $report->metadata['corroborated_context']['payload_id']);
+    }
+
+    public static function corroboratedLocations(): array
+    {
+        return [
+            ['3/4 Day', '17 Yellowtail, limits of Calico Bass in California waters'],
+            ['3/4 Day Local', '17 Yellowtail, limits of Calico Bass'],
+        ];
+    }
+
+    public function test_contradictory_catch_locations_remain_reviewable_without_an_estimate(): void
+    {
+        config()->set('fish.parsing.diagnostics.suspicious_enabled', true);
+        $primary = $this->payload('fishermans_landing', '2026-10-07', '<p>The Dolphin caught limits of Calico Bass in Mexican waters, 17 Yellowtail on their 3/4 day trip for 25 anglers.</p>');
+        $support = $this->payload('sportfishingreport_landing_pages', '2026-10-07', $this->partyRow('Dolphin', "Fisherman's Landing", '3/4 Day', 25, '17 Yellowtail, limits of Calico Bass in California waters'));
+        app(ParseRawPayloadAction::class)->handleWithOptions($primary->id, ParseRawPayloadOptions::maintenance());
+        $report = TripReport::query()->with('speciesCounts.species')->sole();
+        $this->assertNull($report->metadata['limits_jurisdiction']);
+        $this->assertSame('conflicting_catch_locations', $report->metadata['limits_source_conflict']['reason']);
+        $count = $report->speciesCounts->firstWhere('species.name', 'Calico Bass');
+        $this->assertNull($count->count);
+        $this->assertSame('conflicting_catch_locations', $count->components[0]['evidence']['unresolved_reason']);
+        $error = $primary->parserErrors()->whereNull('resolution_type')->where('error_type', 'extracted_value_source_span_mismatch')->sole();
+        app(ParserDiagnosticReviewRequestValidator::class)->validate(app(ParserDiagnosticReviewRequestFactory::class)->make($primary, $error));
     }
 
     private function payload(string $slug, string $date, string $body): RawScrapePayload

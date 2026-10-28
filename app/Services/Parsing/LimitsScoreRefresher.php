@@ -20,7 +20,7 @@ final class LimitsScoreRefresher
         if ($maxWindow < 1) {
             return;
         }
-        ScoreResult::query()->with(['alertRule.species', 'alertRule.regions:id', 'alertRule.landings:id', 'alertRule.boats:id', 'alertRule.tripTypes:id', 'scoreRun'])->whereDate('score_date', '>=', $date)->whereDate('score_date', '<=', $changedDate->addDays($maxWindow - 1))->orderBy('id')->get()
+        ScoreResult::query()->with(['alertRule.species', 'alertRule.regions:id', 'alertRule.landings:id', 'alertRule.boats:id', 'alertRule.tripTypes:id', 'scoreRun'])->where('score_date', '>=', $date)->where('score_date', '<', $changedDate->addDays($maxWindow)->toDateString())->orderBy('id')->get()
             ->each(function (ScoreResult $score) use ($changedDate): void {
                 $window = $score->alertRule->recent_window_days + $score->alertRule->comparison_window_days;
                 if ($score->score_date->toImmutable()->diffInDays($changedDate, absolute: true) < $window) {

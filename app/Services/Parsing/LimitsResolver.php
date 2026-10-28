@@ -38,6 +38,12 @@ final class LimitsResolver
             }
         }
         $context = $this->context($report);
+        $location = $this->locationSignals($report);
+        $locationConflict = collect($counts)->contains(fn (ParsedSpeciesCountData $count): bool => $count->isLimits) && $location['mexico'] && $location['california'];
+        $sourceConflict = $report->metadata['limits_source_conflict'] ?? null;
+        if ($locationConflict) {
+            $sourceConflict = ['reason' => 'conflicting_catch_locations', 'payload_ids' => array_values(array_filter([$payload->id, $report->metadata['corroborated_context']['payload_id'] ?? null]))];
+        }
         $rules = [];
         foreach ($counts as $index => $count) {
             if (! isset($report->metadata['limits_source_conflict']) && $count->count === null && $context !== null && ($count->evidence['full_limits'] ?? false) && $report->anglers > 0) {
@@ -66,14 +72,14 @@ final class LimitsResolver
                     $participants = $count->evidence['subset_anglers'] ?? $report->anglers;
                     $evidence = [...$evidence, ...$context, 'participating_anglers' => $participants, 'estimated_retained' => $quantity, 'raw_trip_type' => $report->tripTypeName, 'source_block' => $report->rawFishCountText, 'anglers_evidence' => $report->metadata['corroborated_anglers'] ?? ['payload_id' => $payload->id, 'source_block' => $report->rawFishCountText], 'anglers' => $report->anglers, 'rule' => $rule, 'allowed_days' => $days, 'regulatory_taxon' => $this->claims->identity($count->speciesName), 'formula' => "{$participants} anglers × {$rule['daily']} per person × {$days} days; shared quotas applied", 'jurisdiction_policy' => config('limits.jurisdiction_version'), 'duration_policy' => config('limits.duration_version')];
                 } else {
-                    $evidence['unresolved_reason'] = $context === null || ! $report->anglers ? 'missing_required_inputs' : ($rule === null ? 'no_verified_trip_date_rule' : 'non_unique_or_restricted_allocation');
+                    $evidence['unresolved_reason'] = $locationConflict ? 'conflicting_catch_locations' : ($context === null || ! $report->anglers ? 'missing_required_inputs' : ($rule === null ? 'no_verified_trip_date_rule' : 'non_unique_or_restricted_allocation'));
                 }
             }
             $isLimits = $count->isLimits || $this->claims->hasExplicitLimits($report->rawFishCountText ?? '', $count->speciesName);
             $resolved[] = new ParsedSpeciesCountData($count->speciesName, $quantity, $count->releasedCount, $count->rawText, $id, $basis, $isLimits, $evidence);
         }
 
-        return new ParsedTripReportData($report->sourceKey, $report->tripDate, $report->regionName, $report->landingName, $report->boatName, $report->tripTypeName, $report->anglers, $report->rawFishCountText, $resolved, [...$report->metadata, 'limits_resolver' => config('limits.version'), 'limits_taxa' => array_values(array_unique(array_map(fn (ParsedSpeciesCountData $count): string => $this->claims->identity($count->speciesName), array_filter($resolved, fn (ParsedSpeciesCountData $count): bool => $count->isLimits)))), 'limits_jurisdiction' => $context['jurisdiction'] ?? null], $report->canonicalBoatId, $report->canonicalTripTypeId);
+        return new ParsedTripReportData($report->sourceKey, $report->tripDate, $report->regionName, $report->landingName, $report->boatName, $report->tripTypeName, $report->anglers, $report->rawFishCountText, $resolved, [...$report->metadata, ...($sourceConflict === null ? [] : ['limits_source_conflict' => $sourceConflict]), 'limits_resolver' => config('limits.version'), 'limits_taxa' => array_values(array_unique(array_map(fn (ParsedSpeciesCountData $count): string => $this->claims->identity($count->speciesName), array_filter($resolved, fn (ParsedSpeciesCountData $count): bool => $count->isLimits)))), 'limits_jurisdiction' => $context['jurisdiction'] ?? null], $report->canonicalBoatId, $report->canonicalTripTypeId);
     }
 
     /** @return array{jurisdiction: string, days: int, assumptions: list<string>}|null */
@@ -83,7 +89,7 @@ final class LimitsResolver
             return null;
         }
         $label = $report->tripTypeName;
-        $text = implode(' ', [$report->rawFishCountText ?? '', ...array_filter($report->metadata['ai_evidence_spans'] ?? [], is_string(...))]);
+        $text = $this->sourceText($report);
         $assumptions = ['Reported anglers are assumed eligible passengers; crew catch is excluded'];
         $duration = null;
         if (preg_match('/\b(?<duration>1\/2|3\/4|\d+(?:\.\d+)?)\s*days?\b/i', $label.' '.$text, $match)) {
@@ -102,17 +108,16 @@ final class LimitsResolver
             return null;
         }
         $days = max(1, (int) floor($duration));
-        $mexico = preg_match('/\b(?:Mexic(?:o|an)|Baja|Coronado\s+Islands)\b/i', $label) === 1
-            || preg_match('/\b(?:Mexican\s+waters|(?:in|off|near)\s+(?:the\s+)?(?:Mexico|Baja)|waters\s+(?:of|off)\s+Mexico|Coronado\s+Islands)\b/i', $text) === 1;
-        $california = preg_match('/\b(?:California|United\s+States|U\.?S\.?(?:A\.?)?|Catalina|San\s+Clemente\s+Island)(?=\s|$|[(),;-])/i', $label) === 1
-            || preg_match('/\b(?:(?:California|United\s+States|U\.?S\.?(?:A\.?)?)\s+waters|Catalina|San\s+Clemente\s+Island)\b/i', $text) === 1;
+        $location = $this->locationSignals($report);
+        $mexico = $location['mexico'];
+        $california = $location['california'];
         if ($mexico && $california) {
             return null;
         }
         if ($mexico || $california) {
             $jurisdiction = $mexico ? 'mexico' : 'california_southern';
             $assumptions[] = 'Jurisdiction selected from explicit catch-location or destination wording';
-        } elseif (preg_match('/\blocal\b/i', $label.' '.$text)) {
+        } elseif (preg_match('/\blocal\b/i', $this->locationLabels($report).' '.$text)) {
             $jurisdiction = 'california_southern';
             $assumptions[] = 'Local trip wording is assumed Southern California';
         } elseif (isset(config('limits.exceptions', [])[$report->sourceKey][$label])) {
@@ -128,6 +133,29 @@ final class LimitsResolver
         }
 
         return compact('jurisdiction', 'days', 'assumptions');
+    }
+
+    private function sourceText(ParsedTripReportData $report): string
+    {
+        return implode(' ', [$report->rawFishCountText ?? '', $report->metadata['corroborated_context']['source_block'] ?? '', ...array_filter($report->metadata['ai_evidence_spans'] ?? [], is_string(...))]);
+    }
+
+    private function locationLabels(ParsedTripReportData $report): string
+    {
+        return ($report->tripTypeName ?? '').' '.($report->metadata['corroborated_context']['trip_type'] ?? '');
+    }
+
+    /** @return array{mexico: bool, california: bool} */
+    private function locationSignals(ParsedTripReportData $report): array
+    {
+        $label = $this->locationLabels($report);
+        $text = $this->sourceText($report);
+        $mexico = preg_match('/\b(?:Mexic(?:o|an)|Baja|Coronado\s+Islands)\b/i', $label) === 1
+            || preg_match('/\b(?:Mexican\s+waters|(?:in|off|near)\s+(?:the\s+)?(?:Mexico|Baja)|waters\s+(?:of|off)\s+Mexico|Coronado\s+Islands)\b/i', $text) === 1;
+        $california = preg_match('/\b(?:California|United\s+States|U\.?S\.?(?:A\.?)?|Catalina|San\s+Clemente\s+Island)(?=\s|$|[(),;-])/i', $label) === 1
+            || preg_match('/\b(?:(?:California|United\s+States|U\.?S\.?(?:A\.?)?)\s+waters|Catalina|San\s+Clemente\s+Island)\b/i', $text) === 1;
+
+        return compact('mexico', 'california');
     }
 
     /** @param list<ParsedSpeciesCountData> $counts @param array<int, array<string, mixed>|null> $rules @param array<string, mixed> $context */

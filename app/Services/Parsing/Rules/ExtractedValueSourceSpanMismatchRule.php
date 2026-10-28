@@ -13,7 +13,7 @@ use App\Services\Parsing\SourceFishCountGrammar;
 
 class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
 {
-    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar) {}
+    public function __construct(private readonly SourceFishCountGrammar $sourceGrammar, private readonly LimitsClaimExtractor $claims) {}
 
     public function inspect(ParsedReportValidationData $data): array
     {
@@ -25,7 +25,7 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
         $findings = [];
         $sourceConflict = $data->report->metadata['limits_source_conflict'] ?? null;
 
-        $claims = app(LimitsClaimExtractor::class);
+        $claims = $this->claims;
         $unquantifiedSpecies = collect($claims->extract($sourceText))
             ->reject(fn (ParsedSpeciesCountData $claim): bool => collect($data->report->speciesCounts)->contains(fn (ParsedSpeciesCountData $count): bool => $count->isLimits && $claims->identity($count->speciesName) === $claims->identity($claim->speciesName)))
             ->map(fn (ParsedSpeciesCountData $claim): string => $claim->evidence['raw_species'] ?? $claim->speciesName)
@@ -78,7 +78,8 @@ class ExtractedValueSourceSpanMismatchRule implements ParsedReportDiagnosticRule
                 }
             }
 
-            if ((! $derivedRetained && (($matches === [] && $sentenceReleasedMatches === [] && $limitsMatches === [] && $parentheticalMatches === [] && $releasedOnlyMatches === []) || $retained !== $speciesCount->count)) || $released !== $speciesCount->releasedCount) {
+            $corroboratedReleases = $speciesCount->isLimits && in_array($speciesCount->quantityBasis, [CatchQuantityBasis::Corroborated, CatchQuantityBasis::LimitsUnquantified], true) && ($speciesCount->evidence['corroborated_releases']['count'] ?? null) === $speciesCount->releasedCount;
+            if ((! $derivedRetained && (($matches === [] && $sentenceReleasedMatches === [] && $limitsMatches === [] && $parentheticalMatches === [] && $releasedOnlyMatches === []) || $retained !== $speciesCount->count)) || (! $corroboratedReleases && $released !== $speciesCount->releasedCount)) {
                 $speciesMismatches[] = [
                     'species' => $speciesCount->speciesName,
                     'extracted_retained' => $speciesCount->count,

@@ -6,6 +6,7 @@ $bass = ['daily' => 5, 'weights' => ['kelp_bass' => 1, 'barred_sand_bass' => 1, 
 $mexico = ['all_finfish' => true, 'daily' => 10, 'weights' => ['dorado' => 2.5, 'roosterfish' => 2.5, 'tarpon' => 2.5, 'baya' => 2.5, 'marlin' => 5, 'striped_marlin' => 5, 'blue_marlin' => 5, 'black_marlin' => 5, 'sailfish' => 5, 'swordfish' => 5, 'shark' => 5, 'mako_shark' => 5, 'thresher_shark' => 5, 'giant_sea_bass' => 5]];
 
 return [
+    'source_hashes' => [],
     'revision' => 'review-2026-10-27-v1',
     'effective_from' => '2026-10-01',
     'effective_until' => '2026-10-27',

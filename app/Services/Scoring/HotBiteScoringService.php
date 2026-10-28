@@ -38,7 +38,7 @@ class HotBiteScoringService
 
         $score = $this->applyRuleMinimums($rule, $metrics, max(0, min(100, $score)));
 
-        return ScoreResult::query()->whereDate('score_date', $date->toDateString())->updateOrCreate(
+        return ScoreResult::query()->where('score_date', '>=', $date->toDateString())->where('score_date', '<', $date->addDay()->toDateString())->updateOrCreate(
             ['alert_rule_id' => $rule->id],
             [
                 'score_date' => $date->toDateString(),

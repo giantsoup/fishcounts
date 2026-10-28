@@ -56,6 +56,11 @@ final class LimitsClaimExtractor
         return preg_match('/\\b0\\s+'.preg_quote($species, '/').'\\b(?!\\s*(?:\\(\\s*)?released\\b)/i', $text) === 1;
     }
 
+    public function hasExplicitReleasedZero(string $text, string $species): bool
+    {
+        return preg_match('/\\b0\\s+'.preg_quote($species, '/').'\\s*(?:\\(\\s*)?released\\b/i', $text) === 1;
+    }
+
     public function hasExplicitLimits(string $text, string $species): bool
     {
         $patterns = [

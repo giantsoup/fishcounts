@@ -19,6 +19,7 @@ final class AiParsedCollectionFactory
     public function __construct(
         private readonly SpeciesCountAssumptions $assumptions,
         private readonly GenericFishCountParser $genericParser,
+        private readonly LimitsClaimExtractor $limits,
     ) {}
 
     /**
@@ -241,7 +242,7 @@ final class AiParsedCollectionFactory
             if ($interpretedName === null) {
                 continue;
             }
-            $limits = app(LimitsClaimExtractor::class);
+            $limits = $this->limits;
             $claim = collect($limits->extract($reportText))->first(fn (ParsedSpeciesCountData $claim): bool => $limits->identity($claim->speciesName) === $limits->identity($name));
             if ($retained === null) {
                 if ($claim === null || ! $this->spansContainExactText($evidenceSpans, $claim->rawText)) {

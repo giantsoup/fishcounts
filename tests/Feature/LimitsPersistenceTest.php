@@ -19,6 +19,7 @@ use App\Services\Parsing\TripReportNormalizer;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LimitsPersistenceTest extends TestCase
@@ -68,5 +69,46 @@ class LimitsPersistenceTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         new ParsedSpeciesCountData('Bonito', null);
+    }
+
+    #[DataProvider('summaryQuantities')]
+    public function test_summary_distinguishes_unknown_quantity_from_reported_zero(?int $quantity, bool $incomplete): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $source = ScrapeSource::query()->where('slug', 'fishermans_landing')->firstOrFail();
+        $run = ScrapeRun::query()->create(['scrape_source_id' => $source->id, 'run_type' => ScrapeRunType::Manual, 'target_date' => '2026-10-07']);
+        $payload = RawScrapePayload::query()->create(['scrape_run_id' => $run->id, 'scrape_source_id' => $source->id, 'target_date' => '2026-10-07', 'url' => 'https://example.test', 'payload' => 'summary fixture', 'payload_hash' => hash('sha256', 'summary'), 'fetched_at' => now()]);
+        $count = new ParsedSpeciesCountData('Calico Bass', $quantity, quantityBasis: $quantity === null ? CatchQuantityBasis::LimitsUnquantified : CatchQuantityBasis::Explicit, isLimits: $quantity === null);
+        $parsed = new ParsedFishCountCollection(collect([new ParsedTripReportData('fishermans_landing', CarbonImmutable::parse('2026-10-07'), 'San Diego', "Fisherman's Landing", 'Dolphin', '3/4 Day', 25, 'summary fixture', [$count])]));
+        $normalizer = app(TripReportNormalizer::class);
+        $normalizer->replaceForPayload($payload, $parsed, []);
+        $normalizer->refreshPrimaryReports('2026-10-07');
+        $this->actingAs(User::factory()->create())->get(route('counts.index', ['from' => '2026-10-07', 'to' => '2026-10-07']))
+            ->assertOk()->assertViewHas('summary', fn (array $summary): bool => $summary['retained'] === $quantity && $summary['incomplete'] === $incomplete && $summary['released'] === 0);
+    }
+
+    public static function summaryQuantities(): array
+    {
+        return [[null, true], [0, false], [17, false]];
+    }
+
+    public function test_species_filter_excludes_unmapped_limits_from_counts_and_summary(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+        $source = ScrapeSource::query()->where('slug', 'fishermans_landing')->firstOrFail();
+        $run = ScrapeRun::query()->create(['scrape_source_id' => $source->id, 'run_type' => ScrapeRunType::Manual, 'target_date' => '2026-10-07']);
+        $payload = RawScrapePayload::query()->create(['scrape_run_id' => $run->id, 'scrape_source_id' => $source->id, 'target_date' => '2026-10-07', 'url' => 'https://example.test', 'payload' => 'filter fixture', 'payload_hash' => hash('sha256', 'filter'), 'fetched_at' => now()]);
+        $parsed = new ParsedFishCountCollection(collect([new ParsedTripReportData('fishermans_landing', CarbonImmutable::parse('2026-10-07'), 'San Diego', "Fisherman's Landing", 'Dolphin', '3/4 Day', 25, 'filter fixture', [
+            new ParsedSpeciesCountData('Yellowtail', 17),
+            new ParsedSpeciesCountData('Mystery Fish', null, quantityBasis: CatchQuantityBasis::LimitsUnquantified, isLimits: true),
+        ])]));
+        $normalizer = app(TripReportNormalizer::class);
+        $normalizer->replaceForPayload($payload, $parsed, []);
+        $normalizer->refreshPrimaryReports('2026-10-07');
+        $this->actingAs(User::factory()->create());
+        $filters = ['from' => '2026-10-07', 'to' => '2026-10-07'];
+        $this->get(route('counts.index', $filters))->assertOk()->assertSee('Limits Mystery Fish')->assertViewHas('summary', fn (array $summary): bool => $summary['incomplete']);
+        $filters['species_id'] = Species::query()->where('name', 'Yellowtail')->value('id');
+        $this->get(route('counts.index', $filters))->assertOk()->assertDontSee('Limits Mystery Fish')->assertViewHas('summary', fn (array $summary): bool => ! $summary['incomplete'] && $summary['retained'] === 17);
     }
 }

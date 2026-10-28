@@ -36,6 +36,7 @@ class LimitsResearchTest extends TestCase
     public function test_official_research_retains_sources_content_hashes_and_dated_review(): void
     {
         Http::fake(['*' => Http::response('<main>4.9.1 diez cinco 4.9.3 vigente</main>', 200, ['Content-Type' => 'text/html'])]);
+        config()->set('limits-reviewed.source_hashes.mexico', array_fill_keys(config('limits.sources.mexico'), hash('sha256', '<main>4.9.1 diez cinco 4.9.3 vigente</main>')));
         $research = app(OfficialRegulationResearcher::class);
         $research->research('mexico', 'kelp_bass', '2026-10-07');
         $rule = $research->find('mexico', 'kelp_bass', '2026-10-07');
@@ -50,6 +51,30 @@ class LimitsResearchTest extends TestCase
     public function test_changed_official_text_does_not_become_an_approved_rule(): void
     {
         Http::fake(['*' => Http::response('Proposed rules, not operative')]);
+        $this->expectException(\RuntimeException::class);
+        try {
+            app(OfficialRegulationResearcher::class)->research('mexico', 'kelp_bass', '2026-10-07');
+        } finally {
+            $this->assertSame(0, RegulationRuleSnapshot::query()->count());
+        }
+    }
+
+    public function test_changed_text_retaining_all_keywords_cannot_be_auto_approved(): void
+    {
+        $reviewed = '<main>4.9.1 diez cinco 4.9.3 vigente</main>';
+        config()->set('limits-reviewed.source_hashes.mexico', array_fill_keys(config('limits.sources.mexico'), hash('sha256', $reviewed)));
+        Http::fake(['*' => Http::response($reviewed.'<p>These rules have been revoked.</p>', 200, ['Content-Type' => 'text/html'])]);
+        $this->expectException(\RuntimeException::class);
+        try {
+            app(OfficialRegulationResearcher::class)->research('mexico', 'kelp_bass', '2026-10-07');
+        } finally {
+            $this->assertSame(0, RegulationRuleSnapshot::query()->count());
+        }
+    }
+
+    public function test_unpinned_sources_cannot_be_automatically_approved(): void
+    {
+        Http::fake(['*' => Http::response('<main>4.9.1 diez cinco 4.9.3 vigente</main>', 200, ['Content-Type' => 'text/html'])]);
         $this->expectException(\RuntimeException::class);
         try {
             app(OfficialRegulationResearcher::class)->research('mexico', 'kelp_bass', '2026-10-07');

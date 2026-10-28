@@ -204,7 +204,7 @@ class ParseRawPayloadAction
 
         try {
             [$payload, $parsed, $parsedReportCount, $diagnosticCount] = DB::transaction(function () use ($payload, $rawPayload, $parsed, $execution, $selectedEngine, $fallbackCategory, $evidenceFingerprint, $ruleFingerprint): array {
-                RawScrapePayload::query()->whereDate('target_date', $payload->target_date)->orderBy('id')->lockForUpdate()->get(['id']);
+                RawScrapePayload::query()->where('target_date', '>=', $payload->target_date->toDateString())->where('target_date', '<', $payload->target_date->copy()->addDay()->toDateString())->orderBy('id')->lockForUpdate()->get(['id']);
                 $lockedPayload = RawScrapePayload::query()->with('scrapeSource')->lockForUpdate()->findOrFail($payload->id);
                 if (! hash_equals($payload->payload_hash, $lockedPayload->payload_hash)) {
                     throw new RuntimeException('The raw payload changed while it was being parsed.');
@@ -266,7 +266,7 @@ class ParseRawPayloadAction
             $this->limitsScores->refresh($payload->target_date->toDateString());
         }
         if (config('limits.enabled') && $options->dispatchDeduplication) {
-            RawScrapePayload::query()->with('scrapeSource')->whereDate('target_date', $payload->target_date)
+            RawScrapePayload::query()->with('scrapeSource')->where('target_date', '>=', $payload->target_date->toDateString())->where('target_date', '<', $payload->target_date->copy()->addDay()->toDateString())
                 ->where('scrape_source_id', '!=', $payload->scrape_source_id)->where('payload', 'like', '%limits%')
                 ->orderByDesc('fetched_at')->orderByDesc('id')->get()->unique('scrape_source_id')
                 ->each(fn (RawScrapePayload $dependent) => ParseRawPayloadJob::dispatch($dependent->id, parserEngine: $dependent->scrapeSource->parser_engine, executionKey: 'limits-evidence:'.$this->reconciler->fingerprint($dependent))->afterCommit());

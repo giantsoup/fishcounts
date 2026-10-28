@@ -44,10 +44,10 @@ final class CatchCountFormatter
         return implode(', ', $parts);
     }
 
-    public function report(TripReport $report): string
+    public function report(TripReport $report, bool $includeUnmappedLimits = true): string
     {
         $parts = $report->speciesCounts->map(fn (SpeciesCount $count): string => $this->count($count))->all();
-        foreach ($report->metadata['unmapped_limits'] ?? [] as $component) {
+        foreach ($includeUnmappedLimits ? ($report->metadata['unmapped_limits'] ?? []) : [] as $component) {
             $parts[] = $this->component($component);
         }
 
@@ -59,6 +59,9 @@ final class CatchCountFormatter
         $details = [];
         foreach ($report->speciesCounts as $count) {
             foreach ($count->components ?? [] as $component) {
+                if (isset($component['evidence']['corroborated_releases'])) {
+                    $details[] = $component['species'].': released count from matching saved report';
+                }
                 if (($component['basis'] ?? null) === 'limits_estimated') {
                     $details[] = $component['species'].': estimated from limits; '.implode('; ', $component['evidence']['assumptions'] ?? []);
                 } elseif (($component['basis'] ?? null) === 'corroborated') {

@@ -89,7 +89,7 @@ class CountsController extends Controller
     /**
      * @param  Builder<TripReport>  $reportsQuery
      * @param  array{from: string, to: string, species_id: ?int, trip_type_id: ?int, landing_id: ?int, boat_id: ?int}  $filters
-     * @return array{trips: int, boats: int, anglers: int, retained: int, released: int}
+     * @return array{trips: int, boats: int, anglers: int, retained: ?int, estimated: bool, incomplete: bool, released: int}
      */
     private function summaryFor(Builder $reportsQuery, array $filters): array
     {
@@ -107,20 +107,21 @@ class CountsController extends Controller
                 : 'raw:'.($report->raw_boat_name ?? $report->id)
             );
 
-        $hasUnmappedLimits = (clone $reportsQuery)->whereNotNull('metadata->unmapped_limits')->exists();
-        $incomplete = (clone $countsQuery)->where('has_unquantified_components', true)->exists() || $hasUnmappedLimits;
-        $retained = (clone $countsQuery)->whereNotNull('count')->exists()
-            ? (int) (clone $countsQuery)->sum('count')
-            : ($incomplete ? null : 0);
+        $totals = (clone $countsQuery)->toBase()
+            ->selectRaw('SUM(species_counts.count) as retained, SUM(species_counts.released_count) as released, MAX(species_counts.has_estimated_components) as estimated, MAX(species_counts.has_unquantified_components) as incomplete')
+            ->first();
+        $hasUnmappedLimits = $filters['species_id'] === null && (clone $reportsQuery)->whereNotNull('metadata->unmapped_limits')->exists();
+        $incomplete = (bool) $totals->incomplete || $hasUnmappedLimits;
+        $retained = $totals->retained !== null ? (int) $totals->retained : ($incomplete ? null : 0);
 
         return [
             'trips' => (clone $reportsQuery)->count(),
             'boats' => $boatKeys->unique()->count(),
             'anglers' => (int) (clone $reportsQuery)->sum('anglers'),
             'retained' => $retained,
-            'estimated' => (clone $countsQuery)->where('has_estimated_components', true)->exists(),
+            'estimated' => (bool) $totals->estimated,
             'incomplete' => $incomplete,
-            'released' => (int) (clone $countsQuery)->sum('released_count'),
+            'released' => (int) ($totals->released ?? 0),
         ];
     }
 
