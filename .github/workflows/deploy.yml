@@ -32,8 +32,11 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           cache: npm
+
+      - name: Install and Verify Pinned npm
+        run: bash .github/scripts/setup-node.sh
 
       - name: Install Node Dependencies
         run: npm ci

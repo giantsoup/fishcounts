@@ -16,7 +16,7 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
 
 - PHP 8.4 and Laravel 13
 - Laravel Breeze authentication with Blade, Alpine.js, and Tailwind CSS
-- Vite 8 and Node.js 20.19+ or 22.12+
+- Vite 8, Node.js 26.13.0 LTS, and npm 12.2.1
 - PHPUnit 12
 - SQLite for the default local environment
 - PostgreSQL and Redis in the Docker Compose environment
@@ -28,39 +28,49 @@ FishCounts is a Laravel web application for collecting San Diego sportfishing co
 
 - PHP 8.4 with the extensions required by Laravel and the selected database
 - Composer 2
-- Node.js 20.19+ or 22.12+ and npm
+- Node.js 26.13.0 LTS and npm 12.2.1, selected with nvm
 
 ### Installation
 
 1. Clone the repository and enter its directory.
-2. Create the local environment file and SQLite database:
+2. Select the pinned toolchain. Node bundles an older npm, so install the manifest's exact npm version:
+
+   ```bash
+   nvm install
+   nvm use
+   bash .github/scripts/setup-node.sh
+   ```
+
+   Local development, CI, and Docker asset builds use this same Node 26/npm pair. Keep `.nvmrc`, `engines`, and `packageManager` synchronized when updating it. Preserve `.npmrc` lifecycle-script and audit settings.
+
+3. Create the local environment file and SQLite database:
 
    ```bash
    cp .env.example .env
    touch database/database.sqlite
    ```
 
-3. Review `.env`. For the default setup, set `APP_URL=http://localhost:8000` and leave `DB_CONNECTION=sqlite`. Never commit secrets or production credentials.
-4. Install dependencies, generate the application key, run migrations, and build the frontend:
+4. Review `.env`. For the default setup, set `APP_URL=http://localhost:8000` and leave `DB_CONNECTION=sqlite`. Never commit secrets or production credentials.
+5. Install dependencies, generate the application key, run migrations, and build the frontend:
 
    ```bash
    composer run setup
    ```
 
-5. Create the first administrator, then seed reference data and the administrator's default alert rule:
+6. Create the first administrator, then seed reference data and the administrator's default alert rule:
 
    ```bash
    php artisan fish:create-admin
    php artisan db:seed
    ```
 
-6. Start the web server, queue listener, application log viewer, and Vite development server:
+7. Start the web server, queue listener, application log viewer, and Vite development server:
 
    ```bash
    composer run dev
    ```
 
-The application is available at <http://localhost:8000>. Sign in with the administrator account created in step 5.
+The application is available at <http://localhost:8000>. Sign in with the administrator account created in step 6.
 
 ## Configuration
 
