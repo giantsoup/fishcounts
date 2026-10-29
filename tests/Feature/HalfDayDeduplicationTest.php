@@ -46,7 +46,7 @@ class HalfDayDeduplicationTest extends TestCase
         $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);
         $this->landing = Landing::query()->create(['region_id' => $region->id, 'name' => 'Seaforth Sportfishing', 'slug' => 'seaforth']);
         $this->boat = Boat::query()->create(['name' => 'New Seaforth', 'slug' => 'new-seaforth', 'landing_id' => $this->landing->id]);
-        foreach (['1/2 Day', '1/2 Day AM', '1/2 Day PM', '1/2 Day Twilight', 'Full Day'] as $name) {
+        foreach (['1/2 Day', '1/2 Day AM', '1/2 Day PM', '1/2 Day Twilight', '3/4 Day', 'Full Day'] as $name) {
             TripType::query()->create(['name' => $name, 'slug' => Str::slug($name)]);
         }
     }
@@ -162,6 +162,109 @@ class HalfDayDeduplicationTest extends TestCase
         $this->assertTrue($fallback->fresh()->is_deduped_primary);
     }
 
+    #[DataProvider('missingDurations')]
+    public function test_matching_catches_and_anglers_count_once_when_a_source_omits_duration(?string $directType, ?string $fallbackType): void
+    {
+        $counts = ['Skipjack Tuna' => [143, 0], 'Yellowfin Tuna' => [11, 0], 'Bonito' => [42, 0], 'Yellowtail' => [9, 0], 'Sand Bass' => [9, 0]];
+        $direct = $this->report($this->direct, $directType, 33, $counts);
+        $fallback = $this->report($this->fallback, $fallbackType, 33, array_reverse($counts, true));
+
+        foreach ([1, 2] as $attempt) {
+            app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+            $this->assertTrue($direct->fresh()->is_deduped_primary);
+            $this->assertFalse($fallback->fresh()->is_deduped_primary);
+            $this->assertSame(2, TripReport::query()->count());
+            $this->assertSame(5, $fallback->speciesCounts()->count());
+            $this->assertSame($directType, $direct->fresh()->raw_trip_type);
+            $this->assertSame($fallbackType, $fallback->fresh()->raw_trip_type);
+        }
+
+        $this->actingAs(User::factory()->create())->get(route('counts.index', ['from' => '2026-08-27', 'to' => '2026-08-27']))
+            ->assertOk()->assertViewHas('summary', fn (array $summary): bool => $summary['trips'] === 1 && $summary['anglers'] === 33 && $summary['retained'] === 214);
+    }
+
+    /** @return array<string, array{?string, ?string}> */
+    public static function missingDurations(): array
+    {
+        return ['landing duration absent' => [null, '3/4 Day'], 'fallback duration absent' => ['3/4 Day', null], 'both durations absent' => [null, null]];
+    }
+
+    #[DataProvider('unknownDurationConflicts')]
+    public function test_unknown_duration_does_not_suppress_incomplete_or_conflicting_evidence(?int $directAnglers, ?int $fallbackAnglers, int $retained, int $released, bool $knownBoat): void
+    {
+        $direct = $this->report($this->direct, null, $directAnglers, ['Bonito' => [42, 9]]);
+        $fallback = $this->report($this->fallback, '3/4 Day', $fallbackAnglers, ['Bonito' => [$retained, $released]]);
+        if (! $knownBoat) {
+            $direct->update(['boat_id' => null]);
+        }
+        app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+        $this->assertTrue($direct->fresh()->is_deduped_primary);
+        $this->assertTrue($fallback->fresh()->is_deduped_primary);
+    }
+
+    /** @return array<string, array{?int, ?int, int, int, bool}> */
+    public static function unknownDurationConflicts(): array
+    {
+        return [
+            'missing landing anglers' => [null, 33, 42, 9, true],
+            'missing fallback anglers' => [33, null, 42, 9, true],
+            'both anglers missing' => [null, null, 42, 9, true],
+            'zero anglers' => [0, 0, 42, 9, true],
+            'conflicting anglers' => [33, 34, 42, 9, true],
+            'conflicting retained' => [33, 33, 43, 9, true],
+            'conflicting released' => [33, 33, 42, 10, true],
+            'missing boat identity' => [33, 33, 42, 9, false],
+        ];
+    }
+
+    public function test_unknown_duration_keeps_ambiguous_matches_visible_in_both_directions(): void
+    {
+        $counts = ['Bonito' => [42, 0]];
+        $first = $this->report($this->direct, null, 33, $counts);
+        $second = $this->report($this->direct, '1/2 Day', 33, $counts);
+        $fallback = $this->report($this->fallback, null, 33, $counts);
+        app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+        $this->assertTrue($fallback->fresh()->is_deduped_primary);
+
+        $second->speciesCounts()->delete();
+        $second->delete();
+        $secondFallback = $this->report($this->fallback, '3/4 Day', 33, $counts);
+        app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+        $this->assertTrue($first->fresh()->is_deduped_primary);
+        $this->assertTrue($fallback->fresh()->is_deduped_primary);
+        $this->assertTrue($secondFallback->fresh()->is_deduped_primary);
+    }
+
+    public function test_unknown_duration_preserves_existing_aggregator_source_precedence(): void
+    {
+        $aggregator = ScrapeSource::query()->create(['name' => 'San Diego Fish Reports', 'slug' => 'sandiego_fish_reports', 'source_type' => SourceType::Aggregator, 'base_url' => 'https://example.test', 'priority' => 20]);
+        $direct = $this->report($this->direct, null, 33, ['Bonito' => [42, 0]]);
+        $duplicate = $this->report($aggregator, null, 33, ['Bonito' => [42, 0]]);
+        app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+        $this->assertTrue($direct->fresh()->is_deduped_primary);
+        $this->assertFalse($duplicate->fresh()->is_deduped_primary);
+    }
+
+    #[DataProvider('uncertainCatches')]
+    public function test_unknown_duration_does_not_use_uncertain_catches_as_identity(?int $count, string $flag): void
+    {
+        $direct = $this->report($this->direct, null, 33, ['Bonito' => [42, 0], 'Yellowfin Tuna' => [11, 0]]);
+        $fallback = $this->report($this->fallback, '3/4 Day', 33, ['Bonito' => [42, 0], 'Yellowfin Tuna' => [11, 0]]);
+        foreach ([$direct, $fallback] as $report) {
+            $report->speciesCounts()->whereHas('species', fn ($query) => $query->where('name', 'Yellowfin Tuna'))
+                ->update(['count' => $count, $flag => true]);
+        }
+        app(TripReportNormalizer::class)->refreshPrimaryReports('2026-08-27');
+        $this->assertTrue($direct->fresh()->is_deduped_primary);
+        $this->assertTrue($fallback->fresh()->is_deduped_primary);
+    }
+
+    /** @return array<string, array{?int, string}> */
+    public static function uncertainCatches(): array
+    {
+        return ['unquantified' => [null, 'has_unquantified_components'], 'estimated' => [11, 'has_estimated_components']];
+    }
+
     #[DataProvider('importOrders')]
     public function test_import_order_preserves_rows_and_suppresses_only_matching_catches(bool $directFirst, string $type): void
     {
@@ -241,11 +344,11 @@ class HalfDayDeduplicationTest extends TestCase
     }
 
     /** @param array<string, array{int, int}> $counts */
-    private function report(ScrapeSource $source, string $type, ?int $anglers, array $counts, string $date = '2026-08-27'): TripReport
+    private function report(ScrapeSource $source, ?string $type, ?int $anglers, array $counts, string $date = '2026-08-27'): TripReport
     {
         $report = TripReport::query()->create([
             'source_id' => $source->id, 'boat_id' => $this->boat->id, 'landing_id' => $this->landing->id,
-            'trip_type_id' => TripType::query()->where('name', $type)->sole()->id, 'trip_date' => $date,
+            'trip_type_id' => $type === null ? null : TripType::query()->where('name', $type)->sole()->id, 'trip_date' => $date,
             'anglers' => $anglers, 'raw_boat_name' => $this->boat->name, 'raw_trip_type' => $type,
             'dedupe_key' => app(TripReportNormalizer::class)->dedupeKey($date, $this->boat->name, $type, $anglers),
             'source_confidence' => 100 - $source->priority,

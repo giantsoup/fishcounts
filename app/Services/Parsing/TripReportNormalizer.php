@@ -224,11 +224,12 @@ class TripReportNormalizer
      */
     private function selectPrimaryReportIds(Collection $reports): array
     {
-        [$halfDayReports, $otherReports] = $reports->partition(
-            fn (TripReport $report): bool => in_array($report->tripType?->name, self::HALF_DAY_TRIP_TYPES, true),
+        [$catchMatchedReports, $otherReports] = $reports->partition(
+            fn (TripReport $report): bool => in_array($report->tripType?->name, self::HALF_DAY_TRIP_TYPES, true)
+                || ($report->trip_type_id === null && $this->isSportfishingReportFallbackSource($report->source)),
         );
         $duplicateIds = [];
-        $groups = $halfDayReports
+        $groups = $reports
             ->filter(fn (TripReport $report): bool => $report->boat_id !== null && $report->landing_id !== null
                 && $report->speciesCounts->contains(fn (SpeciesCount $count): bool => $count->count > 0 || $count->released_count > 0))
             ->groupBy(fn (TripReport $report): string => $report->boat_id.'|'.$report->landing_id.'|'.$this->catchSignature($report));
@@ -240,9 +241,19 @@ class TripReportNormalizer
 
             foreach ($fallbackReports as $fallback) {
                 $matches[$fallback->id] = $directReports
-                    ->filter(fn (TripReport $direct): bool => ($direct->trip_type_id === $fallback->trip_type_id
-                        || $direct->tripType->name === '1/2 Day' || $fallback->tripType->name === '1/2 Day')
-                        && ($direct->anglers === null || $fallback->anglers === null || $direct->anglers === $fallback->anglers))
+                    ->filter(function (TripReport $direct) use ($fallback): bool {
+                        if ($direct->trip_type_id === null || $fallback->trip_type_id === null) {
+                            return $direct->anglers > 0 && $direct->anglers === $fallback->anglers
+                                && $direct->speciesCounts->every(fn (SpeciesCount $count): bool => $count->count !== null
+                                    && ! $count->has_estimated_components && ! $count->has_unquantified_components);
+                        }
+
+                        return in_array($direct->tripType->name, self::HALF_DAY_TRIP_TYPES, true)
+                            && in_array($fallback->tripType->name, self::HALF_DAY_TRIP_TYPES, true)
+                            && ($direct->trip_type_id === $fallback->trip_type_id
+                                || $direct->tripType->name === '1/2 Day' || $fallback->tripType->name === '1/2 Day')
+                            && ($direct->anglers === null || $fallback->anglers === null || $direct->anglers === $fallback->anglers);
+                    })
                     ->pluck('id')->all();
             }
 
@@ -254,8 +265,8 @@ class TripReportNormalizer
             }
         }
 
-        return $otherReports->unique('dedupe_key')->pluck('id')
-            ->merge($halfDayReports->whereNotIn('id', $duplicateIds)->pluck('id'))->values()->all();
+        return $otherReports->whereNotIn('id', $duplicateIds)->unique('dedupe_key')->pluck('id')
+            ->merge($catchMatchedReports->whereNotIn('id', $duplicateIds)->pluck('id'))->values()->all();
     }
 
     private function catchSignature(TripReport $report): string
