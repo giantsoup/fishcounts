@@ -26,6 +26,8 @@ class SourceFishCountGrammar
             ->replaceMatches('/\s+with\s+the\s+majority\s+of\s+fish\s+around\s+\d+(?:\.\d+)?\s*(?:lbs?|pounds?)\b/i', '')
             ->replaceMatches('/\s+up\s+to\s+\d+(?:\.\d+)?\s*#/', '')
             ->replaceMatches('/\s+\d+(?:\.\d+)?\s+plus\s+(?:lbs?|pounds?)\b/i', '')
+            ->replaceMatches('/(?<=\d)\s+plus(?=\s+(?!(?:lbs?|pounds?)\b)[A-Za-z])/i', '')
+            ->replaceMatches('/(?<![\w.\/#])(\d+)(?=Yellowtail\b)/i', '$1 ')
             ->replaceMatches('/\s*\(\s*(?:up\s+to\s+)?\d+(?:\s*(?:-|to)\s*\d+)?\s*#\s*\)/i', '')
             ->replaceMatches('/\s*\(\s*fishing\s+[A-Za-z .-]+\)/i', '')
             ->replaceMatches('/\s+with\s+\d+\s+between\s+\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b/i', '')
