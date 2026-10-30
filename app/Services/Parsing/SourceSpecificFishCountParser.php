@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v14";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v15";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -314,14 +314,21 @@ class SourceSpecificFishCountParser
     /** @return Collection<int, ParsedTripReportData> */
     private function parseSeaforthListItems(RawPayloadData $payload, string $parserVersion): Collection
     {
-        preg_match_all('/<li\b[^>]*>(?<item>.*?)(?:<\/li>|(?=<li\b|<\/ul>|\z))/is', $payload->body, $matches);
+        preg_match_all('/<li\b[^>]*>(?<item>.*?)(?:<\/li>|(?=<li\b|<\/ul>|\z))/is', $payload->body, $matches, PREG_OFFSET_CAPTURE);
 
         return collect($matches['item'] ?? [])
-            ->flatMap(function (string $itemHtml) use ($payload, $parserVersion): Collection {
+            ->flatMap(function (array $item) use ($payload, $parserVersion): Collection {
+                [$itemHtml, $itemOffset] = $item;
                 $line = Str::of(html_entity_decode(strip_tags($itemHtml), ENT_QUOTES | ENT_HTML5))
                     ->replace("\u{00A0}", ' ')
                     ->squish()
                     ->toString();
+
+                $pairedReports = $this->seaforthPairedHalfDayReports($payload, $line, $itemOffset, $parserVersion);
+
+                if ($pairedReports->isNotEmpty()) {
+                    return $pairedReports;
+                }
 
                 if (preg_match('/^The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+continues\b.*?\bThe\s+finished\s+up\s+their\b/i', $line, $contextMatches)) {
                     $line = Str::of($line)
@@ -391,7 +398,53 @@ class SourceSpecificFishCountParser
             .'|'.$tripFirstQualifiers.'(?<trip_alt>'.$tripPattern.')\s*'.$afterTripAction
             .'|charter\s+group(?:\s+today)?\s+went\s+offshore\s+for\s+their\s+(?<trip_charter>'.$tripPattern.')\s+trip\s+and\s+returned\s+'
             .'|(?<period_only>AM|PM)\s+(?:trip\s+)?(?:finished(?:\s+up)?|returned)\s+'
-            .')(?:with|wth|caught|landed|had)\b/i';
+            .')(?:with|wth|caught|landed|had|bagged)\b/i';
+    }
+
+    /** @return Collection<int, ParsedTripReportData> */
+    private function seaforthPairedHalfDayReports(RawPayloadData $payload, string $line, int $itemOffset, string $parserVersion): Collection
+    {
+        preg_match_all('/<h4\b[^>]*>(.*?)<\/h4>/is', substr($payload->body, 0, $itemOffset), $headings);
+        $heading = $this->cleanHtmlText(Arr::last($headings[1] ?? []) ?? '');
+
+        if (preg_match('/^(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)\s+(?<trip>Half\s+Day|1\/2\s+Day)$/i', $heading, $section) !== 1) {
+            return collect();
+        }
+
+        $boatPattern = preg_quote($section['boat'], '/');
+        $morningPattern = '/^(?<raw>The\s+'.$boatPattern.'\s+was\s+back\b[^.!?]*?\bthis\s+morning\s+landing\s+(?<counts>[^.!?]+)[.!?])\s*/i';
+
+        if (preg_match($morningPattern, $line, $morning) !== 1) {
+            return collect();
+        }
+
+        $periods = [['period' => 'AM', 'raw' => $morning['raw'], 'counts' => $morning['counts']]];
+        $continuation = substr($line, strlen($morning[0]));
+
+        if (preg_match('/^(?<raw>They\s+located\s+them\s+again\s+on\s+the\s+afternoon\s+trip\s+landing\s+(?<counts>[^.!?]+)[.!?])/i', $continuation, $afternoon) === 1) {
+            $periods[] = ['period' => 'PM', 'raw' => $afternoon['raw'], 'counts' => $afternoon['counts']];
+        }
+
+        return collect($periods)->map(function (array $period) use ($payload, $section, $parserVersion): ?ParsedTripReportData {
+            $speciesCounts = $this->genericParser->parseSpeciesCounts($period['counts']);
+
+            if ($speciesCounts->isEmpty()) {
+                return null;
+            }
+
+            return new ParsedTripReportData(
+                sourceKey: $payload->sourceKey,
+                tripDate: $payload->targetDate,
+                regionName: 'San Diego',
+                landingName: 'Seaforth Sportfishing',
+                boatName: $section['boat'],
+                tripTypeName: $this->normalizeSeaforthTripType($section['trip'], $period['period']),
+                anglers: $this->anglerCountFromNarrative($period['raw']),
+                rawFishCountText: $period['raw'],
+                speciesCounts: $speciesCounts->all(),
+                metadata: ['parser' => $parserVersion, 'format' => 'narrative-list-item'],
+            );
+        })->filter()->values();
     }
 
     private function seaforthSimpleNarrativeReportFromLine(RawPayloadData $payload, string $line, string $parserVersion): ?ParsedTripReportData

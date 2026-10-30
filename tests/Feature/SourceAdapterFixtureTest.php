@@ -36,7 +36,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Fisherman\'s Landing', $report->landingName);
         $this->assertSame('Full Day', $report->tripTypeName);
         $this->assertSame(20, $report->anglers);
-        $this->assertSame('source-specific-fishermans_landing-v14', $report->metadata['parser']);
+        $this->assertSame('source-specific-fishermans_landing-v15', $report->metadata['parser']);
         $this->assertSame('Yellowtail', $report->speciesCounts[0]->speciesName);
         $this->assertSame(40, $report->speciesCounts[0]->count);
         $this->assertSame('Calico Bass', $report->speciesCounts[1]->speciesName);
@@ -95,7 +95,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Premier', $report->boatName);
         $this->assertSame('2026-07-22', $report->tripDate->toDateString());
         $this->assertSame(93, $report->speciesCounts[0]->count);
-        $this->assertSame('source-specific-hm_landing-v14', $parsed->parserVersion);
+        $this->assertSame('source-specific-hm_landing-v15', $parsed->parserVersion);
     }
 
     public function test_fishermans_landing_parser_only_reads_the_requested_date_section(): void
@@ -121,7 +121,7 @@ class SourceAdapterFixtureTest extends TestCase
         $this->assertSame('Dolphin', $report->boatName);
         $this->assertSame('2026-07-22', $report->tripDate->toDateString());
         $this->assertSame(40, $report->speciesCounts[0]->count);
-        $this->assertSame('source-specific-fishermans_landing-v14', $parsed->parserVersion);
+        $this->assertSame('source-specific-fishermans_landing-v15', $parsed->parserVersion);
     }
 
     public function test_hm_landing_parser_fails_closed_without_trusted_date_markers(): void
