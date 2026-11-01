@@ -21,6 +21,8 @@ class SourceFishCountGrammar
             ->replaceMatches('/\bona\s+(?=\d+(?:\.\d+)?\s*day\b)/i', 'on a ')
             ->replaceMatches('/\bfpr(?=\s+\d+\s+anglers?\b)/i', 'for')
             ->replaceMatches('/(?<=\d)\+(?=\s+[A-Za-z])/i', '')
+            ->replaceMatches('/\b\d+(?:\.\d+)?(?:\s*(?:-|to|\x{2013})\s*\d+(?:\.\d+)?)?\s*(?:grams?|feet|ft)\b/iu', '')
+            ->replaceMatches('/\b(for\s+(?:their\s+)?\d+\s+(?:anglers?|people|passengers?))\s+on\s+their\s+(?:morning|afternoon|evening)\s+trip\b/i', '$1')
             ->replaceMatches('/\bLL\s+of\s+(?=\d+\s+anglers?\b)/i', 'trip for ')
             ->replaceMatches('/\s+averaging\s+\d+\s*(?:-|to)\s*\d+\s*(?:lbs?|pounds?)\b(?:\s+with\s+a\s+few\s+up\s+to\s+\d+\s*(?:lbs?|pounds?)\b)?/i', '')
             ->replaceMatches('/\s+with\s+the\s+majority\s+of\s+fish\s+around\s+\d+(?:\.\d+)?\s*(?:lbs?|pounds?)\b/i', '')

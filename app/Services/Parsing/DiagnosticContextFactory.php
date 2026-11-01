@@ -94,6 +94,7 @@ class DiagnosticContextFactory
 
         return collect(preg_split('/\R+/', $body) ?: [])
             ->map(fn (string $paragraph): string => $this->sanitizeText($paragraph))
+            ->flatMap(fn (string $paragraph): array => preg_split('/(?<=[.!?])\s+(?=The\s+(?:AM|PM)\s+(?:1\/2|3\/4|Half)\s+Day\s+for\s+the\s+[A-Za-z][A-Za-z0-9 \'&.-]{1,60}?\s+(?:bagged|caught|landed)\b)/i', $paragraph) ?: [])
             ->filter(fn (string $paragraph): bool => $paragraph !== '')
             ->values()
             ->all();

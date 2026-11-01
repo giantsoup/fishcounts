@@ -32,7 +32,7 @@ class SourceSpecificFishCountParser
 
     private function parseLandingPayload(RawPayloadData $payload): ParsedFishCountCollection
     {
-        $parserVersion = "source-specific-{$payload->sourceKey}-v15";
+        $parserVersion = "source-specific-{$payload->sourceKey}-v16";
         if (in_array($payload->sourceKey, ['fishermans_landing', 'hm_landing'], true)) {
             $payload = new RawPayloadData(
                 sourceKey: $payload->sourceKey,
@@ -391,7 +391,7 @@ class SourceSpecificFishCountParser
         $returnPhrase = '(?:also\s+)?(?:returned|ended|arrived)(?:\s+(?:this\s+(?:morning|afternoon|evening)|today))?\s+(?:from|on)\s+(?:a|their)\s+';
         $statusPhrase = '(?:started\s+off\s+day\s+(?:\d+|one|two|three|four)\s+of\s+their\s+|(?:just\s+)?checked\s+in(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+(?:day\s+\d+\s+of\s+)?their\s+|reported\s+in\s+from\s+their\s+|(?:finished(?:\s+up)?|ended)\s+(?:their|a)\s+|wrapped\s+up\s+(?:their|today(?:\'s)?)\s+|got\s+back\s+to\s+the\s+dock(?:\s+this\s+(?:morning|afternoon|evening))?\s+from\s+their\s+|'.$returnPhrase.')';
         $tripFirstQualifiers = '(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+(?:morning|afternoon|evening|night))?\s+)?(?:(?<period>AM|PM)\s+)?(?:on\s+(?:a|the|their)\s+)?(?:(?<period_after>AM|PM)\s+)?(?:Coronado\s+Islands\s+)?(?:local\s+|reverse\s+)?';
-        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:(?:finished(?:\s+up)?|returned|ended)(?:\s+from\s+their)?\s+|checked\s+in\s+to\s+start\s+their\s+(?:morning|afternoon|evening)\s+)?';
+        $afterTripAction = '(?:(?:\s+[A-Za-z0-9-]+){0,3}\s+(?:trip|charter))?(?:\s+to\s+the\s+Coronado\s+Islands)?\s*(?:today\s+)?(?:reported\s+in\s+|(?:finished(?:\s+up)?|returned|ended)(?:\s+from\s+their)?\s+|checked\s+in\s+to\s+start\s+their\s+(?:morning|afternoon|evening)\s+)?';
 
         return '/(?:^|(?<=[.!?])\s+)The\s+(?<boat>[A-Z][A-Za-z0-9 \'&.-]{1,60}?)(?:\'s)?\s+(?:'
             .$statusPhrase.'(?:(?<period_status>AM|PM|morning|afternoon)\s+)?(?:reverse\s+)?(?<trip>'.$tripPattern.')\s*'.$afterTripAction
@@ -422,6 +422,11 @@ class SourceSpecificFishCountParser
         $continuation = substr($line, strlen($morning[0]));
 
         if (preg_match('/^(?<raw>They\s+located\s+them\s+again\s+on\s+the\s+afternoon\s+trip\s+landing\s+(?<counts>[^.!?]+)[.!?])/i', $continuation, $afternoon) === 1) {
+            $periods[] = ['period' => 'PM', 'raw' => $afternoon['raw'], 'counts' => $afternoon['counts']];
+        }
+
+        $explicitPmPattern = '/(?:^|(?<=[.!?])\s+)(?<raw>The\s+PM\s+(?:1\/2|Half)\s+Day\s+for\s+the\s+'.$boatPattern.'\s+(?:bagged|caught|landed)\s+(?<counts>[^.!?]+)[.!?])/i';
+        if (count($periods) === 1 && preg_match($explicitPmPattern, $continuation, $afternoon) === 1) {
             $periods[] = ['period' => 'PM', 'raw' => $afternoon['raw'], 'counts' => $afternoon['counts']];
         }
 
