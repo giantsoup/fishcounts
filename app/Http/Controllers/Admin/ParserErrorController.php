@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Parsing\DismissParserError;
 use App\Enums\ParserDiagnosticReviewActionType;
-use App\Enums\ParserErrorResolutionType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DismissParserErrorRequest;
 use App\Models\Boat;
@@ -83,16 +83,12 @@ class ParserErrorController extends Controller
         ]);
     }
 
-    public function dismiss(DismissParserErrorRequest $request, ParserError $parserError): RedirectResponse
-    {
-        $wasDismissed = ParserError::query()
-            ->whereKey($parserError->getKey())
-            ->whereNull('resolved_at')
-            ->update([
-                'resolved_at' => now(),
-                'resolved_by_user_id' => $request->user()->getKey(),
-                'resolution_type' => ParserErrorResolutionType::Dismissed->value,
-            ]) === 1;
+    public function dismiss(
+        DismissParserErrorRequest $request,
+        ParserError $parserError,
+        DismissParserError $dismissParserError,
+    ): RedirectResponse {
+        $wasDismissed = $dismissParserError->handle($parserError, $request->user()->getKey());
 
         return back()->with('status', $wasDismissed
             ? 'Parser error dismissed without creating an alias.'

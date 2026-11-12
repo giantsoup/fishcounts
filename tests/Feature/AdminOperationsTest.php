@@ -391,6 +391,45 @@ class AdminOperationsTest extends TestCase
             ->assertSee(route('admin.scrape-runs.index'));
     }
 
+    public function test_admin_dismissing_a_parser_error_records_the_resolver_once(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $otherAdmin = User::factory()->admin()->create();
+        $source = ScrapeSource::query()->create([
+            'name' => 'Fisherman\'s Landing',
+            'slug' => 'fishermans_landing',
+            'source_type' => SourceType::Landing,
+            'base_url' => 'https://www.fishermanslanding.com',
+        ]);
+        $parserError = ParserError::query()->create([
+            'scrape_source_id' => $source->id,
+            'target_date' => '2026-06-20',
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Mixed Rockfish',
+            'message' => 'Unknown species alias [Mixed Rockfish].',
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('admin.parser-errors.index'))
+            ->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertRedirect(route('admin.parser-errors.index'))
+            ->assertSessionHas('status', 'Parser error dismissed without creating an alias.');
+
+        $parserError->refresh();
+        $this->assertNotNull($parserError->resolved_at);
+        $this->assertSame($admin->id, $parserError->resolved_by_user_id);
+        $this->assertSame(ParserErrorResolutionType::Dismissed, $parserError->resolution_type);
+
+        $this->actingAs($otherAdmin)
+            ->from(route('admin.parser-errors.index'))
+            ->patch(route('admin.parser-errors.dismiss', $parserError))
+            ->assertRedirect(route('admin.parser-errors.index'))
+            ->assertSessionHas('status', 'Parser error was already resolved.');
+
+        $this->assertSame($admin->id, $parserError->refresh()->resolved_by_user_id);
+    }
+
     public function test_parser_error_alias_selects_require_an_explicit_existing_item_selection(): void
     {
         $admin = User::factory()->admin()->create();
