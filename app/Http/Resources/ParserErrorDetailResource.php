@@ -31,6 +31,9 @@ class ParserErrorDetailResource extends ParserErrorResource
             'context' => $this->contextFields(),
             'raw_scrape_payload' => $this->whenLoaded('rawScrapePayload', fn (): ?array => $this->payloadMetadata($this->rawScrapePayload)),
             'trip_reports' => TripReportResource::collection($this->rawScrapePayload?->tripReports ?? collect()),
+            'latest_parser_execution' => $this->rawScrapePayload?->latestParserExecution === null
+                ? null
+                : ParserExecutionSummaryResource::make($this->rawScrapePayload->latestParserExecution),
         ];
     }
 

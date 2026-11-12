@@ -41,6 +41,7 @@ class ParserErrorController extends Controller
     {
         return ParserErrorDetailResource::make($parserError->load([
             'scrapeSource',
+            'rawScrapePayload.latestParserExecution',
             'rawScrapePayload.tripReports' => fn ($query) => $query->orderBy('id'),
             'rawScrapePayload.tripReports.boat',
             'rawScrapePayload.tripReports.landing',

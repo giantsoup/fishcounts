@@ -6,6 +6,7 @@ use App\Enums\ParserEngine;
 use App\Models\Boat;
 use App\Models\Landing;
 use App\Models\ParserError;
+use App\Models\ParserExecution;
 use App\Models\RawScrapePayload;
 use App\Models\Region;
 use App\Models\ScrapeSource;
@@ -113,6 +114,49 @@ class ParserErrorShowTest extends TestCase
             ->assertJsonPath('data.trip_reports.0.species_counts.0.released_count', 12);
     }
 
+    public function test_includes_the_latest_parser_execution_summary_for_the_payload(): void
+    {
+        $payload = RawScrapePayload::factory()->create();
+        $error = ParserError::factory()->for($payload)->create();
+        $this->executionFor($payload, ['status' => 'failed', 'started_at' => now()->subHour()]);
+        $latest = $this->executionFor($payload, [
+            'requested_engine' => ParserEngine::Ai,
+            'selected_engine' => ParserEngine::Deterministic,
+            'status' => 'completed',
+            'parser_version' => 'deterministic-v9',
+            'comparison_status' => 'mismatch',
+            'fallback_category' => 'ai_budget_exhausted',
+            'deterministic_snapshot' => ['reports' => ['secret snapshot']],
+            'started_at' => now(),
+        ]);
+
+        $response = $this->withToken($this->readToken())
+            ->getJson("/api/parser-errors/{$error->id}")
+            ->assertOk()
+            ->assertJsonPath('data.latest_parser_execution.id', $latest->id)
+            ->assertJsonPath('data.latest_parser_execution.requested_engine', 'ai')
+            ->assertJsonPath('data.latest_parser_execution.selected_engine', 'deterministic')
+            ->assertJsonPath('data.latest_parser_execution.status', 'completed')
+            ->assertJsonPath('data.latest_parser_execution.parser_version', 'deterministic-v9')
+            ->assertJsonPath('data.latest_parser_execution.comparison_status', 'mismatch')
+            ->assertJsonPath('data.latest_parser_execution.fallback_category', 'ai_budget_exhausted');
+
+        $this->assertStringNotContainsString('secret snapshot', $response->getContent());
+    }
+
+    public function test_latest_parser_execution_is_null_when_the_payload_never_ran(): void
+    {
+        $error = ParserError::factory()->create();
+
+        $response = $this->withToken($this->readToken())
+            ->getJson("/api/parser-errors/{$error->id}")
+            ->assertOk()
+            ->assertJsonPath('data.latest_parser_execution', null)
+            ->assertJsonPath('data.trip_reports', []);
+
+        $this->assertArrayHasKey('latest_parser_execution', $response->json('data'));
+    }
+
     public function test_missing_parser_error_returns_json_404(): void
     {
         $this->withToken($this->readToken())
@@ -127,6 +171,21 @@ class ParserErrorShowTest extends TestCase
         $token = User::factory()->admin()->create()->createToken('agent', ['errors'])->plainTextToken;
 
         $this->withToken($token)->getJson("/api/parser-errors/{$error->id}")->assertForbidden();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function executionFor(RawScrapePayload $payload, array $attributes): ParserExecution
+    {
+        return ParserExecution::query()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'idempotency_key' => fake()->unique()->sha256(),
+            'requested_engine' => ParserEngine::Deterministic,
+            'payload_hash' => $payload->payload_hash,
+            ...$attributes,
+        ]);
     }
 
     private function readToken(): string
