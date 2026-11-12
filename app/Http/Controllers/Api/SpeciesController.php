@@ -5,20 +5,25 @@ namespace App\Http\Controllers\Api;
 use App\Actions\Species\CreateSpecies;
 use App\Actions\Species\UpdateSpecies;
 use App\Enums\CanonicalEntityType;
+use App\Http\Controllers\Api\Concerns\DeletesUnreferencedEntities;
 use App\Http\Controllers\Api\Concerns\ListsEntitiesWithAliases;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ListEntitiesRequest;
 use App\Http\Requests\Api\StoreSpeciesRequest;
 use App\Http\Requests\Api\UpdateSpeciesRequest;
 use App\Http\Resources\SpeciesResource;
+use App\Models\AlertRule;
 use App\Models\Species;
+use App\Models\SpeciesCount;
 use App\Support\ApiAudit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
 class SpeciesController extends Controller
 {
+    use DeletesUnreferencedEntities;
     use ListsEntitiesWithAliases;
 
     public function index(ListEntitiesRequest $request): AnonymousResourceCollection
@@ -49,6 +54,15 @@ class SpeciesController extends Controller
         ApiAudit::write($request, 'species.update', $species->id);
 
         return SpeciesResource::make($this->withAliases($species));
+    }
+
+    public function destroy(Request $request, Species $species): Response
+    {
+        return $this->destroyUnlessReferenced($request, $species, 'species', [
+            'species counts' => fn () => SpeciesCount::query()->where('species_id', $species->id),
+            'aliases' => fn () => $species->aliases()->getQuery(),
+            'alert rules' => fn () => AlertRule::query()->where('species_id', $species->id),
+        ], 'Deactivate it instead with PATCH /api/species/{id} and {"is_active": false}.');
     }
 
     private function withAliases(Species $species): Species

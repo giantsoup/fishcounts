@@ -2,10 +2,14 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\AlertRule;
 use App\Models\Boat;
 use App\Models\Landing;
 use App\Models\Region;
+use App\Models\ScrapeSource;
 use App\Models\Species;
+use App\Models\SpeciesCount;
+use App\Models\TripReport;
 use App\Models\TripType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -222,6 +226,85 @@ class EntityWriteTest extends TestCase
 
         $this->assertTrue($boat->refresh()->is_active);
         $this->assertDatabaseMissing('boats', ['name' => 'Lone Star']);
+    }
+
+    public function test_unreferenced_entities_can_be_deleted(): void
+    {
+        $token = $this->token(['entities']);
+        $entities = [
+            'boats' => Boat::factory()->create(),
+            'species' => Species::factory()->create(),
+            'trip-types' => TripType::factory()->create(),
+        ];
+
+        foreach ($entities as $path => $entity) {
+            $this->withToken($token)->deleteJson("/api/{$path}/{$entity->id}")->assertNoContent();
+            $this->assertModelMissing($entity);
+        }
+    }
+
+    public function test_deleting_a_referenced_entity_returns_409_and_keeps_it(): void
+    {
+        $token = $this->token(['entities']);
+        $source = ScrapeSource::factory()->create();
+        $alertSpecies = Species::factory()->create();
+        $report = fn (array $attributes): TripReport => TripReport::query()->create([
+            'source_id' => $source->id,
+            'trip_date' => '2026-07-10',
+            'dedupe_key' => fake()->unique()->uuid(),
+            ...$attributes,
+        ]);
+        $alertRule = fn (array $attributes = []): AlertRule => AlertRule::query()->create([
+            'user_id' => $this->agent->id,
+            'name' => 'Alert',
+            'species_id' => $alertSpecies->id,
+            ...$attributes,
+        ]);
+
+        $boatWithReport = Boat::factory()->create();
+        $report(['boat_id' => $boatWithReport->id]);
+        $boatWithAlias = Boat::factory()->create();
+        $boatWithAlias->aliases()->create(['alias' => 'Old Name', 'normalized_alias' => 'old name']);
+        $boatWithAlert = Boat::factory()->create();
+        $alertRule()->boats()->attach($boatWithAlert);
+
+        $speciesWithCount = Species::factory()->create();
+        SpeciesCount::query()->create(['trip_report_id' => $report([])->id, 'species_id' => $speciesWithCount->id, 'count' => 4]);
+        $speciesWithAlias = Species::factory()->create();
+        $speciesWithAlias->aliases()->create(['alias' => 'Yellows', 'normalized_alias' => 'yellows']);
+        $speciesWithAlert = Species::factory()->create();
+        $alertRule(['species_id' => $speciesWithAlert->id]);
+
+        $tripTypeWithReport = TripType::factory()->create();
+        $report(['trip_type_id' => $tripTypeWithReport->id]);
+        $tripTypeWithAlias = TripType::factory()->create();
+        $tripTypeWithAlias->aliases()->create(['alias' => 'All Day', 'normalized_alias' => 'all day']);
+        $tripTypeWithAlert = TripType::factory()->create();
+        $alertRule()->tripTypes()->attach($tripTypeWithAlert);
+
+        $referenced = [
+            'boats' => [$boatWithReport, $boatWithAlias, $boatWithAlert],
+            'species' => [$speciesWithCount, $speciesWithAlias, $speciesWithAlert],
+            'trip-types' => [$tripTypeWithReport, $tripTypeWithAlias, $tripTypeWithAlert],
+        ];
+
+        foreach ($referenced as $path => $entities) {
+            foreach ($entities as $entity) {
+                $message = $this->withToken($token)
+                    ->deleteJson("/api/{$path}/{$entity->id}")
+                    ->assertConflict()
+                    ->json('message');
+
+                $this->assertStringContainsString('is_active', $message);
+                $this->assertModelExists($entity);
+            }
+        }
+
+        $this->assertStringContainsString(
+            'POST /api/boats/{id}/merge',
+            $this->withToken($token)->deleteJson("/api/boats/{$boatWithReport->id}")->json('message'),
+        );
+        $this->assertSame(1, $boatWithAlias->aliases()->count());
     }
 
     private function landing(): Landing
