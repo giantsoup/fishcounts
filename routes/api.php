@@ -73,6 +73,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('boats/{boat}', [BoatController::class, 'show'])->whereNumber('boat')->middleware('abilities:read')->name('boats.show');
     Route::patch('boats/{boat}', [BoatController::class, 'update'])->whereNumber('boat')->middleware('abilities:entities')->name('boats.update');
     Route::delete('boats/{boat}', [BoatController::class, 'destroy'])->whereNumber('boat')->middleware('abilities:entities')->name('boats.destroy');
+    Route::post('boats/{boat}/merge', [BoatController::class, 'merge'])->whereNumber('boat')->middleware('abilities:entities')->name('boats.merge');
     Route::get('boats/{boat}/aliases', [BoatAliasController::class, 'index'])->whereNumber('boat')->middleware('abilities:read')->name('boats.aliases.index');
     Route::post('boats/{boat}/aliases', [BoatAliasController::class, 'store'])->whereNumber('boat')->middleware('abilities:aliases')->name('boats.aliases.store');
     Route::delete('boats/aliases/{boatAlias}', [BoatAliasController::class, 'destroy'])->whereNumber('boatAlias')->middleware('abilities:aliases')->name('boats.aliases.destroy');

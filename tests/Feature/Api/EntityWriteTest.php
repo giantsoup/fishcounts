@@ -218,13 +218,17 @@ class EntityWriteTest extends TestCase
     {
         $token = $this->token(['read', 'aliases']);
         $boat = Boat::factory()->create();
+        $duplicate = Boat::factory()->create();
 
         $this->withToken($token)->postJson('/api/boats', ['name' => 'Lone Star'])->assertForbidden();
         $this->withToken($token)->postJson('/api/species', ['name' => 'Opaleye'])->assertForbidden();
         $this->withToken($token)->postJson('/api/trip-types', ['name' => 'Twilight'])->assertForbidden();
         $this->withToken($token)->patchJson("/api/boats/{$boat->id}", ['is_active' => false])->assertForbidden();
+        $this->withToken($token)->deleteJson("/api/boats/{$boat->id}")->assertForbidden();
+        $this->withToken($token)->postJson("/api/boats/{$boat->id}/merge", ['duplicate_boat_id' => $duplicate->id])->assertForbidden();
 
         $this->assertTrue($boat->refresh()->is_active);
+        $this->assertTrue($duplicate->refresh()->is_active);
         $this->assertDatabaseMissing('boats', ['name' => 'Lone Star']);
     }
 
@@ -301,10 +305,81 @@ class EntityWriteTest extends TestCase
         }
 
         $this->assertStringContainsString(
-            'POST /api/boats/{id}/merge',
+            "POST /api/boats/{canonical_id}/merge and {\"duplicate_boat_id\": {$boatWithReport->id}}",
             $this->withToken($token)->deleteJson("/api/boats/{$boatWithReport->id}")->json('message'),
         );
         $this->assertSame(1, $boatWithAlias->aliases()->count());
+    }
+
+    public function test_merging_moves_a_duplicate_boats_reports_aliases_and_alert_rules_then_deactivates_it(): void
+    {
+        $source = ScrapeSource::factory()->create();
+        $landing = $this->landing();
+        $target = Boat::factory()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        $duplicate = Boat::factory()->create(['name' => 'Dolphin II', 'slug' => 'legacy-dolphin-2', 'landing_id' => $landing->id]);
+        $duplicate->aliases()->create(['alias' => 'Dolphin 2', 'normalized_alias' => 'dolphin 2']);
+        $bystander = Boat::factory()->create(['name' => 'Lone Star', 'slug' => 'lone-star']);
+        $report = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => $duplicate->id,
+            'trip_date' => '2026-07-09',
+            'raw_trip_type' => 'Full Day',
+            'anglers' => 20,
+            'dedupe_key' => 'duplicate-report',
+        ]);
+        $bystanderReport = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => $bystander->id,
+            'trip_date' => '2026-07-09',
+            'dedupe_key' => 'bystander-report',
+        ]);
+        $alertRule = AlertRule::query()->create([
+            'user_id' => $this->agent->id,
+            'name' => 'Dolphin alert',
+            'species_id' => Species::factory()->create()->id,
+        ]);
+        $alertRule->boats()->attach($duplicate);
+
+        $this->withToken($this->token(['entities']))
+            ->postJson("/api/boats/{$target->id}/merge", ['duplicate_boat_id' => $duplicate->id])
+            ->assertOk()
+            ->assertJsonPath('data.id', $target->id)
+            ->assertJsonPath('data.landing.id', $landing->id)
+            ->assertJsonPath('data.aliases.*.alias', ['Dolphin 2', 'Dolphin II'])
+            ->assertJsonPath('meta.merged_boat.id', $duplicate->id)
+            ->assertJsonPath('meta.merged_boat.is_active', false);
+
+        $this->assertSame($target->id, $report->refresh()->boat_id);
+        $this->assertSame('2026-07-09|dolphin|full-day|20', $report->dedupe_key);
+        $this->assertSame($bystander->id, $bystanderReport->refresh()->boat_id);
+        $this->assertSame([$target->id], $alertRule->boats()->pluck('boats.id')->all());
+        $this->assertSame(0, $duplicate->aliases()->count());
+        $this->assertFalse($duplicate->refresh()->is_active);
+        $this->assertTrue($target->refresh()->is_active);
+        $this->assertTrue($bystander->refresh()->is_active);
+    }
+
+    public function test_merge_rejects_invalid_requests(): void
+    {
+        $token = $this->token(['entities']);
+        $target = Boat::factory()->create();
+        $inactiveTarget = Boat::factory()->inactive()->create();
+        $duplicate = Boat::factory()->create();
+
+        $this->withToken($token)->postJson("/api/boats/{$target->id}/merge", ['duplicate_boat_id' => $target->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('duplicate_boat_id');
+        $this->withToken($token)->postJson("/api/boats/{$target->id}/merge", ['duplicate_boat_id' => 999])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('duplicate_boat_id');
+        $this->withToken($token)->postJson("/api/boats/{$target->id}/merge", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('duplicate_boat_id');
+        $this->withToken($token)->postJson("/api/boats/{$inactiveTarget->id}/merge", ['duplicate_boat_id' => $duplicate->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('duplicate_boat_id');
+
+        $this->assertTrue($duplicate->refresh()->is_active);
     }
 
     private function landing(): Landing
