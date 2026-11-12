@@ -21,6 +21,24 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
+     * API tokens only ever belong to active admins. Deleting the account, deactivating it, or
+     * removing its admin role revokes every token, so a later reactivation or re-promotion does
+     * not quietly bring an old token back to life.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (User $user): void {
+            if ($user->wasChanged(['is_active', 'role']) && (! $user->is_active || ! $user->isAdmin())) {
+                $user->tokens()->delete();
+            }
+        });
+
+        static::deleting(function (User $user): void {
+            $user->tokens()->delete();
+        });
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

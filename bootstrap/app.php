@@ -35,6 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin',
             SubstituteBindings::class,
         ]);
+
+        // Each route's ability check is route middleware, which would otherwise run after the
+        // group's route-model binding and let a token without the ability probe for record ids.
+        $middleware->prependToPriorityList(before: SubstituteBindings::class, prepend: CheckAbilities::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

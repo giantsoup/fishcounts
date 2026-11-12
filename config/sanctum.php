@@ -53,7 +53,9 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Backstop for tokens created without an expires_at (for example from tinker): no token
+    // outlives the longest expiry fish:mint-api-token allows (365 days).
+    'expiration' => 365 * 24 * 60,
 
     /*
     |--------------------------------------------------------------------------
