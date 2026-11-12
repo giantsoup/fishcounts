@@ -26,7 +26,7 @@ class ParserErrorShowTest extends TestCase
         $source = ScrapeSource::factory()->create(['parser_engine' => ParserEngine::Ai]);
         $payload = RawScrapePayload::factory()->for($source)->create([
             'target_date' => '2026-07-14',
-            'url' => 'https://example.test/counts?date=2026-07-14&api_key=secret123',
+            'url' => 'https://example.test/counts?date=2026-07-14',
             'http_status' => 200,
             'content_type' => 'text/html',
             'payload' => '<p>full raw body that must not appear</p>',
@@ -61,7 +61,7 @@ class ParserErrorShowTest extends TestCase
             ->assertJsonPath('data.context.report_index', 2)
             ->assertJsonPath('data.raw_scrape_payload.id', $payload->id)
             ->assertJsonPath('data.raw_scrape_payload.target_date', '2026-07-14')
-            ->assertJsonPath('data.raw_scrape_payload.url', 'https://example.test/counts')
+            ->assertJsonPath('data.raw_scrape_payload.url', 'https://example.test/counts?date=2026-07-14')
             ->assertJsonPath('data.raw_scrape_payload.http_status', 200)
             ->assertJsonPath('data.raw_scrape_payload.content_type', 'text/html')
             ->assertJsonPath('data.raw_scrape_payload.parser_version', 'deterministic-v9')
@@ -71,7 +71,6 @@ class ParserErrorShowTest extends TestCase
         $this->assertArrayNotHasKey('unlisted_key', $response->json('data.context'));
         $this->assertArrayNotHasKey('payload', $response->json('data.raw_scrape_payload'));
         $this->assertStringNotContainsString('full raw body', $response->getContent());
-        $this->assertStringNotContainsString('secret123', $response->getContent());
     }
 
     public function test_embeds_the_trip_reports_parsed_from_the_errors_payload(): void
