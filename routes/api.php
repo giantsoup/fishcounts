@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\BoatController;
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\SpeciesController;
+use App\Http\Controllers\Api\TripTypeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -17,4 +20,14 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
+
+    // Boats, species, and trip types (#67 reads and aliases; #70 adds the entity writes here).
+    Route::middleware('abilities:read')->group(function (): void {
+        Route::get('boats', [BoatController::class, 'index'])->name('boats.index');
+        Route::get('boats/{boat}', [BoatController::class, 'show'])->whereNumber('boat')->name('boats.show');
+        Route::get('species', [SpeciesController::class, 'index'])->name('species.index');
+        Route::get('species/{species}', [SpeciesController::class, 'show'])->whereNumber('species')->name('species.show');
+        Route::get('trip-types', [TripTypeController::class, 'index'])->name('trip-types.index');
+        Route::get('trip-types/{tripType}', [TripTypeController::class, 'show'])->whereNumber('tripType')->name('trip-types.show');
+    });
 });

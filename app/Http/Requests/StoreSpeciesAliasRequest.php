@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CanonicalEntityType;
 use App\Models\Species;
 use App\Models\SpeciesAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -32,7 +33,7 @@ class StoreSpeciesAliasRequest extends FormRequest
 
     public function normalizedAlias(): string
     {
-        return str($this->validated('alias'))->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+        return CanonicalEntityType::Species->normalizeAlias($this->validated('alias'));
     }
 
     /**

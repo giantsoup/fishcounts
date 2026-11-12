@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Services\Parsing\BoatNameNormalizer;
+use App\Enums\CanonicalEntityType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -34,7 +34,7 @@ class StoreBoatAliasRequest extends FormRequest
 
     public function normalizedAlias(): string
     {
-        return BoatNameNormalizer::normalize($this->validated('alias'));
+        return CanonicalEntityType::Boat->normalizeAlias($this->validated('alias'));
     }
 
     /** @return array<int, callable(Validator): void> */

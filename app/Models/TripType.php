@@ -2,15 +2,20 @@
 
 namespace App\Models;
 
+use Database\Factories\TripTypeFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Guarded(['id'])]
 class TripType extends Model
 {
+    /** @use HasFactory<TripTypeFactory> */
+    use HasFactory;
+
     public const int MAX_SORT_ORDER = 65_535;
 
     protected $attributes = [

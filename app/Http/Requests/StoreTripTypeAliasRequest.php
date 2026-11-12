@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\CanonicalEntityType;
 use App\Models\TripType;
 use App\Models\TripTypeAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -32,7 +33,7 @@ class StoreTripTypeAliasRequest extends FormRequest
 
     public function normalizedAlias(): string
     {
-        return str($this->validated('alias'))->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+        return CanonicalEntityType::TripType->normalizeAlias($this->validated('alias'));
     }
 
     /**

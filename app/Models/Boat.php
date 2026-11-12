@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\BoatFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +12,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Guarded(['id'])]
 class Boat extends Model
 {
+    /** @use HasFactory<BoatFactory> */
+    use HasFactory;
+
     protected $attributes = [
         'is_active' => true,
     ];
