@@ -2,6 +2,7 @@
 
 namespace App\DTOs;
 
+use App\Enums\CanonicalEntityType;
 use App\Enums\ParserDiagnosticType;
 
 final readonly class ParserDiagnosticData
@@ -18,7 +19,8 @@ final readonly class ParserDiagnosticData
     ) {}
 
     /**
-     * The parser error type this diagnostic is stored as: unknown aliases split by field.
+     * The parser error type this diagnostic is stored as: unknown aliases split by the entity
+     * their field names, with any other field treated as a species.
      */
     public function errorType(): string
     {
@@ -26,10 +28,6 @@ final readonly class ParserDiagnosticData
             return $this->type->value;
         }
 
-        return match ($this->field) {
-            'boat' => 'unknown_boat_alias',
-            'trip_type' => 'unknown_trip_type_alias',
-            default => 'unknown_species_alias',
-        };
+        return (CanonicalEntityType::tryFrom($this->field) ?? CanonicalEntityType::Species)->aliasErrorType();
     }
 }

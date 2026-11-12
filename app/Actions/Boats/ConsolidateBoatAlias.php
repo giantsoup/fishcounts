@@ -2,6 +2,7 @@
 
 namespace App\Actions\Boats;
 
+use App\Enums\CanonicalEntityType;
 use App\Enums\ParserErrorResolutionType;
 use App\Exceptions\BoatAliasWouldMergeBoat;
 use App\Models\AlertRule;
@@ -186,7 +187,7 @@ class ConsolidateBoatAlias
 
         $parserErrorIds = ParserError::query()
             ->whereNull('resolved_at')
-            ->where('error_type', 'unknown_boat_alias')
+            ->where('error_type', CanonicalEntityType::Boat->aliasErrorType())
             ->where('raw_field', 'boat')
             ->whereNotNull('raw_value')
             ->get(['id', 'raw_value'])
