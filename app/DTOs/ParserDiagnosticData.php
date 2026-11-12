@@ -16,4 +16,20 @@ final readonly class ParserDiagnosticData
         public string $reportFingerprint,
         public string $diagnosticFingerprint,
     ) {}
+
+    /**
+     * The parser error type this diagnostic is stored as: unknown aliases split by field.
+     */
+    public function errorType(): string
+    {
+        if ($this->type !== ParserDiagnosticType::UnknownAlias) {
+            return $this->type->value;
+        }
+
+        return match ($this->field) {
+            'boat' => 'unknown_boat_alias',
+            'trip_type' => 'unknown_trip_type_alias',
+            default => 'unknown_species_alias',
+        };
+    }
 }

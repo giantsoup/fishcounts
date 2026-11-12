@@ -25,4 +25,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('raw-payloads/{rawScrapePayload}/body', [RawPayloadController::class, 'body'])
         ->middleware('abilities:read')
         ->name('raw-payloads.body');
+    Route::post('raw-payloads/{rawScrapePayload}/evaluate', [RawPayloadController::class, 'evaluate'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.evaluate');
 });
