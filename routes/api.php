@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\RawPayloadReparseController;
 use App\Http\Controllers\Api\ReparseRunController;
 use App\Http\Controllers\Api\SpeciesAliasController;
 use App\Http\Controllers\Api\SpeciesController;
+use App\Http\Controllers\Api\TripReportController;
 use App\Http\Controllers\Api\TripTypeAliasController;
 use App\Http\Controllers\Api\TripTypeController;
 use Illuminate\Support\Facades\Route;
@@ -26,7 +27,6 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
-
     Route::get('raw-payloads/{rawScrapePayload}', [RawPayloadController::class, 'show'])
         ->middleware('abilities:read')
         ->name('raw-payloads.show');
@@ -36,7 +36,6 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::post('raw-payloads/{rawScrapePayload}/evaluate', [RawPayloadController::class, 'evaluate'])
         ->middleware('abilities:read')
         ->name('raw-payloads.evaluate');
-
     Route::get('reparse-runs/preview', [ReparseRunController::class, 'preview'])
         ->middleware('abilities:reparse')
         ->name('reparse-runs.preview');
@@ -55,6 +54,18 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
         ->whereNumber('rawScrapePayload')
         ->middleware('abilities:reparse')
         ->name('raw-payloads.reparse');
+    Route::get('parser-errors/{parserError}', [ParserErrorController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('parser-errors.show');
+    Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])
+        ->middleware('abilities:errors')
+        ->name('parser-errors.dismiss');
+    Route::get('trip-reports', [TripReportController::class, 'index'])
+        ->middleware('abilities:read')
+        ->name('trip-reports.index');
+    Route::get('trip-reports/{tripReport}', [TripReportController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('trip-reports.show');
 
     // Boats, species, and trip types (#67 reads and aliases; #70 adds the entity writes here).
     Route::get('boats', [BoatController::class, 'index'])->middleware('abilities:read')->name('boats.index');

@@ -80,6 +80,12 @@ class RawScrapePayload extends Model
         return $this->hasMany(ParserExecution::class);
     }
 
+    /** @return HasOne<ParserExecution, $this> */
+    public function latestParserExecution(): HasOne
+    {
+        return $this->hasOne(ParserExecution::class)->latestOfMany();
+    }
+
     /** @return BelongsTo<ParserExecution, $this> */
     public function authoritativeParserExecution(): BelongsTo
     {
