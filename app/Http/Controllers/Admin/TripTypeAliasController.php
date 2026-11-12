@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\TripTypes\CreateTripType;
 use App\Actions\TripTypes\CreateTripTypeAlias;
+use App\Actions\TripTypes\UpdateTripType;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTripTypeAliasRequest;
 use App\Http\Requests\StoreTripTypeRequest;
@@ -29,15 +31,9 @@ class TripTypeAliasController extends Controller
         ]);
     }
 
-    public function storeTripType(StoreTripTypeRequest $request): RedirectResponse
+    public function storeTripType(StoreTripTypeRequest $request, CreateTripType $createTripType): RedirectResponse
     {
-        $tripType = TripType::query()->create([
-            'name' => $request->validated('name'),
-            'slug' => $request->slug(),
-            'sort_order' => $request->validated('sort_order')
-                ?? min((int) TripType::query()->max('sort_order') + 1, TripType::MAX_SORT_ORDER),
-            'is_active' => true,
-        ]);
+        $tripType = $createTripType->handle($request->validated('name'), $request->validated('sort_order'));
 
         return redirect()
             ->route('admin.trip-type-aliases.index')
@@ -46,9 +42,12 @@ class TripTypeAliasController extends Controller
             ->with('selected_trip_type_id', $tripType->id);
     }
 
-    public function updateTripType(UpdateTripTypeRequest $request, TripType $tripType): RedirectResponse
-    {
-        $tripType->update([
+    public function updateTripType(
+        UpdateTripTypeRequest $request,
+        TripType $tripType,
+        UpdateTripType $updateTripType,
+    ): RedirectResponse {
+        $updateTripType->handle($tripType, [
             'sort_order' => $request->validated('order_sort_order'),
         ]);
 

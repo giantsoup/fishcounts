@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\Species\CreateSpecies;
 use App\Actions\Species\CreateSpeciesAlias;
+use App\Actions\Species\UpdateSpecies;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSpeciesAliasRequest;
 use App\Http\Requests\StoreSpeciesRequest;
@@ -29,15 +31,12 @@ class SpeciesAliasController extends Controller
         ]);
     }
 
-    public function storeSpecies(StoreSpeciesRequest $request): RedirectResponse
+    public function storeSpecies(StoreSpeciesRequest $request, CreateSpecies $createSpecies): RedirectResponse
     {
-        $species = Species::query()->create([
-            'environmental_location_profile' => $request->validated('environmental_location_profile')
-                ?? config('fish.conditions.location_profile', 'san_diego_bight'),
-            'name' => $request->validated('name'),
-            'slug' => $request->slug(),
-            'is_active' => true,
-        ]);
+        $species = $createSpecies->handle(
+            $request->validated('name'),
+            $request->validated('environmental_location_profile'),
+        );
 
         return redirect()
             ->route('admin.species-aliases.index')
@@ -49,8 +48,9 @@ class SpeciesAliasController extends Controller
     public function updateSpecies(
         UpdateSpeciesEnvironmentalProfileRequest $request,
         Species $species,
+        UpdateSpecies $updateSpecies,
     ): RedirectResponse {
-        $species->update([
+        $updateSpecies->handle($species, [
             'environmental_location_profile' => $request->validated('species_environmental_location_profile'),
         ]);
 

@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Actions\Boats;
+
+use App\Models\Boat;
+use App\Models\BoatAlias;
+use App\Services\Parsing\BoatNameNormalizer;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+
+class CreateBoat
+{
+    /**
+     * @throws ValidationException when the name is blank or clashes with another boat or boat alias.
+     */
+    public function handle(string $name, ?int $landingId = null): Boat
+    {
+        $name = Str::squish($name);
+
+        if (($conflict = $this->nameConflict($name)) !== null) {
+            throw ValidationException::withMessages(['name' => $conflict]);
+        }
+
+        return Boat::query()->create([
+            'name' => $name,
+            'slug' => Str::slug($name),
+            'landing_id' => $landingId,
+            'is_active' => true,
+        ]);
+    }
+
+    /**
+     * The duplicate-name rule shared by creating and renaming boats, or null when the name is free.
+     */
+    public function nameConflict(string $name, ?Boat $except = null): ?string
+    {
+        $slug = Str::slug($name);
+
+        if ($slug === '') {
+            return 'The boat name must contain letters or numbers.';
+        }
+
+        $boatExists = Boat::query()
+            ->where('slug', $slug)
+            ->when($except, fn ($query) => $query->whereKeyNot($except->getKey()))
+            ->exists();
+
+        if ($boatExists) {
+            return 'A boat with this name already exists.';
+        }
+
+        $aliasExists = BoatAlias::query()
+            ->where('normalized_alias', BoatNameNormalizer::normalize($name))
+            ->when($except, fn ($query) => $query->where('boat_id', '!=', $except->getKey()))
+            ->exists();
+
+        return $aliasExists ? 'This name is already an alias for another boat.' : null;
+    }
+}

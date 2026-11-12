@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Actions\Boats\ConsolidateBoatAlias;
+use App\Actions\Boats\CreateBoat;
+use App\Actions\Boats\UpdateBoat;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreBoatAliasRequest;
 use App\Http\Requests\StoreBoatRequest;
@@ -33,14 +35,9 @@ class BoatController extends Controller
         ]);
     }
 
-    public function store(StoreBoatRequest $request): RedirectResponse
+    public function store(StoreBoatRequest $request, CreateBoat $createBoat): RedirectResponse
     {
-        $boat = Boat::query()->create([
-            'name' => $request->validated('boat_name'),
-            'slug' => $request->slug(),
-            'landing_id' => $request->validated('landing_id'),
-            'is_active' => true,
-        ]);
+        $boat = $createBoat->handle($request->validated('boat_name'), $request->validated('landing_id'));
 
         return redirect()
             ->route('admin.boats.index')
@@ -49,9 +46,9 @@ class BoatController extends Controller
             ->with('selected_boat_id', $boat->id);
     }
 
-    public function update(UpdateBoatRequest $request, Boat $boat): RedirectResponse
+    public function update(UpdateBoatRequest $request, Boat $boat, UpdateBoat $updateBoat): RedirectResponse
     {
-        $boat->update([
+        $updateBoat->handle($boat, [
             'booking_url' => $request->validated('booking_url'),
         ]);
 
