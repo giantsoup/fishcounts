@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Parsing\RetryParserReparseRun;
 use App\Actions\Parsing\StartParserReparseRun;
 use App\Enums\ParserReparseItemStatus;
+use App\Enums\ParserReparseRunStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\PreviewReparseRunRequest;
 use App\Http\Requests\Api\StartReparseRunRequest;
@@ -13,6 +15,7 @@ use App\Models\ParserReparseRun;
 use App\Services\Parsing\ParserReparsePlanner;
 use App\Support\ApiAudit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ReparseRunController extends Controller
 {
@@ -56,6 +59,25 @@ class ReparseRunController extends Controller
     public function show(ParserReparseRun $parserReparseRun): ReparseRunResource
     {
         return $this->runResource($parserReparseRun);
+    }
+
+    /**
+     * Requeue a finished run's failed items. `meta.retried` is false, and nothing changes, when the
+     * run is still active, has no failed items, or another run is active.
+     */
+    public function retry(Request $request, ParserReparseRun $parserReparseRun, RetryParserReparseRun $retryRun): JsonResponse
+    {
+        $wasActive = $parserReparseRun->status->isActive();
+        $run = $retryRun->handle($parserReparseRun);
+        $retried = ! $wasActive && $run->status === ParserReparseRunStatus::Pending;
+
+        if ($retried) {
+            ApiAudit::write($request, 'reparse-run.retry', $run->id);
+        }
+
+        return $this->runResource($run)
+            ->additional(['meta' => ['retried' => $retried]])
+            ->response();
     }
 
     private function runResource(ParserReparseRun $run): ReparseRunResource

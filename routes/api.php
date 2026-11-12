@@ -29,4 +29,8 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
         ->whereNumber('parserReparseRun')
         ->middleware('abilities:read')
         ->name('reparse-runs.show');
+    Route::post('reparse-runs/{parserReparseRun}/retry', [ReparseRunController::class, 'retry'])
+        ->whereNumber('parserReparseRun')
+        ->middleware(['abilities:reparse', 'throttle:3,1,parser-reparse-write:'])
+        ->name('reparse-runs.retry');
 });

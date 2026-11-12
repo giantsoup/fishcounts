@@ -188,12 +188,71 @@ class ReparseApiTest extends TestCase
         $this->withToken($this->token(['read']))->getJson('/api/reparse-runs/999')->assertNotFound();
     }
 
+    public function test_retry_requeues_the_failed_items_of_a_failed_run(): void
+    {
+        $run = $this->failedRun();
+
+        $this->withToken($this->token(['reparse']))
+            ->postJson("/api/reparse-runs/{$run->id}/retry")
+            ->assertOk()
+            ->assertJsonPath('meta.retried', true)
+            ->assertJsonPath('data.id', $run->id)
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.progress.failed_items', 0)
+            ->assertJsonPath('data.failures', []);
+
+        $this->assertSame(ParserReparseItemStatus::Pending, $run->items()->sole()->status);
+        Queue::assertPushed(DispatchParserReparseRunJob::class, fn (DispatchParserReparseRunJob $job): bool => $job->parserReparseRunId === $run->id);
+    }
+
+    public function test_retry_of_a_run_without_failures_changes_nothing(): void
+    {
+        $run = ParserReparseRun::query()->create(['status' => ParserReparseRunStatus::Succeeded, 'finished_at' => now()]);
+
+        $this->withToken($this->token(['reparse']))
+            ->postJson("/api/reparse-runs/{$run->id}/retry")
+            ->assertOk()
+            ->assertJsonPath('meta.retried', false)
+            ->assertJsonPath('data.status', 'succeeded');
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_retry_of_a_missing_run_is_a_json_404(): void
+    {
+        $this->withToken($this->token(['reparse']))->postJson('/api/reparse-runs/999/retry')->assertNotFound();
+    }
+
     /**
      * @param  list<string>  $abilities
      */
     private function token(array $abilities): string
     {
         return User::factory()->admin()->create()->createToken('agent', $abilities)->plainTextToken;
+    }
+
+    private function failedRun(): ParserReparseRun
+    {
+        $payload = RawScrapePayload::factory()->create(['target_date' => '2026-07-10']);
+        $run = ParserReparseRun::query()->create([
+            'status' => ParserReparseRunStatus::Failed,
+            'total_items' => 1,
+            'queued_items' => 1,
+            'failed_items' => 1,
+            'finished_at' => now(),
+            'error_message' => '1 item(s) failed to reparse.',
+        ]);
+        $run->items()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'target_date' => '2026-07-10',
+            'mode' => ParserReparseItemMode::Authoritative,
+            'sequence' => 1,
+            'status' => ParserReparseItemStatus::Failed,
+            'error_message' => 'Timed out.',
+        ]);
+
+        return $run;
     }
 
     private function openErrorOn(ScrapeSource $source, string $targetDate, bool $structural = false): ParserError
