@@ -68,7 +68,14 @@ return [
     |
     */
 
-    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', ''),
+    'token_prefix' => env('SANCTUM_TOKEN_PREFIX', 'fishcounts_'),
+
+    /*
+    | Sanctum's /sanctum/csrf-cookie route serves cookie-based SPA auth,
+    | which this app does not use.
+    */
+
+    'routes' => false,
 
     /*
     |--------------------------------------------------------------------------

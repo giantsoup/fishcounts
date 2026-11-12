@@ -3,6 +3,14 @@
 use App\Http\Controllers\Api\ParserErrorController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum'])->name('api.')->group(function (): void {
-    Route::get('parser-errors', [ParserErrorController::class, 'index'])->name('parser-errors.index');
+/*
+| Agent API. Every route goes inside the agent-api group (bootstrap/app.php):
+| bearer token, per-token rate limit, active account, admin. Each route then
+| declares the one token ability it needs with ->middleware('abilities:<ability>'),
+| where the ability is read, aliases, entities, reparse, or errors.
+*/
+Route::middleware('agent-api')->name('api.')->group(function (): void {
+    Route::get('parser-errors', [ParserErrorController::class, 'index'])
+        ->middleware('abilities:read')
+        ->name('parser-errors.index');
 });

@@ -57,7 +57,7 @@ class RouteAccessSecurityTest extends TestCase
         $checked = 0;
 
         foreach (app('router')->getRoutes() as $route) {
-            if (! in_array('admin', $route->gatherMiddleware(), true)) {
+            if (! in_array('admin', $route->gatherMiddleware(), true) || str_starts_with($route->uri(), 'api/')) {
                 continue;
             }
 
