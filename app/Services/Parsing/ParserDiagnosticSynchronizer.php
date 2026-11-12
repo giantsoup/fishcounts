@@ -3,7 +3,6 @@
 namespace App\Services\Parsing;
 
 use App\DTOs\ParserDiagnosticData;
-use App\Enums\ParserDiagnosticType;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
 
@@ -24,7 +23,7 @@ class ParserDiagnosticSynchronizer
                     'raw_scrape_payload_id' => $payload->id,
                     'scrape_source_id' => $payload->scrape_source_id,
                     'target_date' => $payload->target_date,
-                    'error_type' => $this->errorType($diagnostic),
+                    'error_type' => $diagnostic->errorType(),
                     'raw_field' => $diagnostic->field,
                     'raw_value' => $diagnostic->rawValue,
                     'message' => $diagnostic->message,
@@ -38,18 +37,5 @@ class ParserDiagnosticSynchronizer
             ->where('raw_scrape_payload_id', $payload->id)
             ->open()
             ->count();
-    }
-
-    private function errorType(ParserDiagnosticData $diagnostic): string
-    {
-        if ($diagnostic->type !== ParserDiagnosticType::UnknownAlias) {
-            return $diagnostic->type->value;
-        }
-
-        return match ($diagnostic->field) {
-            'boat' => 'unknown_boat_alias',
-            'trip_type' => 'unknown_trip_type_alias',
-            default => 'unknown_species_alias',
-        };
     }
 }

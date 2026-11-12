@@ -24,6 +24,10 @@ return [
         'password' => env('FISH_ADMIN_PASSWORD', 'password'),
     ],
 
+    'api' => [
+        'raw_payload_body_max_bytes' => (int) env('FISH_API_RAW_PAYLOAD_BODY_MAX_BYTES', 200_000),
+    ],
+
     'scraping' => [
         'user_agent' => $scraperUserAgent,
         'timeout_seconds' => (int) env('FISH_SCRAPER_TIMEOUT', 20),
