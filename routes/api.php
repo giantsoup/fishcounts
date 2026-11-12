@@ -27,4 +27,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('trip-reports', [TripReportController::class, 'index'])
         ->middleware('abilities:read')
         ->name('trip-reports.index');
+    Route::get('trip-reports/{tripReport}', [TripReportController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('trip-reports.show');
 });

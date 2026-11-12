@@ -120,6 +120,51 @@ class TripReportApiTest extends TestCase
             ->assertJsonValidationErrors($field);
     }
 
+    public function test_shows_one_trip_report_with_its_species_counts(): void
+    {
+        $species = Species::query()->create(['name' => 'Rockfish', 'slug' => 'rockfish']);
+        $report = $this->report(ScrapeSource::factory()->create(), '2026-07-04', $this->boat('Dolphin'), ['anglers' => 18]);
+        $report->speciesCounts()->create(['species_id' => $species->id, 'count' => 120, 'released_count' => 3]);
+
+        $this->withToken($this->readToken())
+            ->getJson("/api/trip-reports/{$report->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $report->id)
+            ->assertJsonPath('data.anglers', 18)
+            ->assertJsonPath('data.boat.name', 'Dolphin')
+            ->assertJsonPath('data.landing', null)
+            ->assertJsonPath('data.species_counts.0.species.name', 'Rockfish')
+            ->assertJsonPath('data.species_counts.0.count', 120)
+            ->assertJsonPath('data.species_counts.0.released_count', 3);
+    }
+
+    public function test_missing_trip_report_returns_404(): void
+    {
+        $this->withToken($this->readToken())->getJson('/api/trip-reports/999999')->assertNotFound();
+    }
+
+    public function test_no_endpoint_creates_updates_or_deletes_trip_reports(): void
+    {
+        $writeRoutes = collect(app('router')->getRoutes()->getRoutes())
+            ->filter(fn ($route): bool => str_starts_with($route->uri(), 'api/trip-reports'))
+            ->flatMap(fn ($route): array => array_diff($route->methods(), ['GET', 'HEAD']))
+            ->all();
+
+        $this->assertSame([], $writeRoutes);
+
+        $report = $this->report(ScrapeSource::factory()->create(), '2026-07-04');
+        $token = User::factory()->admin()->create()
+            ->createToken('agent', ['read', 'aliases', 'entities', 'reparse', 'errors'])
+            ->plainTextToken;
+
+        $this->withToken($token)->postJson('/api/trip-reports', ['trip_date' => '2026-07-05'])->assertMethodNotAllowed();
+        $this->withToken($token)->patchJson("/api/trip-reports/{$report->id}", ['anglers' => 1])->assertMethodNotAllowed();
+        $this->withToken($token)->deleteJson("/api/trip-reports/{$report->id}")->assertMethodNotAllowed();
+
+        $this->assertSame(1, TripReport::query()->count());
+        $this->assertNull($report->refresh()->anglers);
+    }
+
     public function test_list_requires_the_read_ability(): void
     {
         $token = User::factory()->admin()->create()->createToken('agent', ['errors'])->plainTextToken;
