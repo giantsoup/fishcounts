@@ -20,4 +20,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors/{parserError}', [ParserErrorController::class, 'show'])
         ->middleware('abilities:read')
         ->name('parser-errors.show');
+    Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])
+        ->middleware('abilities:errors')
+        ->name('parser-errors.dismiss');
 });

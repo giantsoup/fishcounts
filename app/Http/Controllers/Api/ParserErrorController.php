@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Parsing\DismissParserError;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ListParserErrorsRequest;
 use App\Http\Resources\ParserErrorDetailResource;
 use App\Http\Resources\ParserErrorResource;
 use App\Models\ParserError;
+use App\Support\ApiAudit;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpFoundation\Response;
 
 class ParserErrorController extends Controller
 {
@@ -35,6 +40,20 @@ class ParserErrorController extends Controller
             ->withQueryString();
 
         return ParserErrorResource::collection($errors);
+    }
+
+    /**
+     * Dismiss an open parser error as the token's user. An already resolved error is left untouched.
+     */
+    public function dismiss(Request $request, ParserError $parserError, DismissParserError $dismissParserError): ParserErrorResource|JsonResponse
+    {
+        if (! $dismissParserError->handle($parserError, $request->user()->getKey())) {
+            return response()->json(['message' => 'Parser error was already resolved.'], Response::HTTP_CONFLICT);
+        }
+
+        ApiAudit::write($request, 'parser-error.dismiss', $parserError->getKey());
+
+        return ParserErrorResource::make($parserError->refresh()->load('scrapeSource'));
     }
 
     public function show(ParserError $parserError): ParserErrorDetailResource
