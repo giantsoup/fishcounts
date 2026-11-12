@@ -832,6 +832,40 @@ class AliasManagementTest extends TestCase
         $this->assertSame('7', $this->domAttribute($page, '//*[@id="sort_order"]', 'value'));
     }
 
+    public function test_entity_creation_reports_duplicate_name_messages(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $boat = Boat::query()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        BoatAlias::query()->create(['boat_id' => $boat->id, 'alias' => 'The Dolphin', 'normalized_alias' => 'the dolphin']);
+        $species = Species::query()->create(['name' => 'Yellowtail', 'slug' => 'yellowtail']);
+        SpeciesAlias::query()->create(['species_id' => $species->id, 'alias' => 'Yellows', 'normalized_alias' => 'yellows']);
+        $tripType = TripType::query()->create(['name' => 'Full Day', 'slug' => 'full-day']);
+        TripTypeAlias::query()->create(['trip_type_id' => $tripType->id, 'alias' => 'All Day', 'normalized_alias' => 'all day']);
+        $counts = [Boat::query()->count(), Species::query()->count(), TripType::query()->count()];
+
+        $cases = [
+            [route('admin.boats.store'), 'boat_name', '!!!', 'The boat name must contain letters or numbers.'],
+            [route('admin.boats.store'), 'boat_name', '  Dolphin! ', 'A boat with this name already exists.'],
+            [route('admin.boats.store'), 'boat_name', 'The Dolphin!', 'This name is already an alias for another boat.'],
+            [route('admin.species.store'), 'name', '!!!', 'The name must contain letters or numbers.'],
+            [route('admin.species.store'), 'name', 'Yellowtail!', 'This species already exists.'],
+            [route('admin.species.store'), 'name', 'Yellows', 'This name is already used as a species alias.'],
+            [route('admin.trip-types.store'), 'name', '!!!', 'The name must contain letters or numbers.'],
+            [route('admin.trip-types.store'), 'name', 'Full Day!', 'This trip type already exists.'],
+            [route('admin.trip-types.store'), 'name', 'All Day', 'This name is already used as a trip type alias.'],
+        ];
+
+        foreach ($cases as [$url, $field, $name, $message]) {
+            $this->actingAs($admin)
+                ->from(route('admin.boats.index'))
+                ->post($url, [$field => $name])
+                ->assertRedirect(route('admin.boats.index'))
+                ->assertSessionHasErrors([$field => $message]);
+        }
+
+        $this->assertSame($counts, [Boat::query()->count(), Species::query()->count(), TripType::query()->count()]);
+    }
+
     public function test_manager_data_attributes_are_parseable_and_escape_hostile_labels(): void
     {
         $admin = User::factory()->admin()->create();
