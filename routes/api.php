@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\RawPayloadReparseController;
 use App\Http\Controllers\Api\ReparseRunController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,4 +34,8 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
         ->whereNumber('parserReparseRun')
         ->middleware(['abilities:reparse', 'throttle:3,1,parser-reparse-write:'])
         ->name('reparse-runs.retry');
+    Route::post('raw-payloads/{rawScrapePayload}/reparse', RawPayloadReparseController::class)
+        ->whereNumber('rawScrapePayload')
+        ->middleware('abilities:reparse')
+        ->name('raw-payloads.reparse');
 });

@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\ParserEngine;
 use App\Enums\ParserReparseItemMode;
 use App\Enums\ParserReparseItemStatus;
 use App\Enums\ParserReparseRunStatus;
 use App\Jobs\DispatchParserReparseRunJob;
+use App\Jobs\ParseRawPayloadJob;
 use App\Models\ParserError;
 use App\Models\ParserReparseRun;
 use App\Models\RawScrapePayload;
@@ -263,6 +265,42 @@ class ReparseApiTest extends TestCase
         $this->withToken($reparseOnly)->getJson("/api/reparse-runs/{$run->id}")->assertForbidden();
 
         $this->assertSame(1, ParserReparseRun::query()->count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_payload_reparse_queues_the_ui_parse_job_with_the_source_engine(): void
+    {
+        $payload = RawScrapePayload::factory()
+            ->for(ScrapeSource::factory()->state(['parser_engine' => ParserEngine::Ai]))
+            ->create();
+
+        $this->withToken($this->token(['reparse']))
+            ->postJson("/api/raw-payloads/{$payload->id}/reparse")
+            ->assertAccepted()
+            ->assertExactJson(['data' => [
+                'raw_scrape_payload_id' => $payload->id,
+                'parser_engine' => 'ai',
+                'queued' => true,
+            ]]);
+
+        Queue::assertPushed(ParseRawPayloadJob::class, 1);
+        Queue::assertPushed(ParseRawPayloadJob::class, fn (ParseRawPayloadJob $job): bool => $job->rawScrapePayloadId === $payload->id
+            && $job->parserEngine === ParserEngine::Ai);
+    }
+
+    public function test_payload_reparse_of_a_missing_payload_is_a_json_404(): void
+    {
+        $this->withToken($this->token(['reparse']))->postJson('/api/raw-payloads/999/reparse')->assertNotFound();
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_payload_reparse_requires_the_reparse_ability(): void
+    {
+        $payload = RawScrapePayload::factory()->create();
+
+        $this->withToken($this->token(['read']))->postJson("/api/raw-payloads/{$payload->id}/reparse")->assertForbidden();
+
         Queue::assertNothingPushed();
     }
 
