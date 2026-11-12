@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\BoatAliasController;
 use App\Http\Controllers\Api\BoatController;
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\RawPayloadController;
 use App\Http\Controllers\Api\SpeciesAliasController;
 use App\Http\Controllers\Api\SpeciesController;
 use App\Http\Controllers\Api\TripTypeAliasController;
@@ -23,6 +24,16 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
+
+    Route::get('raw-payloads/{rawScrapePayload}', [RawPayloadController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.show');
+    Route::get('raw-payloads/{rawScrapePayload}/body', [RawPayloadController::class, 'body'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.body');
+    Route::post('raw-payloads/{rawScrapePayload}/evaluate', [RawPayloadController::class, 'evaluate'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.evaluate');
 
     // Boats, species, and trip types (#67 reads and aliases; #70 adds the entity writes here).
     Route::get('boats', [BoatController::class, 'index'])->middleware('abilities:read')->name('boats.index');
