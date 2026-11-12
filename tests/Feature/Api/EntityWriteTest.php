@@ -121,6 +121,109 @@ class EntityWriteTest extends TestCase
         $this->assertSame($tripTypeCount, TripType::query()->count());
     }
 
+    public function test_agent_updates_a_boat_and_rejects_a_duplicate_name(): void
+    {
+        $token = $this->token(['entities']);
+        $landing = $this->landing();
+        $boat = Boat::factory()->create(['name' => 'Dolphn', 'slug' => 'dolphn']);
+        Boat::factory()->create(['name' => 'Pacific Queen', 'slug' => 'pacific-queen']);
+
+        $this->withToken($token)
+            ->patchJson("/api/boats/{$boat->id}", [
+                'name' => ' Dolphin ',
+                'landing_id' => $landing->id,
+                'booking_url' => 'https://example.test/dolphin',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Dolphin')
+            ->assertJsonPath('data.slug', 'dolphin')
+            ->assertJsonPath('data.landing.id', $landing->id)
+            ->assertJsonPath('data.booking_url', 'https://example.test/dolphin');
+
+        $this->withToken($token)
+            ->patchJson("/api/boats/{$boat->id}", ['name' => 'Pacific Queen'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name' => 'A boat with this name already exists.']);
+        $this->withToken($token)
+            ->patchJson("/api/boats/{$boat->id}", ['booking_url' => 'not a url', 'is_active' => 'maybe'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['booking_url', 'is_active']);
+
+        $this->assertSame('Dolphin', $boat->refresh()->name);
+        $this->assertSame('https://example.test/dolphin', $boat->booking_url);
+    }
+
+    public function test_agent_updates_species_and_trip_types_and_rejects_duplicate_names(): void
+    {
+        $token = $this->token(['entities']);
+        $species = Species::factory()->create(['name' => 'Yelowtail', 'slug' => 'yelowtail']);
+        Species::factory()->create(['name' => 'Bonito', 'slug' => 'bonito']);
+        $tripType = TripType::factory()->create(['name' => 'Ful Day', 'slug' => 'ful-day', 'sort_order' => 3]);
+        TripType::factory()->create(['name' => 'Half Day AM', 'slug' => 'half-day-am']);
+
+        $this->withToken($token)
+            ->patchJson("/api/species/{$species->id}", ['name' => 'Yellowtail'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Yellowtail')
+            ->assertJsonPath('data.slug', 'yellowtail');
+        $this->withToken($token)
+            ->patchJson("/api/trip-types/{$tripType->id}", ['name' => 'Full Day', 'sort_order' => 7])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Full Day')
+            ->assertJsonPath('data.slug', 'full-day');
+
+        $this->withToken($token)
+            ->patchJson("/api/species/{$species->id}", ['name' => 'bonito'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name' => 'This species already exists.']);
+        $this->withToken($token)
+            ->patchJson("/api/trip-types/{$tripType->id}", ['name' => 'Half-Day AM'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name' => 'This trip type already exists.']);
+
+        $this->assertSame('Yellowtail', $species->refresh()->name);
+        $this->assertSame(7, $tripType->refresh()->sort_order);
+        $this->assertSame('Full Day', $tripType->name);
+    }
+
+    public function test_deactivation_and_reactivation_go_through_is_active(): void
+    {
+        $token = $this->token(['entities']);
+        $entities = [
+            'boats' => Boat::factory()->create(),
+            'species' => Species::factory()->create(),
+            'trip-types' => TripType::factory()->create(),
+        ];
+
+        foreach ($entities as $path => $entity) {
+            $this->withToken($token)
+                ->patchJson("/api/{$path}/{$entity->id}", ['is_active' => false])
+                ->assertOk()
+                ->assertJsonPath('data.is_active', false);
+            $this->assertFalse($entity->refresh()->is_active);
+
+            $this->withToken($token)
+                ->patchJson("/api/{$path}/{$entity->id}", ['is_active' => true])
+                ->assertOk()
+                ->assertJsonPath('data.is_active', true);
+            $this->assertTrue($entity->refresh()->is_active);
+        }
+    }
+
+    public function test_entity_writes_need_the_entities_ability(): void
+    {
+        $token = $this->token(['read', 'aliases']);
+        $boat = Boat::factory()->create();
+
+        $this->withToken($token)->postJson('/api/boats', ['name' => 'Lone Star'])->assertForbidden();
+        $this->withToken($token)->postJson('/api/species', ['name' => 'Opaleye'])->assertForbidden();
+        $this->withToken($token)->postJson('/api/trip-types', ['name' => 'Twilight'])->assertForbidden();
+        $this->withToken($token)->patchJson("/api/boats/{$boat->id}", ['is_active' => false])->assertForbidden();
+
+        $this->assertTrue($boat->refresh()->is_active);
+        $this->assertDatabaseMissing('boats', ['name' => 'Lone Star']);
+    }
+
     private function landing(): Landing
     {
         $region = Region::query()->create(['name' => 'San Diego', 'slug' => 'san-diego']);

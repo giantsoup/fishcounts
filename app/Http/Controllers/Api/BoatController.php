@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Boats\CreateBoat;
+use App\Actions\Boats\UpdateBoat;
 use App\Enums\CanonicalEntityType;
 use App\Http\Controllers\Api\Concerns\ListsEntitiesWithAliases;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ListEntitiesRequest;
 use App\Http\Requests\Api\StoreBoatRequest;
+use App\Http\Requests\Api\UpdateBoatRequest;
 use App\Http\Resources\BoatResource;
 use App\Models\Boat;
 use App\Support\ApiAudit;
@@ -38,6 +40,15 @@ class BoatController extends Controller
         ApiAudit::write($request, 'boat.create', $boat->id);
 
         return BoatResource::make($this->withRelations($boat))->response()->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    public function update(UpdateBoatRequest $request, Boat $boat, UpdateBoat $updateBoat): BoatResource
+    {
+        $updateBoat->handle($boat, $request->validated());
+
+        ApiAudit::write($request, 'boat.update', $boat->id);
+
+        return BoatResource::make($this->withRelations($boat));
     }
 
     private function withRelations(Boat $boat): Boat
