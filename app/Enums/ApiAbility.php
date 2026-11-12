@@ -3,7 +3,7 @@
 namespace App\Enums;
 
 /**
- * Agent API token abilities. A route requires one with ->middleware('abilities:<value>').
+ * Agent API token abilities. A route requires one with ->middleware(ApiAbility::<Case>->middleware()).
  */
 enum ApiAbility: string
 {
@@ -21,4 +21,12 @@ enum ApiAbility: string
 
     /** Dismissing parser errors. */
     case Errors = 'errors';
+
+    /**
+     * The route middleware that requires a token with this ability.
+     */
+    public function middleware(): string
+    {
+        return 'abilities:'.$this->value;
+    }
 }
