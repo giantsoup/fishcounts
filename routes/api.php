@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\RawPayloadController;
 use App\Http\Controllers\Api\TripReportController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,15 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
+    Route::get('raw-payloads/{rawScrapePayload}', [RawPayloadController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.show');
+    Route::get('raw-payloads/{rawScrapePayload}/body', [RawPayloadController::class, 'body'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.body');
+    Route::post('raw-payloads/{rawScrapePayload}/evaluate', [RawPayloadController::class, 'evaluate'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.evaluate');
     Route::get('parser-errors/{parserError}', [ParserErrorController::class, 'show'])
         ->middleware('abilities:read')
         ->name('parser-errors.show');
