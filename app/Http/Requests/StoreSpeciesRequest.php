@@ -3,10 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Species;
-use App\Models\SpeciesAlias;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -30,11 +28,6 @@ class StoreSpeciesRequest extends FormRequest
         ];
     }
 
-    public function slug(): string
-    {
-        return Str::slug($this->validated('name'));
-    }
-
     /**
      * @return array<int, callable(Validator): void>
      */
@@ -46,25 +39,10 @@ class StoreSpeciesRequest extends FormRequest
                     return;
                 }
 
-                if ($this->slug() === '') {
-                    $validator->errors()->add('name', 'The name must contain letters or numbers.');
+                $conflict = Species::nameConflict($this->validated('name'));
 
-                    return;
-                }
-
-                if (Species::query()->where('slug', $this->slug())->exists()) {
-                    $validator->errors()->add('name', 'This species already exists.');
-
-                    return;
-                }
-
-                $normalizedNames = [
-                    Str::of($this->validated('name'))->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString(),
-                    Str::of($this->validated('name'))->lower()->squish()->toString(),
-                ];
-
-                if (SpeciesAlias::query()->whereIn('normalized_alias', $normalizedNames)->exists()) {
-                    $validator->errors()->add('name', 'This name is already used as a species alias.');
+                if ($conflict !== null) {
+                    $validator->errors()->add('name', $conflict);
                 }
             },
         ];

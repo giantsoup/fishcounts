@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\RawScrapePayloadFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Guarded(['id'])]
 class RawScrapePayload extends Model
 {
+    /** @use HasFactory<RawScrapePayloadFactory> */
+    use HasFactory;
+
     protected function casts(): array
     {
         return [
@@ -73,6 +78,12 @@ class RawScrapePayload extends Model
     public function parserExecutions(): HasMany
     {
         return $this->hasMany(ParserExecution::class);
+    }
+
+    /** @return HasOne<ParserExecution, $this> */
+    public function latestParserExecution(): HasOne
+    {
+        return $this->hasOne(ParserExecution::class)->latestOfMany();
     }
 
     /** @return BelongsTo<ParserExecution, $this> */

@@ -3,11 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\Boat;
-use App\Models\BoatAlias;
-use App\Services\Parsing\BoatNameNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -34,11 +31,6 @@ class StoreBoatRequest extends FormRequest
         ];
     }
 
-    public function slug(): string
-    {
-        return Str::slug($this->validated('boat_name'));
-    }
-
     /** @return array<int, callable(Validator): void> */
     public function after(): array
     {
@@ -48,22 +40,10 @@ class StoreBoatRequest extends FormRequest
                     return;
                 }
 
-                if ($this->slug() === '') {
-                    $validator->errors()->add('boat_name', 'The boat name must contain letters or numbers.');
+                $conflict = Boat::nameConflict($this->validated('boat_name'));
 
-                    return;
-                }
-
-                if (Boat::query()->where('slug', $this->slug())->exists()) {
-                    $validator->errors()->add('boat_name', 'A boat with this name already exists.');
-
-                    return;
-                }
-
-                $normalizedName = BoatNameNormalizer::normalize($this->validated('boat_name'));
-
-                if (BoatAlias::query()->where('normalized_alias', $normalizedName)->exists()) {
-                    $validator->errors()->add('boat_name', 'This name is already an alias for another boat.');
+                if ($conflict !== null) {
+                    $validator->errors()->add('boat_name', $conflict);
                 }
             },
         ];

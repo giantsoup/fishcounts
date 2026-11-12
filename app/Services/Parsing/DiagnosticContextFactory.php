@@ -16,6 +16,26 @@ class DiagnosticContextFactory
         return $this->sanitizeText($text);
     }
 
+    /**
+     * Replace authorization headers, cookies, API keys, access tokens and passwords
+     * with [redacted], leaving the rest of the text (markup included) untouched. Quoted
+     * keys and values, as in JSON or inline scripts, are redacted too. Text that is not
+     * valid UTF-8 is scrubbed first, because the patterns cannot scan it.
+     */
+    public function redactSecrets(string $text): string
+    {
+        if (! mb_check_encoding($text, 'UTF-8')) {
+            $text = mb_scrub($text, 'UTF-8');
+        }
+
+        $quotedValue = '"[^"\r\n]*"|\'[^\'\r\n]*\'';
+
+        $text = preg_replace('/\b(authorization|proxy-authorization)\b(["\']?)\s*[:=]\s*(?:'.$quotedValue.'|(?:(?:bearer|basic|digest)\s+)?[^\s,;]+)/iu', '$1$2=[redacted]', $text) ?? $text;
+        $text = preg_replace('/\b(cookie|set-cookie)\b(["\']?)\s*[:=]\s*[^\r\n]*/iu', '$1$2=[redacted]', $text) ?? $text;
+
+        return preg_replace('/\b(api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|client[-_ ]?secret|password)\b(["\']?)\s*[:=]\s*(?:'.$quotedValue.'|[^\s,;]+)/iu', '$1$2=[redacted]', $text) ?? $text;
+    }
+
     public function containsSourceSpan(string $paragraph, string $sourceSpan): bool
     {
         if ($sourceSpan === '') {
@@ -119,10 +139,7 @@ class DiagnosticContextFactory
 
     private function sanitizeText(string $text): string
     {
-        $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5);
-        $text = preg_replace('/\b(authorization|proxy-authorization)\b\s*[:=]\s*(?:(?:bearer|basic|digest)\s+)?[^\s,;]+/iu', '$1=[redacted]', $text) ?? $text;
-        $text = preg_replace('/\b(cookie|set-cookie)\b\s*[:=]\s*[^\r\n]*/iu', '$1=[redacted]', $text) ?? $text;
-        $text = preg_replace('/\b(api[-_ ]?key|access[-_ ]?token|password)\b\s*[:=]\s*[^\s,;]+/iu', '$1=[redacted]', $text) ?? $text;
+        $text = $this->redactSecrets(html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5));
 
         return $this->limit(Str::of($text)
             ->replace("\u{00A0}", ' ')

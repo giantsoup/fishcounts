@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\ParserEngine;
 use App\Enums\SourceType;
+use Database\Factories\ScrapeSourceFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -12,6 +14,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Guarded(['id'])]
 class ScrapeSource extends Model
 {
+    /** @use HasFactory<ScrapeSourceFactory> */
+    use HasFactory;
+
     protected $attributes = [
         'priority' => 100,
         'is_enabled' => true,

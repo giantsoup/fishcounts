@@ -10,6 +10,7 @@ use App\Services\AI\OpenAiParserDiagnosticReviewer;
 use App\Services\IssueTracking\GitHubIssueTracker;
 use App\Services\Parsing\OfficialRegulationResearcher;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -48,5 +49,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('github-parser-issues', fn (): Limit => Limit::perMinute(
             max(1, (int) config('fish.github_issues.rate_limit_per_minute')),
         )->by('github-parser-issues'));
+
+        RateLimiter::for('agent-api', fn (Request $request): Limit => Limit::perMinute(60)->by(
+            'agent-api-token:'.($request->user()?->currentAccessToken()?->getKey() ?? $request->ip()),
+        ));
     }
 }

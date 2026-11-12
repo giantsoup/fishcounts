@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\ParserErrorResolutionType;
+use Database\Factories\ParserErrorFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Guarded(['id'])]
 class ParserError extends Model
 {
+    /** @use HasFactory<ParserErrorFactory> */
+    use HasFactory;
+
     public const ALIAS_ERROR_TYPES = [
         'unknown_boat_alias',
         'unknown_species_alias',
@@ -33,6 +38,16 @@ class ParserError extends Model
     public function scopeOpen(Builder $query): Builder
     {
         return $query->whereNull('resolved_at')->whereNull('resolution_type');
+    }
+
+    /**
+     * Errors that are no longer open: resolved, or given a resolution type.
+     *
+     * @param  Builder<ParserError>  $query
+     */
+    public function scopeResolved(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $query) => $query->whereNotNull('resolved_at')->orWhereNotNull('resolution_type'));
     }
 
     /** @param Builder<ParserError> $query */

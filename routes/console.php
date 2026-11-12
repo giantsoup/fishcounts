@@ -70,3 +70,9 @@ Schedule::command('ai-reviews:monitor')
     ->onOneServer();
 
 Schedule::command('fish:limits-research --refresh')->dailyAt('04:15')->withoutOverlapping()->when(fn (): bool => (bool) config('limits.research_enabled'));
+
+Schedule::command('sanctum:prune-expired --hours=24')
+    ->dailyAt('03:30')
+    ->timezone('America/Los_Angeles')
+    ->withoutOverlapping()
+    ->onOneServer();
