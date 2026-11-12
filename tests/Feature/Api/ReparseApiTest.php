@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Api;
 
+use App\Enums\ParserReparseItemMode;
+use App\Enums\ParserReparseItemStatus;
 use App\Enums\ParserReparseRunStatus;
 use App\Jobs\DispatchParserReparseRunJob;
 use App\Models\ParserError;
@@ -111,6 +113,79 @@ class ReparseApiTest extends TestCase
             ->assertJsonPath('data.status', 'running');
 
         Queue::assertNothingPushed();
+    }
+
+    public function test_status_returns_structured_json_with_progress_failures_and_timestamps(): void
+    {
+        $payload = RawScrapePayload::factory()->create(['target_date' => '2026-07-10']);
+        $run = ParserReparseRun::query()->create([
+            'status' => ParserReparseRunStatus::Failed,
+            'initial_open_errors' => 5,
+            'initial_alias_errors' => 2,
+            'initial_structural_errors' => 3,
+            'initial_payloads' => 2,
+            'affected_dates' => 1,
+            'total_items' => 2,
+            'completed_items' => 1,
+            'failed_items' => 1,
+            'remaining_open_errors' => 4,
+            'remaining_alias_errors' => 1,
+            'remaining_structural_errors' => 3,
+            'error_message' => '1 item(s) failed to reparse.',
+            'started_at' => '2026-07-11 10:00:00',
+            'finished_at' => '2026-07-11 10:05:00',
+        ]);
+        $run->items()->create([
+            'raw_scrape_payload_id' => $payload->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'target_date' => '2026-07-10',
+            'mode' => ParserReparseItemMode::Authoritative,
+            'sequence' => 1,
+            'status' => ParserReparseItemStatus::Failed,
+            'attempts' => 3,
+            'error_message' => 'Upstream timeout; api_key=sk-live-123 rejected',
+        ]);
+        $run->items()->create([
+            'raw_scrape_payload_id' => RawScrapePayload::factory()->create()->id,
+            'scrape_source_id' => $payload->scrape_source_id,
+            'target_date' => '2026-07-10',
+            'mode' => ParserReparseItemMode::DiagnosticsOnly,
+            'sequence' => 2,
+            'status' => ParserReparseItemStatus::Succeeded,
+        ]);
+
+        $response = $this->withToken($this->token(['read']))
+            ->getJson("/api/reparse-runs/{$run->id}")
+            ->assertOk()
+            ->assertExactJson(['data' => [
+                'id' => $run->id,
+                'status' => 'failed',
+                'finished' => true,
+                'requested_by_user_id' => null,
+                'initial' => ['open_errors' => 5, 'alias_errors' => 2, 'structural_errors' => 3, 'payloads' => 2, 'dates' => 1],
+                'progress' => ['total_items' => 2, 'queued_items' => 0, 'completed_items' => 1, 'failed_items' => 1],
+                'remaining' => ['open_errors' => 4, 'alias_errors' => 1, 'structural_errors' => 3],
+                'error_message' => '1 item(s) failed to reparse.',
+                'failures' => [[
+                    'raw_scrape_payload_id' => $payload->id,
+                    'scrape_source_id' => $payload->scrape_source_id,
+                    'target_date' => '2026-07-10',
+                    'mode' => 'authoritative',
+                    'attempts' => 3,
+                    'error_message' => 'Upstream timeout; api_key=[redacted] rejected',
+                ]],
+                'started_at' => '2026-07-11T10:00:00+00:00',
+                'finished_at' => '2026-07-11T10:05:00+00:00',
+                'created_at' => $run->created_at->toIso8601String(),
+                'updated_at' => $run->updated_at->toIso8601String(),
+            ]]);
+
+        $this->assertStringNotContainsString('sk-live-123', $response->getContent());
+    }
+
+    public function test_status_of_a_missing_run_is_a_json_404(): void
+    {
+        $this->withToken($this->token(['read']))->getJson('/api/reparse-runs/999')->assertNotFound();
     }
 
     /**

@@ -50,6 +50,14 @@ class ReparseRunController extends Controller
             ->setStatusCode($result->created ? 201 : 200);
     }
 
+    /**
+     * The run's state as the queue jobs last recorded it. Reading it changes nothing.
+     */
+    public function show(ParserReparseRun $parserReparseRun): ReparseRunResource
+    {
+        return $this->runResource($parserReparseRun);
+    }
+
     private function runResource(ParserReparseRun $run): ReparseRunResource
     {
         return ReparseRunResource::make($run->load(['items' => fn ($query) => $query
