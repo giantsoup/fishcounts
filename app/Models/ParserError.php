@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\ParserErrorResolutionType;
+use Database\Factories\ParserErrorFactory;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,6 +15,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Guarded(['id'])]
 class ParserError extends Model
 {
+    /** @use HasFactory<ParserErrorFactory> */
+    use HasFactory;
+
     public const ALIAS_ERROR_TYPES = [
         'unknown_boat_alias',
         'unknown_species_alias',
