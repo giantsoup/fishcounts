@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ListParserErrorsRequest;
+use App\Http\Resources\ParserErrorDetailResource;
 use App\Http\Resources\ParserErrorResource;
 use App\Models\ParserError;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -34,5 +35,10 @@ class ParserErrorController extends Controller
             ->withQueryString();
 
         return ParserErrorResource::collection($errors);
+    }
+
+    public function show(ParserError $parserError): ParserErrorDetailResource
+    {
+        return ParserErrorDetailResource::make($parserError->load(['scrapeSource', 'rawScrapePayload']));
     }
 }

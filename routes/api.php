@@ -17,4 +17,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
+    Route::get('parser-errors/{parserError}', [ParserErrorController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('parser-errors.show');
 });
