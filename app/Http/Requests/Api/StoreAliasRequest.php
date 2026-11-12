@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api;
 
 use App\Enums\CanonicalEntityType;
+use App\Models\ParserError;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -36,7 +37,7 @@ abstract class StoreAliasRequest extends FormRequest
     {
         return [
             'alias' => ['required', 'string', 'max:255'],
-            'parser_error_id' => ['sometimes', 'nullable', 'integer', 'min:1', Rule::exists('parser_errors', 'id')],
+            'parser_error_id' => ['sometimes', 'nullable', 'integer', 'min:1', Rule::exists(ParserError::class, 'id')],
         ];
     }
 

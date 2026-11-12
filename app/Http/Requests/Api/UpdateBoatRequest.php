@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Models\Landing;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -27,7 +28,7 @@ class UpdateBoatRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'landing_id' => ['sometimes', 'nullable', 'integer', Rule::exists('landings', 'id')->where('is_active', true)],
+            'landing_id' => ['sometimes', 'nullable', 'integer', Rule::exists(Landing::class, 'id')->where('is_active', true)],
             'booking_url' => ['sometimes', 'nullable', 'url', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
         ];

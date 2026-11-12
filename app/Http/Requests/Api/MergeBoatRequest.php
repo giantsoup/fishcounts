@@ -29,7 +29,7 @@ class MergeBoatRequest extends FormRequest
             'duplicate_boat_id' => [
                 'required',
                 'integer',
-                Rule::exists('boats', 'id'),
+                Rule::exists(Boat::class, 'id'),
                 Rule::notIn([$this->targetBoat()->id]),
             ],
         ];

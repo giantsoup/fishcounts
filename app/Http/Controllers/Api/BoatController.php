@@ -15,6 +15,7 @@ use App\Http\Requests\Api\MergeBoatRequest;
 use App\Http\Requests\Api\StoreBoatRequest;
 use App\Http\Requests\Api\UpdateBoatRequest;
 use App\Http\Resources\BoatResource;
+use App\Models\AlertRule;
 use App\Models\Boat;
 use App\Models\TripReport;
 use App\Support\ApiAudit;
@@ -22,7 +23,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 
 class BoatController extends Controller
 {
@@ -64,7 +64,7 @@ class BoatController extends Controller
         return $this->destroyUnlessReferenced($request, $boat, 'boat', [
             'trip reports' => fn () => TripReport::query()->where('boat_id', $boat->id),
             'aliases' => fn () => $boat->aliases()->getQuery(),
-            'alert rules' => fn () => DB::table('alert_rule_boat')->where('boat_id', $boat->id),
+            'alert rules' => fn () => AlertRule::query()->whereHas('boats', fn ($query) => $query->whereKey($boat->id)),
         ], "Deactivate it with PATCH /api/boats/{$boat->id} and {\"is_active\": false}, or merge it into the canonical boat with POST /api/boats/{canonical_id}/merge and {\"duplicate_boat_id\": {$boat->id}}.");
     }
 

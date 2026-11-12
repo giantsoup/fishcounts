@@ -12,6 +12,7 @@ use App\Http\Requests\Api\ListEntitiesRequest;
 use App\Http\Requests\Api\StoreTripTypeRequest;
 use App\Http\Requests\Api\UpdateTripTypeRequest;
 use App\Http\Resources\TripTypeResource;
+use App\Models\AlertRule;
 use App\Models\TripReport;
 use App\Models\TripType;
 use App\Support\ApiAudit;
@@ -19,7 +20,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 
 class TripTypeController extends Controller
 {
@@ -61,7 +61,7 @@ class TripTypeController extends Controller
         return $this->destroyUnlessReferenced($request, $tripType, 'trip-type', [
             'trip reports' => fn () => TripReport::query()->where('trip_type_id', $tripType->id),
             'aliases' => fn () => $tripType->aliases()->getQuery(),
-            'alert rules' => fn () => DB::table('alert_rule_trip_type')->where('trip_type_id', $tripType->id),
+            'alert rules' => fn () => AlertRule::query()->whereHas('tripTypes', fn ($query) => $query->whereKey($tripType->id)),
         ], 'Deactivate it instead with PATCH /api/trip-types/{id} and {"is_active": false}.');
     }
 
