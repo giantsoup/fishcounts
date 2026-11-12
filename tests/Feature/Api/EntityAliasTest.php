@@ -310,6 +310,26 @@ class EntityAliasTest extends TestCase
         }
     }
 
+    public function test_re_adding_an_existing_alias_logs_an_exists_line_not_a_create(): void
+    {
+        $species = Species::factory()->create();
+        $alias = $species->aliases()->create(['alias' => 'Yellow Tail', 'normalized_alias' => 'yellow tail']);
+        Log::spy();
+
+        $this->withToken($this->token(['aliases']))
+            ->postJson("/api/species/{$species->id}/aliases", ['alias' => 'yellow-tail'])
+            ->assertOk()
+            ->assertJsonPath('data.id', $alias->id);
+
+        Log::shouldHaveReceived('info')->with('api.write', \Mockery::on(fn (array $context): bool => $context === [
+            'user_id' => $this->agent->id,
+            'token_name' => 'agent',
+            'action' => 'species-alias.exists',
+            'target_id' => $alias->id,
+        ]))->once();
+        Log::shouldNotHaveReceived('info', ['api.write', \Mockery::on(fn (array $context): bool => $context['action'] === 'species-alias.create')]);
+    }
+
     private function aliasError(string $errorType, string $rawField, string $rawValue): ParserError
     {
         return ParserError::factory()->create([

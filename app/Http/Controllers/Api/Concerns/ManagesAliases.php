@@ -64,7 +64,7 @@ trait ManagesAliases
             ->where('resolved_by_user_id', $userId)
             ->pluck('id');
 
-        ApiAudit::write($request, "{$auditResource}.create", $alias->getKey());
+        ApiAudit::write($request, $alias->wasRecentlyCreated ? "{$auditResource}.create" : "{$auditResource}.exists", $alias->getKey());
 
         return AliasResource::make($alias)
             ->additional(['meta' => [
