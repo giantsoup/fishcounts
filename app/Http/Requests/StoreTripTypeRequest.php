@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Actions\TripTypes\CreateTripType;
 use App\Models\TripType;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,7 +38,7 @@ class StoreTripTypeRequest extends FormRequest
                     return;
                 }
 
-                $conflict = app(CreateTripType::class)->nameConflict($this->validated('name'));
+                $conflict = TripType::nameConflict($this->validated('name'));
 
                 if ($conflict !== null) {
                     $validator->errors()->add('name', $conflict);

@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Actions\Boats\CreateBoat;
+use App\Models\Boat;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -40,7 +40,7 @@ class StoreBoatRequest extends FormRequest
                     return;
                 }
 
-                $conflict = app(CreateBoat::class)->nameConflict($this->validated('boat_name'));
+                $conflict = Boat::nameConflict($this->validated('boat_name'));
 
                 if ($conflict !== null) {
                     $validator->errors()->add('boat_name', $conflict);

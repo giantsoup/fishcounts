@@ -9,8 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateSpecies
 {
-    public function __construct(private CreateSpecies $createSpecies) {}
-
     /**
      * Update the editable attributes of a species. Renaming re-checks the duplicate-name rule and refreshes the slug.
      *
@@ -23,7 +21,7 @@ class UpdateSpecies
         $attributes = Arr::only($attributes, ['name', 'environmental_location_profile', 'is_active']);
 
         if (array_key_exists('name', $attributes)) {
-            if (($conflict = $this->createSpecies->nameConflict($attributes['name'], $species)) !== null) {
+            if (($conflict = Species::nameConflict($attributes['name'], $species)) !== null) {
                 throw ValidationException::withMessages(['name' => $conflict]);
             }
 

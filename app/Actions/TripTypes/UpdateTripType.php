@@ -9,8 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateTripType
 {
-    public function __construct(private CreateTripType $createTripType) {}
-
     /**
      * Update the editable attributes of a trip type. Renaming re-checks the duplicate-name rule and refreshes the slug.
      *
@@ -23,7 +21,7 @@ class UpdateTripType
         $attributes = Arr::only($attributes, ['name', 'sort_order', 'is_active']);
 
         if (array_key_exists('name', $attributes)) {
-            if (($conflict = $this->createTripType->nameConflict($attributes['name'], $tripType)) !== null) {
+            if (($conflict = TripType::nameConflict($attributes['name'], $tripType)) !== null) {
                 throw ValidationException::withMessages(['name' => $conflict]);
             }
 

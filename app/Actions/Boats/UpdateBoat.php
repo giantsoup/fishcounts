@@ -9,8 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class UpdateBoat
 {
-    public function __construct(private CreateBoat $createBoat) {}
-
     /**
      * Update the editable attributes of a boat. Renaming re-checks the duplicate-name rule and refreshes the slug.
      *
@@ -25,7 +23,7 @@ class UpdateBoat
         if (array_key_exists('name', $attributes)) {
             $attributes['name'] = Str::squish($attributes['name']);
 
-            if (($conflict = $this->createBoat->nameConflict($attributes['name'], $boat)) !== null) {
+            if (($conflict = Boat::nameConflict($attributes['name'], $boat)) !== null) {
                 throw ValidationException::withMessages(['name' => $conflict]);
             }
 

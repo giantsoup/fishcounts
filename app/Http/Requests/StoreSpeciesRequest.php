@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Actions\Species\CreateSpecies;
+use App\Models\Species;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -39,7 +39,7 @@ class StoreSpeciesRequest extends FormRequest
                     return;
                 }
 
-                $conflict = app(CreateSpecies::class)->nameConflict($this->validated('name'));
+                $conflict = Species::nameConflict($this->validated('name'));
 
                 if ($conflict !== null) {
                     $validator->errors()->add('name', $conflict);
