@@ -160,3 +160,17 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
 
 </laravel-boost-guidelines>
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues on giantsoup/fishcounts, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` plus `docs/adr/`. See `docs/agents/domain.md`.
