@@ -17,4 +17,21 @@ enum ParserDiagnosticType: string
     {
         return $this === self::UnknownAlias;
     }
+
+    /**
+     * Every error type a parser error can be stored under. Unknown aliases are never stored as
+     * themselves: they are split into one type per entity (see CanonicalEntityType::aliasErrorType()).
+     *
+     * @return list<string>
+     */
+    public static function storedErrorTypes(): array
+    {
+        return [
+            ...array_map(fn (CanonicalEntityType $entityType): string => $entityType->aliasErrorType(), CanonicalEntityType::cases()),
+            ...array_values(array_map(
+                fn (self $type): string => $type->value,
+                array_filter(self::cases(), fn (self $type): bool => $type !== self::UnknownAlias),
+            )),
+        ];
+    }
 }

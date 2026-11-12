@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Api;
 
+use App\DTOs\ParserDiagnosticData;
+use App\Enums\ParserDiagnosticType;
 use App\Enums\ParserErrorResolutionType;
 use App\Models\ParserError;
 use App\Models\RawScrapePayload;
@@ -68,6 +70,40 @@ class ParserErrorIndexTest extends TestCase
         ParserError::factory()->structural('prose_captured_as_entity')->create();
 
         $this->assertListedIds(['type' => 'unknown_trip_type_alias'], [$tripType->id]);
+    }
+
+    public function test_type_filter_accepts_every_stored_error_type_and_rejects_unknown_alias(): void
+    {
+        $storedTypes = [
+            'unknown_boat_alias',
+            'unknown_species_alias',
+            'unknown_trip_type_alias',
+            'fractional_trip_conflict',
+            'prose_captured_as_entity',
+            'excessive_name_length',
+            'unaccounted_numeric_tokens',
+            'empty_or_unexpectedly_small_result_set',
+            'structured_source_fallback',
+            'extracted_value_source_span_mismatch',
+        ];
+
+        foreach (ParserDiagnosticType::cases() as $type) {
+            foreach (['boat', 'species', 'trip_type', 'anglers'] as $field) {
+                $errorType = (new ParserDiagnosticData($type, $field, null, '', [], '', ''))->errorType();
+                $this->assertContains($errorType, $storedTypes, "{$type->value} on {$field} is stored as {$errorType}.");
+            }
+        }
+
+        foreach ($storedTypes as $storedType) {
+            $this->withToken($this->readToken())
+                ->getJson('/api/parser-errors?type='.$storedType)
+                ->assertOk();
+        }
+
+        $this->withToken($this->readToken())
+            ->getJson('/api/parser-errors?type=unknown_alias')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('type');
     }
 
     public function test_source_and_target_date_range_filters(): void
