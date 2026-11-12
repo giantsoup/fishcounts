@@ -30,6 +30,7 @@ class ParserErrorDetailResource extends ParserErrorResource
             ...parent::toArray($request),
             'context' => $this->contextFields(),
             'raw_scrape_payload' => $this->whenLoaded('rawScrapePayload', fn (): ?array => $this->payloadMetadata($this->rawScrapePayload)),
+            'trip_reports' => TripReportResource::collection($this->rawScrapePayload?->tripReports ?? collect()),
         ];
     }
 

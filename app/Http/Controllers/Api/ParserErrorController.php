@@ -39,6 +39,13 @@ class ParserErrorController extends Controller
 
     public function show(ParserError $parserError): ParserErrorDetailResource
     {
-        return ParserErrorDetailResource::make($parserError->load(['scrapeSource', 'rawScrapePayload']));
+        return ParserErrorDetailResource::make($parserError->load([
+            'scrapeSource',
+            'rawScrapePayload.tripReports' => fn ($query) => $query->orderBy('id'),
+            'rawScrapePayload.tripReports.boat',
+            'rawScrapePayload.tripReports.landing',
+            'rawScrapePayload.tripReports.tripType',
+            'rawScrapePayload.tripReports.speciesCounts.species',
+        ]));
     }
 }
