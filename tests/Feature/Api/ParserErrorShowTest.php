@@ -26,7 +26,7 @@ class ParserErrorShowTest extends TestCase
         $source = ScrapeSource::factory()->create(['parser_engine' => ParserEngine::Ai]);
         $payload = RawScrapePayload::factory()->for($source)->create([
             'target_date' => '2026-07-14',
-            'url' => 'https://example.test/counts?date=2026-07-14',
+            'url' => 'https://example.test/counts?date=2026-07-14&api_key=secret123#top',
             'http_status' => 200,
             'content_type' => 'text/html',
             'payload' => '<p>full raw body that must not appear</p>',
@@ -61,7 +61,7 @@ class ParserErrorShowTest extends TestCase
             ->assertJsonPath('data.context.report_index', 2)
             ->assertJsonPath('data.raw_scrape_payload.id', $payload->id)
             ->assertJsonPath('data.raw_scrape_payload.target_date', '2026-07-14')
-            ->assertJsonPath('data.raw_scrape_payload.url', 'https://example.test/counts?date=2026-07-14')
+            ->assertJsonPath('data.raw_scrape_payload.url', 'https://example.test/counts')
             ->assertJsonPath('data.raw_scrape_payload.http_status', 200)
             ->assertJsonPath('data.raw_scrape_payload.content_type', 'text/html')
             ->assertJsonPath('data.raw_scrape_payload.parser_version', 'deterministic-v9')
@@ -71,6 +71,7 @@ class ParserErrorShowTest extends TestCase
         $this->assertArrayNotHasKey('unlisted_key', $response->json('data.context'));
         $this->assertArrayNotHasKey('payload', $response->json('data.raw_scrape_payload'));
         $this->assertStringNotContainsString('full raw body', $response->getContent());
+        $this->assertStringNotContainsString('secret123', $response->getContent());
     }
 
     public function test_embeds_the_trip_reports_parsed_from_the_errors_payload(): void
@@ -154,6 +155,20 @@ class ParserErrorShowTest extends TestCase
             ->assertJsonPath('data.trip_reports', []);
 
         $this->assertArrayHasKey('latest_parser_execution', $response->json('data'));
+    }
+
+    public function test_detail_and_raw_payload_endpoints_both_drop_the_payload_url_query_string(): void
+    {
+        $payload = RawScrapePayload::factory()->create(['url' => 'https://example.test/counts?token=secret456']);
+        $error = ParserError::factory()->for($payload)->create();
+        $token = $this->readToken();
+
+        $detail = $this->withToken($token)->getJson("/api/parser-errors/{$error->id}")->assertOk();
+        $metadata = $this->withToken($token)->getJson("/api/raw-payloads/{$payload->id}")->assertOk();
+
+        $detail->assertJsonPath('data.raw_scrape_payload.url', 'https://example.test/counts');
+        $metadata->assertJsonPath('data.url', 'https://example.test/counts');
+        $this->assertStringNotContainsString('secret456', $metadata->getContent());
     }
 
     public function test_missing_parser_error_returns_json_404(): void

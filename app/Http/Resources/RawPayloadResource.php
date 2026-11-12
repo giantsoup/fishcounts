@@ -23,7 +23,7 @@ class RawPayloadResource extends JsonResource
             'id' => $this->id,
             'scrape_source' => ScrapeSourceResource::make($this->whenLoaded('scrapeSource')),
             'target_date' => $this->target_date?->toDateString(),
-            'url' => $this->url,
+            'url' => self::urlWithoutQuery($this->url),
             'http_status' => $this->http_status,
             'content_type' => $this->content_type,
             'payload_hash' => $this->payload_hash,
@@ -36,5 +36,17 @@ class RawPayloadResource extends JsonResource
                 : app(DiagnosticContextFactory::class)->redactSecrets($this->error_message),
             'authoritative_parser_execution' => ParserExecutionResource::make($this->whenLoaded('authoritativeParserExecution')),
         ];
+    }
+
+    /**
+     * Drop the query string and fragment, which can carry credentials.
+     */
+    private static function urlWithoutQuery(?string $url): ?string
+    {
+        if ($url === null) {
+            return null;
+        }
+
+        return strtok(strtok($url, '#') ?: '', '?') ?: null;
     }
 }
