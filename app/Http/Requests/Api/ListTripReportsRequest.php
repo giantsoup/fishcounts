@@ -2,13 +2,12 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\PaginatesApiLists;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ListTripReportsRequest extends FormRequest
 {
-    public const DEFAULT_PER_PAGE = 50;
-
-    public const MAX_PER_PAGE = 100;
+    use PaginatesApiLists;
 
     /**
      * Access is decided by the agent-api middleware group and the route's ability.
@@ -29,8 +28,7 @@ class ListTripReportsRequest extends FormRequest
             'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
             'source' => ['sometimes', 'integer', 'min:1'],
             'boat' => ['sometimes', 'integer', 'min:1'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.self::MAX_PER_PAGE],
+            ...$this->paginationRules(),
         ];
     }
 }

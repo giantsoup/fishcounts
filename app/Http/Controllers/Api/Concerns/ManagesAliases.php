@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Enums\ParserErrorResolutionType;
 use App\Http\Requests\Api\ListAliasesRequest;
-use App\Http\Requests\Api\ListParserErrorsRequest;
 use App\Http\Requests\Api\StoreAliasRequest;
 use App\Http\Resources\AliasResource;
 use App\Models\ParserError;
@@ -15,8 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Collection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 
 /**
  * Shared alias endpoints for boats, species, and trip types. Each controller supplies the
@@ -34,7 +33,7 @@ trait ManagesAliases
             $aliases
                 ->orderBy('alias')
                 ->orderBy('id')
-                ->paginate((int) $request->validated('per_page', ListParserErrorsRequest::DEFAULT_PER_PAGE))
+                ->paginate($request->perPage())
                 ->withQueryString(),
         );
     }

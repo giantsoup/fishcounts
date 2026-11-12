@@ -29,7 +29,7 @@ class TripReportController extends Controller
             ->when($filters['boat'] ?? null, fn ($query, int|string $boat) => $query->where('boat_id', (int) $boat))
             ->orderByDesc('trip_date')
             ->orderByDesc('id')
-            ->paginate((int) ($filters['per_page'] ?? ListTripReportsRequest::DEFAULT_PER_PAGE))
+            ->paginate($request->perPage())
             ->withQueryString();
 
         return TripReportResource::collection($reports);

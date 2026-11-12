@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Concerns;
 
 use App\Enums\CanonicalEntityType;
 use App\Http\Requests\Api\ListEntitiesRequest;
-use App\Http\Requests\Api\ListParserErrorsRequest;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -39,7 +38,7 @@ trait ListsEntitiesWithAliases
             })
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate((int) ($filters['per_page'] ?? ListParserErrorsRequest::DEFAULT_PER_PAGE))
+            ->paginate($request->perPage())
             ->withQueryString();
     }
 }

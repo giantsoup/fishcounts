@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Api;
 
+use App\Http\Requests\Api\Concerns\PaginatesApiLists;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ListAliasesRequest extends FormRequest
 {
+    use PaginatesApiLists;
+
     /**
      * Access is decided by the agent-api middleware group and the route's ability.
      */
@@ -20,8 +23,7 @@ class ListAliasesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.ListParserErrorsRequest::MAX_PER_PAGE],
+            ...$this->paginationRules(),
         ];
     }
 }

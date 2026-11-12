@@ -26,7 +26,7 @@ class ParserErrorController extends Controller
                 $filters['status'] ?? 'open',
                 fn ($query, string $status) => match ($status) {
                     'open' => $query->open(),
-                    'resolved' => $query->where(fn ($query) => $query->whereNotNull('resolved_at')->orWhereNotNull('resolution_type')),
+                    'resolved' => $query->resolved(),
                     'all' => $query,
                 },
             )
@@ -36,7 +36,7 @@ class ParserErrorController extends Controller
             ->when($filters['from'] ?? null, fn ($query, string $from) => $query->whereDate('target_date', '>=', $from))
             ->when($filters['to'] ?? null, fn ($query, string $to) => $query->whereDate('target_date', '<=', $to))
             ->latest('id')
-            ->paginate((int) ($filters['per_page'] ?? ListParserErrorsRequest::DEFAULT_PER_PAGE))
+            ->paginate($request->perPage())
             ->withQueryString();
 
         return ParserErrorResource::collection($errors);

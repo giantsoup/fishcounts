@@ -40,6 +40,16 @@ class ParserError extends Model
         return $query->whereNull('resolved_at')->whereNull('resolution_type');
     }
 
+    /**
+     * Errors that are no longer open: resolved, or given a resolution type.
+     *
+     * @param  Builder<ParserError>  $query
+     */
+    public function scopeResolved(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $query) => $query->whereNotNull('resolved_at')->orWhereNotNull('resolution_type'));
+    }
+
     /** @param Builder<ParserError> $query */
     public function scopeAliases(Builder $query): Builder
     {
