@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\RawPayloadController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -17,4 +18,8 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('parser-errors', [ParserErrorController::class, 'index'])
         ->middleware('abilities:read')
         ->name('parser-errors.index');
+
+    Route::get('raw-payloads/{rawScrapePayload}', [RawPayloadController::class, 'show'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.show');
 });
