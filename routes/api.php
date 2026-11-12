@@ -22,4 +22,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('reparse-runs/preview', [ReparseRunController::class, 'preview'])
         ->middleware('abilities:reparse')
         ->name('reparse-runs.preview');
+    Route::post('reparse-runs', [ReparseRunController::class, 'store'])
+        ->middleware(['abilities:reparse', 'throttle:3,1,parser-reparse-write:'])
+        ->name('reparse-runs.store');
 });
