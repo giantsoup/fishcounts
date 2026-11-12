@@ -72,17 +72,10 @@ class EntityAliasTest extends TestCase
         $this->assertDatabaseHas('trip_type_aliases', ['trip_type_id' => $tripType->id, 'alias' => 'Over Night Run']);
     }
 
-    public function test_boat_alias_resolves_errors_repoints_unmatched_reports_and_merges_a_variant_boat(): void
+    public function test_boat_alias_resolves_errors_and_repoints_unmatched_reports(): void
     {
         $source = ScrapeSource::factory()->create();
         $boat = Boat::factory()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
-        $variant = Boat::factory()->create(['name' => 'The Dolphin', 'slug' => 'the-dolphin']);
-        $variantReport = TripReport::query()->create([
-            'source_id' => $source->id,
-            'boat_id' => $variant->id,
-            'trip_date' => '2026-07-09',
-            'dedupe_key' => 'variant-report',
-        ]);
         $unmatchedReport = TripReport::query()->create([
             'source_id' => $source->id,
             'boat_id' => null,
@@ -104,10 +97,42 @@ class EntityAliasTest extends TestCase
 
         $this->assertSame(ParserErrorResolutionType::AgentAlias, $error->refresh()->resolution_type);
         $this->assertSame($this->agent->id, $error->resolved_by_user_id);
-        $this->assertSame($boat->id, $variantReport->refresh()->boat_id);
         $this->assertSame($boat->id, $unmatchedReport->refresh()->boat_id);
         $this->assertSame('2026-07-10|dolphin|full-day|20', $unmatchedReport->dedupe_key);
-        $this->assertFalse($variant->refresh()->is_active);
+    }
+
+    public function test_boat_alias_that_would_merge_another_boat_returns_409_and_changes_nothing(): void
+    {
+        $source = ScrapeSource::factory()->create();
+        $boat = Boat::factory()->create(['name' => 'Dolphin', 'slug' => 'dolphin']);
+        $namedVariant = Boat::factory()->create(['name' => 'The Dolphin', 'slug' => 'the-dolphin']);
+        $aliasedVariant = Boat::factory()->create(['name' => 'Dolphin II', 'slug' => 'dolphin-ii']);
+        $aliasedVariant->aliases()->create(['alias' => 'Dolphin Two', 'normalized_alias' => 'dolphin two']);
+        $variantReport = TripReport::query()->create([
+            'source_id' => $source->id,
+            'boat_id' => $namedVariant->id,
+            'trip_date' => '2026-07-09',
+            'dedupe_key' => 'variant-report',
+        ]);
+        $error = $this->aliasError('unknown_boat_alias', 'boat', 'The Dolphin');
+        $token = $this->token(['aliases']);
+
+        foreach ([[$namedVariant, 'The Dolphin'], [$aliasedVariant, 'dolphin two']] as [$variant, $alias]) {
+            $message = $this->withToken($token)
+                ->postJson("/api/boats/{$boat->id}/aliases", ['alias' => $alias])
+                ->assertConflict()
+                ->json('message');
+
+            $this->assertStringContainsString("\"{$variant->name}\" (id {$variant->id})", $message);
+            $this->assertStringContainsString("POST /api/boats/{$boat->id}/merge", $message);
+            $this->assertStringContainsString("\"duplicate_boat_id\": {$variant->id}", $message);
+            $this->assertTrue($variant->refresh()->is_active);
+        }
+
+        $this->assertSame($namedVariant->id, $variantReport->refresh()->boat_id);
+        $this->assertSame(1, $aliasedVariant->aliases()->count());
+        $this->assertSame(0, $boat->aliases()->count());
+        $this->assertNull($error->refresh()->resolved_at);
     }
 
     public function test_response_says_when_the_named_parser_error_was_not_resolved(): void
