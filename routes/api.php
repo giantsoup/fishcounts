@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\Api\BoatAliasController;
 use App\Http\Controllers\Api\BoatController;
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\SpeciesAliasController;
 use App\Http\Controllers\Api\SpeciesController;
+use App\Http\Controllers\Api\TripTypeAliasController;
 use App\Http\Controllers\Api\TripTypeController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,12 +25,21 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
         ->name('parser-errors.index');
 
     // Boats, species, and trip types (#67 reads and aliases; #70 adds the entity writes here).
-    Route::middleware('abilities:read')->group(function (): void {
-        Route::get('boats', [BoatController::class, 'index'])->name('boats.index');
-        Route::get('boats/{boat}', [BoatController::class, 'show'])->whereNumber('boat')->name('boats.show');
-        Route::get('species', [SpeciesController::class, 'index'])->name('species.index');
-        Route::get('species/{species}', [SpeciesController::class, 'show'])->whereNumber('species')->name('species.show');
-        Route::get('trip-types', [TripTypeController::class, 'index'])->name('trip-types.index');
-        Route::get('trip-types/{tripType}', [TripTypeController::class, 'show'])->whereNumber('tripType')->name('trip-types.show');
-    });
+    Route::get('boats', [BoatController::class, 'index'])->middleware('abilities:read')->name('boats.index');
+    Route::get('boats/{boat}', [BoatController::class, 'show'])->whereNumber('boat')->middleware('abilities:read')->name('boats.show');
+    Route::get('boats/{boat}/aliases', [BoatAliasController::class, 'index'])->whereNumber('boat')->middleware('abilities:read')->name('boats.aliases.index');
+    Route::post('boats/{boat}/aliases', [BoatAliasController::class, 'store'])->whereNumber('boat')->middleware('abilities:aliases')->name('boats.aliases.store');
+    Route::delete('boats/aliases/{boatAlias}', [BoatAliasController::class, 'destroy'])->whereNumber('boatAlias')->middleware('abilities:aliases')->name('boats.aliases.destroy');
+
+    Route::get('species', [SpeciesController::class, 'index'])->middleware('abilities:read')->name('species.index');
+    Route::get('species/{species}', [SpeciesController::class, 'show'])->whereNumber('species')->middleware('abilities:read')->name('species.show');
+    Route::get('species/{species}/aliases', [SpeciesAliasController::class, 'index'])->whereNumber('species')->middleware('abilities:read')->name('species.aliases.index');
+    Route::post('species/{species}/aliases', [SpeciesAliasController::class, 'store'])->whereNumber('species')->middleware('abilities:aliases')->name('species.aliases.store');
+    Route::delete('species/aliases/{speciesAlias}', [SpeciesAliasController::class, 'destroy'])->whereNumber('speciesAlias')->middleware('abilities:aliases')->name('species.aliases.destroy');
+
+    Route::get('trip-types', [TripTypeController::class, 'index'])->middleware('abilities:read')->name('trip-types.index');
+    Route::get('trip-types/{tripType}', [TripTypeController::class, 'show'])->whereNumber('tripType')->middleware('abilities:read')->name('trip-types.show');
+    Route::get('trip-types/{tripType}/aliases', [TripTypeAliasController::class, 'index'])->whereNumber('tripType')->middleware('abilities:read')->name('trip-types.aliases.index');
+    Route::post('trip-types/{tripType}/aliases', [TripTypeAliasController::class, 'store'])->whereNumber('tripType')->middleware('abilities:aliases')->name('trip-types.aliases.store');
+    Route::delete('trip-types/aliases/{tripTypeAlias}', [TripTypeAliasController::class, 'destroy'])->whereNumber('tripTypeAlias')->middleware('abilities:aliases')->name('trip-types.aliases.destroy');
 });
