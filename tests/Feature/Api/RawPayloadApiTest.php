@@ -68,6 +68,71 @@ class RawPayloadApiTest extends TestCase
             ->assertJsonStructure(['message']);
     }
 
+    public function test_body_is_returned_with_secrets_redacted(): void
+    {
+        $body = "<html><head><script>var cfg = {api_key: \"sk-live-123\"};</script></head>\n"
+            ."<p>Authorization: Bearer abc.def.ghi</p>\n"
+            ."<p>Cookie: session=xyz; remember=1</p>\n"
+            ."<p>password=hunter2</p>\n"
+            .'<p>The Dolphin caught 17 Yellowtail.</p></html>';
+        $payload = RawScrapePayload::factory()->create(['payload' => $body]);
+
+        $response = $this->withToken($this->readToken())
+            ->getJson("/api/raw-payloads/{$payload->id}/body")
+            ->assertOk()
+            ->assertJsonPath('data.id', $payload->id)
+            ->assertJsonPath('data.truncated', false)
+            ->assertJsonPath('data.original_bytes', strlen($body));
+
+        $returned = $response->json('data.body');
+        $this->assertStringContainsString('<p>The Dolphin caught 17 Yellowtail.</p>', $returned);
+        $this->assertStringContainsString('Authorization=[redacted]', $returned);
+        $this->assertStringContainsString('password=[redacted]', $returned);
+        foreach (['sk-live-123', 'abc.def.ghi', 'session=xyz', 'hunter2'] as $secret) {
+            $this->assertStringNotContainsString($secret, $response->getContent());
+        }
+    }
+
+    public function test_body_is_capped_at_the_configured_size_and_reports_truncation(): void
+    {
+        config()->set('fish.api.raw_payload_body_max_bytes', 100);
+        $body = str_repeat('a', 99).'é'.str_repeat('b', 400);
+        $payload = RawScrapePayload::factory()->create(['payload' => $body]);
+
+        $response = $this->withToken($this->readToken())
+            ->getJson("/api/raw-payloads/{$payload->id}/body")
+            ->assertOk()
+            ->assertJsonPath('data.truncated', true)
+            ->assertJsonPath('data.original_bytes', 501);
+
+        $this->assertSame(str_repeat('a', 99), $response->json('data.body'));
+    }
+
+    public function test_body_at_exactly_the_cap_is_not_truncated(): void
+    {
+        config()->set('fish.api.raw_payload_body_max_bytes', 100);
+        $payload = RawScrapePayload::factory()->create(['payload' => str_repeat('a', 100)]);
+
+        $this->withToken($this->readToken())
+            ->getJson("/api/raw-payloads/{$payload->id}/body")
+            ->assertOk()
+            ->assertJsonPath('data.truncated', false)
+            ->assertJsonPath('data.body', str_repeat('a', 100));
+    }
+
+    public function test_body_cap_defaults_to_about_200_kb(): void
+    {
+        $payload = RawScrapePayload::factory()->create(['payload' => str_repeat('x', 250_000)]);
+
+        $response = $this->withToken($this->readToken())
+            ->getJson("/api/raw-payloads/{$payload->id}/body")
+            ->assertOk()
+            ->assertJsonPath('data.truncated', true)
+            ->assertJsonPath('data.original_bytes', 250_000);
+
+        $this->assertSame(200_000, strlen($response->json('data.body')));
+    }
+
     private function readToken(): string
     {
         return $this->token ??= User::factory()->admin()->create()->createToken('agent', ['read'])->plainTextToken;

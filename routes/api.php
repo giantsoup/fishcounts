@@ -22,4 +22,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::get('raw-payloads/{rawScrapePayload}', [RawPayloadController::class, 'show'])
         ->middleware('abilities:read')
         ->name('raw-payloads.show');
+    Route::get('raw-payloads/{rawScrapePayload}/body', [RawPayloadController::class, 'body'])
+        ->middleware('abilities:read')
+        ->name('raw-payloads.body');
 });
