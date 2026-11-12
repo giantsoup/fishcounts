@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Species\CreateSpecies;
 use App\Enums\CanonicalEntityType;
 use App\Http\Controllers\Api\Concerns\ListsEntitiesWithAliases;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\ListEntitiesRequest;
+use App\Http\Requests\Api\StoreSpeciesRequest;
 use App\Http\Resources\SpeciesResource;
 use App\Models\Species;
+use App\Support\ApiAudit;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 class SpeciesController extends Controller
 {
@@ -23,6 +28,20 @@ class SpeciesController extends Controller
 
     public function show(Species $species): SpeciesResource
     {
-        return SpeciesResource::make($species->load(['aliases' => fn ($query) => $query->orderBy('alias')]));
+        return SpeciesResource::make($this->withAliases($species));
+    }
+
+    public function store(StoreSpeciesRequest $request, CreateSpecies $createSpecies): JsonResponse
+    {
+        $species = $createSpecies->handle($request->validated('name'), $request->validated('environmental_location_profile'));
+
+        ApiAudit::write($request, 'species.create', $species->id);
+
+        return SpeciesResource::make($this->withAliases($species))->response()->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    private function withAliases(Species $species): Species
+    {
+        return $species->load(['aliases' => fn ($query) => $query->orderBy('alias')]);
     }
 }
