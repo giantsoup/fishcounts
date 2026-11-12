@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ParserErrorController;
+use App\Http\Controllers\Api\TripReportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,4 +24,7 @@ Route::middleware('agent-api')->name('api.')->group(function (): void {
     Route::patch('parser-errors/{parserError}/dismiss', [ParserErrorController::class, 'dismiss'])
         ->middleware('abilities:errors')
         ->name('parser-errors.dismiss');
+    Route::get('trip-reports', [TripReportController::class, 'index'])
+        ->middleware('abilities:read')
+        ->name('trip-reports.index');
 });
