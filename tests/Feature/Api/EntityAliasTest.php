@@ -151,6 +151,38 @@ class EntityAliasTest extends TestCase
         $this->assertNull($unrelated->refresh()->resolved_at);
     }
 
+    public function test_named_parser_error_resolved_before_the_call_is_not_reported_as_resolved_by_it(): void
+    {
+        $species = Species::factory()->create(['name' => 'Yellowtail']);
+        $dismissed = ParserError::factory()->resolved(ParserErrorResolutionType::Dismissed)->create([
+            'error_type' => 'unknown_species_alias',
+            'raw_field' => 'species',
+            'raw_value' => 'Yellow Tail',
+        ]);
+        $alreadyAliased = $this->speciesError('yellowtails');
+        $token = $this->token(['aliases']);
+
+        $this->withToken($token)
+            ->postJson("/api/species/{$species->id}/aliases", ['alias' => 'Yellow Tail', 'parser_error_id' => $dismissed->id])
+            ->assertCreated()
+            ->assertJsonPath('meta.resolved_parser_errors', 0)
+            ->assertJsonPath('meta.parser_error.id', $dismissed->id)
+            ->assertJsonPath('meta.parser_error.resolved', false)
+            ->assertJsonPath('meta.parser_error.resolution_type', 'dismissed');
+
+        $this->withToken($token)
+            ->postJson("/api/species/{$species->id}/aliases", ['alias' => 'Yellowtails'])
+            ->assertCreated()
+            ->assertJsonPath('meta.resolved_parser_errors', 1);
+
+        $this->withToken($token)
+            ->postJson("/api/species/{$species->id}/aliases", ['alias' => 'Yellowtails', 'parser_error_id' => $alreadyAliased->id])
+            ->assertOk()
+            ->assertJsonPath('meta.resolved_parser_errors', 0)
+            ->assertJsonPath('meta.parser_error.resolved', false)
+            ->assertJsonPath('meta.parser_error.resolution_type', 'agent_alias');
+    }
+
     public function test_alias_clashing_with_another_species_or_trip_type_returns_422(): void
     {
         $token = $this->token(['aliases']);

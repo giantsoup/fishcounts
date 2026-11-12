@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Http\Response;
 
 /**
@@ -56,19 +57,19 @@ trait ManagesAliases
             ParserErrorResolutionType::AgentAlias,
         );
 
-        $resolvedCount = ParserError::query()
+        $resolvedIds = ParserError::query()
             ->whereKey($openErrorIds)
             ->whereNotNull('resolved_at')
             ->where('resolution_type', ParserErrorResolutionType::AgentAlias->value)
             ->where('resolved_by_user_id', $userId)
-            ->count();
+            ->pluck('id');
 
         ApiAudit::write($request, "{$auditResource}.create", $alias->getKey());
 
         return AliasResource::make($alias)
             ->additional(['meta' => [
-                'resolved_parser_errors' => $resolvedCount,
-                'parser_error' => $this->parserErrorOutcome($request->validated('parser_error_id')),
+                'resolved_parser_errors' => $resolvedIds->count(),
+                'parser_error' => $this->parserErrorOutcome($request->validated('parser_error_id'), $resolvedIds),
             ]])
             ->response()
             ->setStatusCode($alias->wasRecentlyCreated ? Response::HTTP_CREATED : Response::HTTP_OK);
@@ -84,9 +85,13 @@ trait ManagesAliases
     }
 
     /**
+     * The named parser error counts as resolved only when this call resolved it: it was open
+     * before the alias was added and is now resolved by this token's user as an agent alias.
+     *
+     * @param  Collection<int, int>  $resolvedIds  Parser errors this call resolved.
      * @return array{id: int, resolved: bool, resolution_type: string|null}|null
      */
-    private function parserErrorOutcome(int|string|null $parserErrorId): ?array
+    private function parserErrorOutcome(int|string|null $parserErrorId, Collection $resolvedIds): ?array
     {
         if ($parserErrorId === null) {
             return null;
@@ -96,7 +101,7 @@ trait ManagesAliases
 
         return [
             'id' => $parserError->id,
-            'resolved' => $parserError->resolved_at !== null,
+            'resolved' => $resolvedIds->contains($parserError->id),
             'resolution_type' => $parserError->resolution_type?->value,
         ];
     }
