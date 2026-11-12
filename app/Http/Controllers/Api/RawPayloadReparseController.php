@@ -8,6 +8,7 @@ use App\Jobs\ParseRawPayloadJob;
 use App\Models\RawScrapePayload;
 use App\Support\ApiAudit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 
 class RawPayloadReparseController extends Controller
@@ -24,6 +25,6 @@ class RawPayloadReparseController extends Controller
         );
         ApiAudit::write($request, 'raw-payload.reparse', $rawScrapePayload->id);
 
-        return QueuedPayloadReparseResource::make($rawScrapePayload)->response()->setStatusCode(202);
+        return QueuedPayloadReparseResource::make($rawScrapePayload)->response()->setStatusCode(Response::HTTP_ACCEPTED);
     }
 }

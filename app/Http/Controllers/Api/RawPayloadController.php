@@ -10,6 +10,7 @@ use App\Http\Resources\RawPayloadResource;
 use App\Models\RawScrapePayload;
 use App\Services\Parsing\DiagnosticContextFactory;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use InvalidArgumentException;
 
 class RawPayloadController extends Controller
@@ -35,7 +36,7 @@ class RawPayloadController extends Controller
         try {
             $evaluation = $evaluateRawPayload->handle($rawScrapePayload->id);
         } catch (InvalidArgumentException $exception) {
-            return response()->json(['message' => $redactor->redactSecrets($exception->getMessage())], 422);
+            return response()->json(['message' => $redactor->redactSecrets($exception->getMessage())], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
         return RawPayloadEvaluationResource::make($evaluation);

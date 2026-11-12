@@ -15,6 +15,7 @@ use App\Models\ParserReparseRun;
 use App\Services\Parsing\ParserReparsePlanner;
 use App\Support\ApiAudit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 
 class ReparseRunController extends Controller
@@ -50,7 +51,7 @@ class ReparseRunController extends Controller
         return $this->runResource($result->run)
             ->additional(['meta' => ['created' => $result->created]])
             ->response()
-            ->setStatusCode($result->created ? 201 : 200);
+            ->setStatusCode($result->created ? Response::HTTP_CREATED : Response::HTTP_OK);
     }
 
     /**
