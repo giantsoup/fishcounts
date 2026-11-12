@@ -223,6 +223,49 @@ class ReparseApiTest extends TestCase
         $this->withToken($this->token(['reparse']))->postJson('/api/reparse-runs/999/retry')->assertNotFound();
     }
 
+    public function test_the_fourth_start_in_a_minute_is_throttled(): void
+    {
+        $token = $this->token(['reparse']);
+        $fingerprint = $this->withToken($token)->getJson('/api/reparse-runs/preview')->json('data.fingerprint');
+
+        foreach (range(1, 3) as $attempt) {
+            $this->withToken($token)->postJson('/api/reparse-runs', ['fingerprint' => $fingerprint])->assertSuccessful();
+        }
+
+        $this->withToken($token)->postJson('/api/reparse-runs', ['fingerprint' => $fingerprint])->assertTooManyRequests();
+    }
+
+    public function test_api_starts_and_retries_share_the_admin_ui_reparse_write_limit(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $admin->createToken('agent', ['reparse'])->plainTextToken;
+        $run = $this->failedRun();
+
+        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.retry', $run))->assertRedirect();
+        $this->actingAs($admin)->post(route('admin.parser-errors.reparse-runs.retry', $run))->assertRedirect();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->postJson("/api/reparse-runs/{$run->id}/retry")->assertOk();
+
+        $this->withToken($token)->postJson("/api/reparse-runs/{$run->id}/retry")->assertTooManyRequests();
+        $this->withToken($token)->postJson('/api/reparse-runs', ['fingerprint' => str_repeat('a', 64)])->assertTooManyRequests();
+    }
+
+    public function test_each_endpoint_requires_its_token_ability(): void
+    {
+        $run = ParserReparseRun::query()->create(['status' => ParserReparseRunStatus::Succeeded]);
+        $readOnly = $this->token(['read']);
+        $reparseOnly = $this->token(['reparse']);
+
+        $this->withToken($readOnly)->getJson('/api/reparse-runs/preview')->assertForbidden();
+        $this->withToken($readOnly)->postJson('/api/reparse-runs', ['fingerprint' => str_repeat('a', 64)])->assertForbidden();
+        $this->withToken($readOnly)->postJson("/api/reparse-runs/{$run->id}/retry")->assertForbidden();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($reparseOnly)->getJson("/api/reparse-runs/{$run->id}")->assertForbidden();
+
+        $this->assertSame(1, ParserReparseRun::query()->count());
+        Queue::assertNothingPushed();
+    }
+
     /**
      * @param  list<string>  $abilities
      */
