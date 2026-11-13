@@ -59,6 +59,14 @@ class User extends Authenticatable
         return $this->role === Role::Admin;
     }
 
+    /**
+     * The only kind of account an agent API token may belong to or be managed by.
+     */
+    public function isActiveAdmin(): bool
+    {
+        return $this->is_active && $this->isAdmin();
+    }
+
     /** @return HasMany<AlertRule, $this> */
     public function alertRules(): HasMany
     {

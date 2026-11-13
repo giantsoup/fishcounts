@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Contracts\AI\ParserDiagnosticReviewer;
 use App\Contracts\IssueTracking\IssueTracker;
 use App\Contracts\Parsing\RegulationResearcher;
+use App\Models\PersonalAccessToken;
+use App\Policies\PersonalAccessTokenPolicy;
 use App\Services\AI\DisabledParserDiagnosticReviewer;
 use App\Services\AI\OpenAiParserDiagnosticReviewer;
 use App\Services\IssueTracking\GitHubIssueTracker;
@@ -13,7 +15,9 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,6 +43,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Gate::define('admin', fn ($user): bool => $user->isAdmin());
+
+        Sanctum::usePersonalAccessTokenModel(PersonalAccessToken::class);
+        Gate::policy(PersonalAccessToken::class, PersonalAccessTokenPolicy::class);
+        Route::model('apiToken', PersonalAccessToken::class);
 
         RateLimiter::for('ai-parser-reviews', fn (): Limit => Limit::perMinute(
             max(1, (int) config('fish.ai_review.rate_limit_per_minute')),
