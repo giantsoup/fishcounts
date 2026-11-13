@@ -43,8 +43,8 @@
                         and paste the token in place of <code class="font-mono">&lt;token&gt;</code>.
                     </p>
                 </section>
-            @elseif (session('status'))
-                <p class="text-sm text-gray-600">If you navigated away before copying, rotate the token to get a new one.</p>
+            @else
+                <p class="text-sm text-gray-600">The full token is shown only once, right after it is created or rotated. If you didn't copy it, rotate the token to get a new one.</p>
             @endif
 
             <section class="bg-white p-6 shadow-sm sm:rounded-lg">

@@ -27,7 +27,7 @@ class MintApiToken
      */
     public function handle(User $owner, string $name, array $abilities, DateTimeInterface $expiresAt, ?User $creator = null): NewAccessToken
     {
-        if (! $owner->is_active || ! $owner->isAdmin()) {
+        if (! $owner->isActiveAdmin()) {
             throw ValidationException::withMessages(['owner_id' => 'API tokens can only be minted for an existing, active admin user.']);
         }
 

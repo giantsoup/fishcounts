@@ -50,6 +50,19 @@ class ApiTokenManagementTest extends TestCase
         $this->assertModelExists($token);
     }
 
+    public function test_inactive_admins_are_logged_out(): void
+    {
+        $inactiveAdmin = User::factory()->admin()->create(['is_active' => false]);
+
+        $this->actingAs($inactiveAdmin)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->post(route('admin.api-tokens.store'), $this->storePayload(['owner_id' => $this->admin->id]))
+            ->assertRedirect(route('login'));
+
+        $this->assertGuest();
+        $this->assertDatabaseEmpty('personal_access_tokens');
+    }
+
     public function test_the_app_model_backs_sanctum(): void
     {
         $this->assertSame(PersonalAccessToken::class, Sanctum::$personalAccessTokenModel);
@@ -216,16 +229,16 @@ class ApiTokenManagementTest extends TestCase
                 $this->actingAs($this->admin)->get(route('admin.api-tokens.show', $model)),
                 $this->confirmed()->get(route('admin.api-tokens.edit', $model)),
             ] as $response) {
-                $response->assertOk()->assertSee($model->maskedToken())->assertSee('Token ending in '.$model->token_hint);
+                $response->assertOk()
+                    ->assertSee($model->maskedToken())
+                    ->assertSee('<span class="sr-only">Token ending in '.$model->token_hint.'</span>', false);
                 $this->assertNoSecretFragment($response, $secret, $model);
             }
         }
 
-        $longerSecretToken = PersonalAccessToken::factory()->forTokenable($this->admin)->withHint('beef')->create();
-        $this->assertSame(
-            mb_strlen($first->accessToken->maskedToken()),
-            mb_strlen($longerSecretToken->maskedToken()),
-        );
+        $secretLength = strlen(explode('|', $first->plainTextToken)[1]);
+        $this->assertSame(PersonalAccessToken::MASK_LENGTH, substr_count($first->accessToken->maskedToken(), '•'));
+        $this->assertNotSame($secretLength - strlen(config('sanctum.token_prefix')) - 4, PersonalAccessToken::MASK_LENGTH);
         $this->assertSame('fishcounts_'.str_repeat('•', 12).$first->accessToken->token_hint, $first->accessToken->maskedToken());
     }
 
@@ -375,7 +388,8 @@ class ApiTokenManagementTest extends TestCase
             && $context['previous_token_id'] === $old->accessToken->id
             && $context['previous_abilities'] === ['read']
             && $context['abilities'] === ['read', 'aliases']
-            && array_key_exists('previous_expires_at', $context))->once();
+            && $context['previous_expires_at'] === $old->accessToken->expires_at->toIso8601String()
+            && $context['expires_at'] === $new->expires_at->toIso8601String())->once();
     }
 
     public function test_rotating_a_token_that_is_already_gone_creates_nothing(): void
@@ -390,6 +404,30 @@ class ApiTokenManagementTest extends TestCase
         ])->assertNotFound();
 
         $this->assertDatabaseEmpty('personal_access_tokens');
+    }
+
+    public function test_a_failure_inside_rotation_leaves_the_old_token_working(): void
+    {
+        $old = $this->mintFor($this->admin);
+        $this->mock(MintApiToken::class)
+            ->shouldReceive('handle')
+            ->andReturnUsing(function (User $owner, string $name): never {
+                $owner->createToken($name.'-half-written', ['read']);
+
+                throw new \RuntimeException('Mint failed after writing.');
+            });
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->confirmed()->post(route('admin.api-tokens.rotate', $old->accessToken), ['abilities' => ['read'], 'expires_in_days' => 30]);
+            $this->fail('Rotation should have thrown.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Mint failed after writing.', $exception->getMessage());
+        }
+
+        $this->assertSame(1, PersonalAccessToken::query()->count());
+        $this->assertModelExists($old->accessToken);
+        $this->withToken($old->plainTextToken)->getJson('/api/parser-errors')->assertOk();
     }
 
     public function test_rotate_with_an_expired_confirmation_changes_nothing(): void
@@ -418,6 +456,7 @@ class ApiTokenManagementTest extends TestCase
             ->assertSessionHas('status', 'Token revoked.');
 
         $this->assertModelMissing($newToken->accessToken);
+        $this->app['auth']->forgetGuards();
         $this->withToken($newToken->plainTextToken)->getJson('/api/parser-errors')->assertUnauthorized();
         Log::shouldHaveReceived('info')->withArgs(fn (string $message): bool => $message === 'api-token.revoked')->once();
     }

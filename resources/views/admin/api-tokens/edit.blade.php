@@ -60,6 +60,8 @@
 
                     @include('admin.api-tokens._ability-fields', ['selectedAbilities' => $token->abilities ?? []])
 
+                    <x-input-error :messages="$errors->get('owner_id')" class="mt-2" />
+
                     <x-secondary-button type="submit">Rotate token</x-secondary-button>
                 </form>
             </section>

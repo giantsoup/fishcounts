@@ -14,7 +14,7 @@ class RotateApiTokenRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('rotate', $this->route('apiToken')) ?? false;
+        return $this->user()?->can('rotate', $this->apiToken()) ?? false;
     }
 
     /** @return array<string, mixed> */

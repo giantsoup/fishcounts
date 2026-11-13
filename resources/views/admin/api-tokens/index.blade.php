@@ -21,6 +21,7 @@
                             <th class="px-6 py-3">Name</th>
                             <th class="px-6 py-3">Token</th>
                             <th class="px-6 py-3">Abilities</th>
+                            <th class="px-6 py-3">Created by</th>
                             <th class="px-6 py-3">Last used</th>
                             <th class="px-6 py-3">Expires</th>
                             <th class="px-6 py-3">Status</th>
@@ -36,6 +37,7 @@
                                 </td>
                                 <td class="whitespace-nowrap px-6 py-4">@include('admin.api-tokens._masked', ['token' => $token])</td>
                                 <td class="px-6 py-4">{{ implode(', ', $token->abilities ?? []) }}</td>
+                                <td class="px-6 py-4">{{ $token->creator?->name ?? 'CLI or deleted user' }}</td>
                                 <td class="whitespace-nowrap px-6 py-4">{{ $token->last_used_at?->format('n/j/Y g:i A') ?? 'Never' }}</td>
                                 <td class="whitespace-nowrap px-6 py-4">{{ $token->effectiveExpiresAt()?->format('n/j/Y g:i A') ?? 'Never' }}</td>
                                 <td class="px-6 py-4">
@@ -51,7 +53,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-6 py-4 text-sm text-gray-500">No API tokens yet.</td>
+                                <td colspan="8" class="px-6 py-4 text-sm text-gray-500">No API tokens yet.</td>
                             </tr>
                         @endforelse
                     </tbody>

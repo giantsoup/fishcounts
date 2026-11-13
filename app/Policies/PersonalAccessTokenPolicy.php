@@ -12,36 +12,36 @@ class PersonalAccessTokenPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->isActiveAdmin($user);
+        return $user->isActiveAdmin();
     }
 
     public function view(User $user, PersonalAccessToken $token): bool
     {
-        return $this->isActiveAdmin($user) && $token->isOwnedByUser();
+        return $this->canManage($user, $token);
     }
 
     public function create(User $user): bool
     {
-        return $this->isActiveAdmin($user);
+        return $user->isActiveAdmin();
     }
 
     public function update(User $user, PersonalAccessToken $token): bool
     {
-        return $this->isActiveAdmin($user) && $token->isOwnedByUser();
+        return $this->canManage($user, $token);
     }
 
     public function rotate(User $user, PersonalAccessToken $token): bool
     {
-        return $this->update($user, $token);
+        return $this->canManage($user, $token);
     }
 
     public function delete(User $user, PersonalAccessToken $token): bool
     {
-        return $this->isActiveAdmin($user) && $token->isOwnedByUser();
+        return $this->canManage($user, $token);
     }
 
-    private function isActiveAdmin(User $user): bool
+    private function canManage(User $user, PersonalAccessToken $token): bool
     {
-        return $user->is_active && $user->isAdmin();
+        return $user->isActiveAdmin() && $token->isOwnedByUser();
     }
 }
