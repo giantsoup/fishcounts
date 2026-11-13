@@ -34,7 +34,7 @@ It reads the token from Windows Credential Manager. It prints the HTTP status li
 
 - Start in the fishcounts repo on `main`, with `git pull --ff-only` clean and `gh auth status` signed in.
 - Run `api.ps1 GET parser-errors -Query @{ per_page = 1 }`. The outcomes:
-  - `NO_TOKEN` or `HTTP 401`: Taylor needs to mint a token and store it with `cmdkey /generic:fishcounts-agent-api /user:agent /pass:<token>`. Stop there and tell Taylor.
+  - `NO_TOKEN` or `HTTP 401`: Taylor needs to create a token at **Admin → API tokens** (`/admin/api-tokens`) and store it with `cmdkey /generic:fishcounts-agent-api /user:agent /pass:<token>`. Stop there and tell Taylor.
   - `HTTP 403`: the token is missing an ability. It needs `read`, `aliases`, `entities`, and `reparse`. Stop and tell Taylor.
 
 **Done when** that call returns `HTTP 200`.

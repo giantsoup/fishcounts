@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\ApiTokenController;
 use App\Http\Controllers\Admin\BackfillController;
 use App\Http\Controllers\Admin\BoatController;
 use App\Http\Controllers\Admin\EnvironmentalBackfillController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\NotificationSettingsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ScoreHotBiteEmailController;
 use App\Http\Controllers\ScoresController;
+use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -64,6 +66,22 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/', AdminDashboardController::class)->name('dashboard');
         Route::post('users/{user}/password-reset', [UserController::class, 'sendPasswordResetLink'])->name('users.password-reset');
         Route::resource('users', UserController::class)->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+
+        // Token writes re-confirm the password (15 minutes) on the route itself, inside the
+        // admin group, so non-admins still get 403. Every form posting here lives on a page
+        // that is itself behind password.confirm, because an unconfirmed POST is discarded.
+        Route::get('api-tokens', [ApiTokenController::class, 'index'])->name('api-tokens.index');
+        Route::get('api-tokens/{apiToken}', [ApiTokenController::class, 'show'])->whereNumber('apiToken')->name('api-tokens.show');
+        Route::middleware(RequirePassword::using(passwordTimeoutSeconds: 900))->group(function (): void {
+            Route::get('api-tokens/create', [ApiTokenController::class, 'create'])->name('api-tokens.create');
+            Route::get('api-tokens/{apiToken}/edit', [ApiTokenController::class, 'edit'])->whereNumber('apiToken')->name('api-tokens.edit');
+            Route::middleware('throttle:10,1,api-token-write:')->group(function (): void {
+                Route::post('api-tokens', [ApiTokenController::class, 'store'])->name('api-tokens.store');
+                Route::put('api-tokens/{apiToken}', [ApiTokenController::class, 'update'])->whereNumber('apiToken')->name('api-tokens.update');
+                Route::post('api-tokens/{apiToken}/rotate', [ApiTokenController::class, 'rotate'])->whereNumber('apiToken')->name('api-tokens.rotate');
+                Route::delete('api-tokens/{apiToken}', [ApiTokenController::class, 'destroy'])->whereNumber('apiToken')->name('api-tokens.destroy');
+            });
+        });
         Route::resource('sources', ScrapeSourceController::class)->only(['index', 'update']);
         Route::resource('boats', BoatController::class)->only(['index', 'store', 'update']);
         Route::post('boats/aliases', [BoatController::class, 'storeAlias'])->name('boat-aliases.store');

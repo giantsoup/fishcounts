@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Actions\ApiTokens\MintApiToken;
 use App\Enums\ApiAbility;
 use App\Models\User;
 use Illuminate\Console\Attributes\Description;
@@ -9,6 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 #[Signature('fish:mint-api-token
     {email : Email of the active admin account the token acts as}
@@ -16,10 +18,10 @@ use Illuminate\Validation\Rule;
     {--ability=* : Ability to grant (read, aliases, entities, reparse, errors). Repeat for several.}
     {--days=90 : Days until the token expires}
 ')]
-#[Description('Mint an agent API token for an admin user and print it once.')]
+#[Description('Mint an agent API token for an admin user and print it once. The admin UI at /admin/api-tokens does the same in the browser.')]
 class MintApiTokenCommand extends Command
 {
-    public function handle(): int
+    public function handle(MintApiToken $mintApiToken): int
     {
         $validator = Validator::make([
             'name' => $this->option('name'),
@@ -50,7 +52,16 @@ class MintApiTokenCommand extends Command
 
         $options = $validator->validated();
         $expiresAt = now()->addDays((int) $options['days']);
-        $token = $user->createToken($options['name'], $options['abilities'], $expiresAt);
+
+        try {
+            $token = $mintApiToken->handle($user, $options['name'], $options['abilities'], $expiresAt);
+        } catch (ValidationException $exception) {
+            foreach ($exception->validator->errors()->all() as $message) {
+                $this->components->error($message);
+            }
+
+            return self::FAILURE;
+        }
 
         $this->components->info(sprintf(
             'Token "%s" minted for %s with [%s], expiring %s. It is shown only once:',

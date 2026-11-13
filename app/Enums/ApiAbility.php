@@ -23,6 +23,20 @@ enum ApiAbility: string
     case Errors = 'errors';
 
     /**
+     * What the ability allows, as the admin token form explains it.
+     */
+    public function description(): string
+    {
+        return match ($this) {
+            self::Read => 'Every GET endpoint.',
+            self::Aliases => 'Create and delete aliases.',
+            self::Entities => 'Create, update, deactivate, merge, and delete boats, species, and trip types.',
+            self::Reparse => 'Reparse previews, runs, retries, and re-processing a single payload.',
+            self::Errors => 'Dismiss parser errors.',
+        };
+    }
+
+    /**
      * The route middleware that requires a token with this ability.
      */
     public function middleware(): string

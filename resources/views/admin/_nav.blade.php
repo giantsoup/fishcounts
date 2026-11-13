@@ -13,6 +13,7 @@
         ['label' => 'Notification logs', 'route' => 'admin.notification-logs.index', 'active' => ['admin.notification-logs.*']],
         ['label' => 'Failed jobs', 'route' => 'admin.failed-jobs.index', 'active' => ['admin.failed-jobs.*']],
         ['label' => 'Users', 'route' => 'admin.users.index', 'active' => ['admin.users.*']],
+        ['label' => 'API tokens', 'route' => 'admin.api-tokens.index', 'active' => ['admin.api-tokens.*']],
     ];
 @endphp
 
